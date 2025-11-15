@@ -1,380 +1,274 @@
-"use client";
-
-import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, MapPin, Star } from "lucide-react";
-import { GameStatusControls } from "@/components/GameStatusControls";
-import { ScreenshotGallery } from "@/components/ScreenshotGallery";
-import { SimilarGamesRow } from "@/components/SimilarGamesRow";
-import { VideoPlayer } from "@/components/VideoPlayer";
-import { YoutubeVideoGrid } from "@/components/YoutubeVideoGrid";
-import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
+import { notFound } from "next/navigation";
+import { ArrowLeft, Globe, Star, Camera, MessageCircle } from "lucide-react";
+import { getGameDetails, getGameReviews, getGameScreenshots } from "@/lib/rawg";
+import type { RawgGameDetails } from "@/lib/rawg";
 
-interface GameDetailsResponse {
-  id: number;
-  slug: string;
-  name: string;
-  description_raw: string | null;
-  background_image: string | null;
-  background_image_additional: string | null;
-  released: string | null;
-  playtime: number | null;
-  metacritic: number | null;
-  esrb_rating: { id: number; name: string } | null;
-  parent_platforms: Array<{ id: number; name: string; slug: string }>;
-  genres: Array<{ id: number; name: string }>;
-  tags: Array<{ id: number; name: string }>;
-  developers: Array<{ id: number; name: string }>;
-  publishers: Array<{ id: number; name: string }>;
-  stores: Array<{ id: number; name: string; domain: string | null; slug: string }>;
-  rating: number | null;
-  ratings_count: number | null;
-}
+export const revalidate = 300;
 
-interface ScreenshotResponse {
-  results: Array<{ id: number; image: string; width?: number; height?: number }>;
-}
+type GameDetailPageProps = {
+  params: { id: string };
+  searchParams?: Record<string, string | string[] | undefined>;
+};
 
-interface MoviesResponse {
-  results: Array<{ id: number; name: string; preview: string | null; data: { 480?: string; max?: string } }>;
-}
+const getSingleParamValue = (value: string | string[] | undefined): string | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return typeof value === "string" ? value : null;
+};
 
-interface SimilarResponse {
-  results: Array<{
-    id: number;
-    name: string;
-    slug: string;
-    background_image: string | null;
-    rating: number | null;
-    released: string | null;
-  }>;
-}
+export default async function GameDetailPage({ params, searchParams }: GameDetailPageProps) {
+  const id = Number.parseInt(params.id, 10);
 
-interface YoutubeResponse {
-  results: Array<{
-    videoId: string;
-    title: string;
-    channelTitle: string;
-    thumbnails: Record<string, { url: string }>;
-  }>;
-}
-
-export default function GameDetailsPage() {
-  const params = useParams<{ id: string }>();
-  const gameId = Number.parseInt(params.id, 10);
-  const { games, upsert, update, remove } = useLibrary();
-  const userGame = useMemo(() => games.find((item) => item.rawgId === gameId), [games, gameId]);
-
-  const [details, setDetails] = useState<GameDetailsResponse | null>(null);
-  const [screenshots, setScreenshots] = useState<ScreenshotResponse["results"]>([]);
-  const [trailers, setTrailers] = useState<MoviesResponse["results"]>([]);
-  const [similar, setSimilar] = useState<SimilarResponse["results"]>([]);
-  const [youtube, setYoutube] = useState<YoutubeResponse["results"]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!Number.isFinite(gameId)) {
-      setError("Invalid game id");
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [detailsRes, screenshotsRes, moviesRes, similarRes] = await Promise.all([
-          fetch(`/api/rawg/details/${gameId}`),
-          fetch(`/api/rawg/screenshots/${gameId}`),
-          fetch(`/api/rawg/movies/${gameId}`),
-          fetch(`/api/rawg/similar/${gameId}`),
-        ]);
-
-        if (!detailsRes.ok) {
-          const data = await detailsRes.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load game details.");
-        }
-
-        const detailsData = (await detailsRes.json()) as GameDetailsResponse;
-        if (cancelled) return;
-        setDetails(detailsData);
-
-        if (screenshotsRes.ok) {
-          const screenshotData = (await screenshotsRes.json()) as ScreenshotResponse;
-          if (!cancelled) {
-            setScreenshots(screenshotData.results ?? []);
-          }
-        }
-
-        if (moviesRes.ok) {
-          const movieData = (await moviesRes.json()) as MoviesResponse;
-          if (!cancelled) {
-            setTrailers(movieData.results ?? []);
-          }
-        }
-
-        if (similarRes.ok) {
-          const similarData = (await similarRes.json()) as SimilarResponse;
-          if (!cancelled) {
-            setSimilar(similarData.results ?? []);
-          }
-        }
-
-        if (detailsData.name) {
-          try {
-            const youtubeRes = await fetch(`/api/youtube/gameplay?q=${encodeURIComponent(detailsData.name)}`);
-            if (youtubeRes.ok) {
-              const youtubeData = (await youtubeRes.json()) as YoutubeResponse;
-              if (!cancelled) {
-                setYoutube(youtubeData.results ?? []);
-              }
-            }
-          } catch (youtubeError) {
-            console.warn("YouTube fetch error", youtubeError);
-          }
-        }
-      } catch (fetchError) {
-        if (cancelled) return;
-        setError(fetchError instanceof Error ? fetchError.message : "Unable to load game details.");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gameId]);
-
-  useEffect(() => {
-    if (!details || !userGame) {
-      return;
-    }
-    const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
-    const coverCandidate = details.background_image ?? details.background_image_additional ?? null;
-    const patch: Partial<UserGame> = {};
-    if (!userGame.coverImage && coverCandidate) {
-      patch.coverImage = coverCandidate;
-    }
-    if ((!userGame.platforms || userGame.platforms.length === 0) && platformNames.length) {
-      patch.platforms = platformNames;
-    }
-    if (Object.keys(patch).length > 0) {
-      update(details.id, patch);
-    }
-  }, [details, update, userGame]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center text-slate-500 dark:text-slate-400">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span className="ml-2 text-sm">Loading game details...</span>
-      </div>
-    );
+  if (!Number.isFinite(id)) {
+    notFound();
   }
 
-  if (error) {
-    return (
-      <div className="mx-auto max-w-2xl rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
-        <p className="text-lg font-semibold">Unable to load game</p>
-        <p className="mt-2 text-sm">{error}</p>
-        <Link href="/" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-emerald-500 hover:text-emerald-400">
-          <ArrowLeft className="h-4 w-4" /> Back to dashboard
-        </Link>
-      </div>
-    );
+  let game: RawgGameDetails;
+
+  try {
+    game = await getGameDetails(id);
+  } catch (error) {
+    if (error instanceof Error && /404/.test(error.message)) {
+      notFound();
+    }
+    throw error;
   }
 
-  if (!details) {
-    return (
-      <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
-        <p className="text-lg font-semibold">Game not found</p>
-        <p className="mt-2 text-sm">We couldn&rsquo;t load this game. Try searching from the dashboard.</p>
-        <Link href="/" className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-emerald-500 hover:text-emerald-400">
-          <ArrowLeft className="h-4 w-4" /> Back to dashboard
-        </Link>
-      </div>
-    );
-  }
+  const screenshotsPromise = getGameScreenshots(id, 1, 12).catch(
+    () => [] as Awaited<ReturnType<typeof getGameScreenshots>>,
+  );
+  const reviewsPromise = getGameReviews(id, 1, 6).catch(
+    () => [] as Awaited<ReturnType<typeof getGameReviews>>,
+  );
+  const [screenshots, reviews] = await Promise.all([screenshotsPromise, reviewsPromise]);
 
-  const releaseYear = details.released ? new Date(details.released).getFullYear() : null;
-  const heroImage = details.background_image_additional ?? details.background_image ?? null;
-  const coverImage = details.background_image ?? details.background_image_additional ?? null;
-  const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
-  const genres = details.genres?.map((genre) => genre.name) ?? [];
-  const tags = details.tags?.slice(0, 8).map((tag) => tag.name) ?? [];
-  const developers = details.developers?.map((developer) => developer.name) ?? [];
-  const publishers = details.publishers?.map((publisher) => publisher.name) ?? [];
-  const stores = details.stores?.map((store) => store.name) ?? [];
+  const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
+  game.short_screenshots?.forEach((shot) => {
+    if (shot?.image) {
+      screenshotMap.set(shot.image, shot);
+    }
+  });
+  screenshots.forEach((shot) => {
+    if (shot?.image) {
+      screenshotMap.set(shot.image, shot);
+    }
+  });
 
-  const handleAddToLibrary = () => {
-    upsert({
-      rawgId: details.id,
-      slug: details.slug,
-      title: details.name,
-      coverImage,
-      platforms: platformNames,
-      playtimeHours: details.playtime ?? 0,
-    });
+  const gallery = Array.from(screenshotMap.values());
+
+  const cleanedReviews = reviews
+    .map((review) => {
+      const rawText = review.text ?? "";
+      const text = rawText.replace(/<[^>]+>/g, "").trim();
+      if (!text) return null;
+      const parsedRating =
+        typeof review.rating === "number"
+          ? review.rating
+          : typeof review.rating === "string"
+            ? Number.parseFloat(review.rating)
+            : NaN;
+      return {
+        id: review.id,
+        text,
+        rating: Number.isFinite(parsedRating) ? parsedRating : null,
+        createdAt: review.created ?? null,
+        author: review.user?.username ?? "RAWG user",
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => {
+      const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bDate - aDate;
+    })
+    .slice(0, 3);
+
+  const description = game.description_raw ?? game.description ?? "No description available.";
+  const releaseDateLabel = (() => {
+    if (!game.released) {
+      return "Unknown";
+    }
+    const parsed = new Date(game.released);
+    return Number.isNaN(parsed.getTime()) ? "Unknown" : parsed.toLocaleDateString();
+  })();
+  const platformNames = game.platforms?.map((entry) => entry.platform.name).filter(Boolean) ?? [];
+  const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
+  const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
+  const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
+  const ratingLabel = Number.isFinite(game.rating) ? game.rating.toFixed(1) : "—";
+  const ratingCountLabel = Number.isFinite(game.ratings_count) ? game.ratings_count : 0;
+  const heroImage = game.background_image_additional ?? game.background_image;
+  const thumbnailImage = game.background_image ?? game.background_image_additional ?? gallery[0]?.image ?? null;
+
+  const formatReviewDate = (value: string | null) => {
+    if (!value) return "Date unknown";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? "Date unknown" : parsed.toLocaleDateString();
   };
 
+  const backParams = new URLSearchParams();
+  const qParam = getSingleParamValue(searchParams?.q)?.trim();
+  const platformParam = getSingleParamValue(searchParams?.platform)?.trim();
+  const pageParam = getSingleParamValue(searchParams?.page)?.trim();
+
+  if (qParam) {
+    backParams.set("q", qParam);
+  }
+  if (platformParam) {
+    backParams.set("platform", platformParam);
+  }
+  if (pageParam) {
+    const parsedPage = Number.parseInt(pageParam, 10);
+    if (Number.isFinite(parsedPage) && parsedPage > 0) {
+      backParams.set("page", String(parsedPage));
+    }
+  }
+
+  const backHref = backParams.size > 0 ? `/?${backParams.toString()}` : "/";
+
   return (
-    <div className="space-y-10">
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-xl dark:border-slate-800">
+    <div className="space-y-6">
+      <Link
+        href={backHref}
+        className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to search
+      </Link>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
         {heroImage ? (
-          <Image
-            src={heroImage}
-            alt={details.name}
-            width={1920}
-            height={1080}
-            className="absolute inset-0 h-full w-full object-cover opacity-60"
-            priority
-          />
+          <div className="relative h-72 w-full overflow-hidden">
+            <img src={heroImage} alt={`${game.name} artwork`} className="h-full w-full object-cover" />
+            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
+          </div>
         ) : null}
-        <div className="relative flex flex-col gap-6 bg-gradient-to-t from-slate-950/90 via-slate-950/80 to-slate-950/30 p-6 md:flex-row">
-          <div className="mx-auto w-44 shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-lg dark:border-slate-700 md:mx-0">
-            {coverImage ? (
-              <Image src={coverImage} alt={`${details.name} cover`} width={440} height={660} className="h-full w-full object-cover" />
+        <div className="space-y-8 p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-start">
+              {thumbnailImage ? (
+                <div className="relative mx-auto h-40 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-800">
+                  <img
+                    src={thumbnailImage}
+                    alt={`${game.name} cover art`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <div className="space-y-3">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white sm:text-4xl">{game.name}</h1>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Released: {releaseDateLabel}</p>
+                </div>
+                {platformNames.length ? (
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    {platformNames.map((platform) => (
+                      <span key={platform} className="rounded-full border border-slate-300 px-3 py-1 text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                        {platform}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {genres.length ? (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">Genres: {genres.join(", ")}</p>
+                ) : null}
+                <div className="grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2">
+                  {developers.length ? <span>Developed by {developers.join(", ")}</span> : null}
+                  {publishers.length ? <span>Published by {publishers.join(", ")}</span> : null}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-start rounded-2xl border border-amber-400/60 bg-amber-100 px-4 py-3 text-amber-700 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+              <Star className="h-5 w-5 fill-current" aria-hidden="true" />
+              <div>
+                <p className="text-lg font-semibold text-amber-700 dark:text-amber-200">{ratingLabel}</p>
+                <p className="text-xs text-amber-600 dark:text-amber-100/80">{ratingCountLabel} ratings</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-400">Description</h2>
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-200">{description}</p>
+          </div>
+
+          {gallery.length ? (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Camera className="h-4 w-4" aria-hidden="true" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest">Screenshots</h2>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Scroll to explore the gallery</span>
+              </div>
+              <div
+                className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory"
+                role="list"
+                aria-label={`Screenshots for ${game.name}`}
+              >
+                {gallery.map((shot) => (
+                  <div
+                    key={`${shot.id}-${shot.image}`}
+                    className="relative h-44 w-64 flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-800 dark:bg-slate-800"
+                    role="listitem"
+                  >
+                    <img
+                      src={shot.image}
+                      alt={`${game.name} screenshot`}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              <h2 className="text-sm font-semibold uppercase tracking-widest">Community reviews</h2>
+            </div>
+            {cleanedReviews.length ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {cleanedReviews.map((review) => (
+                  <article
+                    key={review.id}
+                    className="flex h-full flex-col justify-between rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900/70"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{review.author}</p>
+                      {typeof review.rating === "number" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-600 dark:text-amber-200">
+                          <Star className="h-3 w-3 fill-current" aria-hidden="true" />
+                          {review.rating.toFixed(1)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{review.text}</p>
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{formatReviewDate(review.createdAt)}</p>
+                  </article>
+                ))}
+              </div>
             ) : (
-              <div className="flex h-full items-center justify-center bg-slate-900 text-slate-500">No cover</div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No public RAWG reviews are available for this game yet.</p>
             )}
-          </div>
-          <div className="flex flex-1 flex-col gap-4 text-white">
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-emerald-300 hover:text-emerald-200">
-                <ArrowLeft className="h-4 w-4" /> Back to dashboard
-              </Link>
-              {releaseYear ? <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide">{releaseYear}</span> : null}
-              {details.playtime ? (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide">Avg {details.playtime}h</span>
-              ) : null}
+          </section>
+
+          {game.website ? (
+            <div>
+              <a
+                href={game.website}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
+              >
+                <Globe className="h-4 w-4" aria-hidden="true" /> Official website
+              </a>
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{details.name}</h1>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
-              {genres.length ? <span>{genres.join(" • ")}</span> : null}
-              {platformNames.length ? (
-                <span className="inline-flex items-center gap-2">
-                  <MapPin className="h-4 w-4" /> {platformNames.join(" / ")}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm">
-              {typeof details.rating === "number" ? (
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1">
-                  <Star className="h-4 w-4 text-amber-300" /> RAWG {details.rating.toFixed(1)}
-                  {details.ratings_count ? <span className="text-xs text-slate-200/80">({details.ratings_count.toLocaleString()} reviews)</span> : null}
-                </div>
-              ) : null}
-              {details.metacritic ? (
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1">
-                  <span className="text-sm font-semibold">Metacritic</span> {details.metacritic}
-                </div>
-              ) : null}
-              {details.esrb_rating ? (
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1">ESRB {details.esrb_rating.name}</div>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {developers.length ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Developers</p>
-                  <p>{developers.join(", ")}</p>
-                </div>
-              ) : null}
-              {publishers.length ? (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Publishers</p>
-                  <p>{publishers.join(", ")}</p>
-                </div>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {userGame ? (
-                <GameStatusControls userGame={userGame} onUpdate={update} onRemove={remove} />
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAddToLibrary}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-                >
-                  Save to library
-                </button>
-              )}
-            </div>
-          </div>
+          ) : null}
         </div>
       </div>
-
-      {details.description_raw ? (
-        <section className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">About this game</h2>
-          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-            {descriptionExpanded ? details.description_raw : `${details.description_raw.slice(0, 480)}${details.description_raw.length > 480 ? "…" : ""}`}
-          </p>
-          {details.description_raw.length > 480 ? (
-            <button
-              type="button"
-              onClick={() => setDescriptionExpanded((value) => !value)}
-              className="mt-3 text-sm font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
-            >
-              {descriptionExpanded ? "Show less" : "Read more"}
-            </button>
-          ) : null}
-        </section>
-      ) : null}
-
-      {tags.length ? (
-        <section className="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Tags</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span key={tag} className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {screenshots.length ? <ScreenshotGallery screenshots={screenshots} /> : null}
-
-      {trailers.length ? (
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">RAWG trailers</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {trailers.slice(0, 2).map((trailer) => {
-              const src = trailer.data.max ?? trailer.data[480];
-              if (!src) return null;
-              return <VideoPlayer key={trailer.id} src={src} poster={trailer.preview} title={trailer.name} />;
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      <YoutubeVideoGrid videos={youtube.slice(0, 3)} />
-
-      {stores.length ? (
-        <section className="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Available on</h2>
-          <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-slate-700 dark:text-slate-300">
-            {stores.map((store) => (
-              <li key={store}>{store}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <SimilarGamesRow games={similar.slice(0, 10)} />
     </div>
   );
 }
