@@ -1,4 +1,4 @@
-const RAWG_API_BASE_URL = (process.env.RAWG_BASE_URL ?? "https://api.rawg.io/api").replace(/\/+$/, "");
+import { fetchFromRawg } from "@/lib/server/rawgClient";
 
 export type RawgPlatform = {
   platform: {
@@ -60,46 +60,6 @@ export type RawgReview = {
     username?: string | null;
   } | null;
 };
-
-function getApiKey(): string {
-  const apiKey = process.env.RAWG_API_KEY;
-  if (!apiKey) {
-    throw new Error("RAWG_API_KEY environment variable is not configured.");
-  }
-  return apiKey;
-}
-
-async function fetchFromRawg<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const apiKey = getApiKey();
-  const normalizedPath = path.replace(/^\/+/, "");
-  const url = new URL(`${RAWG_API_BASE_URL}/${normalizedPath}`);
-
-  url.searchParams.set("key", apiKey);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-    next: { revalidate: 60 },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const message =
-      (errorBody && (errorBody.detail || errorBody.error || errorBody.message)) ||
-      `RAWG request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  return (await response.json()) as T;
-}
 
 /**
  * Search for games on RAWG by text query.
