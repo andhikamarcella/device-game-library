@@ -1,4 +1,32 @@
-const RAWG_BASE_URL = process.env.RAWG_BASE_URL ?? "https://api.rawg.io/api";
+function resolveRawgBaseUrl(): string {
+  const configured = process.env.RAWG_BASE_URL?.trim();
+  const fallback = "https://api.rawg.io/api";
+
+  if (!configured) {
+    return fallback;
+  }
+
+  try {
+    const url = new URL(configured);
+    const pathname = url.pathname?.replace(/\/+$/, "") ?? "";
+
+    if (!pathname || pathname === "/") {
+      url.pathname = "/api";
+    } else if (!/\bapi\b/.test(pathname.split("/").filter(Boolean).join("/"))) {
+      url.pathname = `${pathname}/api`.replace(/\/+/, "/");
+    }
+
+    return url.toString();
+  } catch (error) {
+    console.warn(
+      "Invalid RAWG_BASE_URL provided. Falling back to default https://api.rawg.io/api.",
+      error,
+    );
+    return fallback;
+  }
+}
+
+const RAWG_BASE_URL = resolveRawgBaseUrl();
 
 function buildRawgUrl(path: string): URL {
   if (path.startsWith("http://") || path.startsWith("https://")) {
