@@ -50,6 +50,7 @@ interface SimilarResponse {
     background_image: string | null;
     rating: number | null;
     released: string | null;
+    parent_platforms: Array<{ id: number; name: string; slug: string }>;
   }>;
 }
 
@@ -123,7 +124,12 @@ export default function GameDetailsPage() {
         if (similarRes.ok) {
           const similarData = (await similarRes.json()) as SimilarResponse;
           if (!cancelled) {
-            setSimilar(similarData.results ?? []);
+            setSimilar(
+              (similarData.results ?? []).map((game) => ({
+                ...game,
+                parent_platforms: game.parent_platforms ?? [],
+              })),
+            );
           }
         }
 

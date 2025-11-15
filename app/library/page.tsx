@@ -6,6 +6,7 @@ import { GameCard, type SearchGameResult } from "@/components/GameCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { FiltersBar, type SortOption } from "@/components/FiltersBar";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
+import { normalizeRawgImageUrl } from "@/lib/images";
 
 interface SearchResponse {
   results: SearchGameResult[];
@@ -242,7 +243,7 @@ export default function DashboardPage() {
       slug: game.slug,
       title: game.name,
       platforms: game.platforms.map((platform) => platform.name),
-      coverImage: game.background_image,
+      coverImage: normalizeRawgImageUrl(game.background_image),
       playtimeHours: 0,
     });
     setMetadataById((prev) => ({
@@ -451,7 +452,7 @@ export default function DashboardPage() {
                 id: userGame.rawgId,
                 slug: userGame.slug,
                 name: userGame.title,
-                background_image: userGame.coverImage ?? null,
+                background_image: normalizeRawgImageUrl(userGame.coverImage ?? null),
                 rating: metadata?.rating ?? null,
                 genres: [],
                 platforms: userGame.platforms.map((platform, index) => ({
