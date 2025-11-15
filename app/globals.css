@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300 ease-out dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  html.accessibility-large-text {
+    font-size: 18px;
+  }
+
+  html.accessibility-high-contrast body {
+    background-color: #f8fafc;
+    color: #020617;
+  }
+
+  html.dark.accessibility-high-contrast body {
+    background-color: #020617;
+    color: #f8fafc;
+  }
+
+  html.accessibility-high-contrast a {
+    text-decoration: underline;
+  }
+
+  html.accessibility-high-contrast .high-contrast-surface {
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(16, 185, 129, 0.6) !important;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35) !important;
+  }
+
+  html.dark.accessibility-high-contrast .high-contrast-surface {
+    background-color: rgba(15, 23, 42, 0.92) !important;
+    border-color: rgba(52, 211, 153, 0.6) !important;
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.4) !important;
+  }
+
+  html,
+  body,
+  #__next {
+    height: 100%;
+  }
+
+  a,
+  button,
+  [role="button"],
+  input,
+  textarea,
+  select {
+    @apply transition-colors duration-200 ease-out motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out;
+  }
+
+  button,
+  [role="button"] {
+    @apply motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-95;
+  }
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-900;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  html.accessibility-reduce-motion *,
+  html.accessibility-reduce-motion *::before,
+  html.accessibility-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(148, 163, 184, 0.1);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6);
+  }
+
+  @keyframes sidebar-slide-in {
+    from {
+      transform: translateX(20%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes menu-item-appear {
+    from {
+      transform: translateX(0.5rem);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+}
