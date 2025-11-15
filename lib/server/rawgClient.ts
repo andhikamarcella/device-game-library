@@ -1,5 +1,15 @@
 const RAWG_BASE_URL = process.env.RAWG_BASE_URL ?? "https://api.rawg.io/api";
 
+function buildRawgUrl(path: string): URL {
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return new URL(path);
+  }
+
+  const base = RAWG_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  return new URL(`${base}/${normalizedPath}`);
+}
+
 function getRawgApiKey(): string {
   const apiKey = process.env.RAWG_API_KEY;
   if (!apiKey) {
@@ -13,7 +23,7 @@ export async function fetchFromRawg<T>(
   params?: Record<string, string | number | undefined | null>,
   init?: RequestInit,
 ): Promise<T> {
-  const url = new URL(path.startsWith("http") ? path : `${RAWG_BASE_URL}${path}`);
+  const url = buildRawgUrl(path);
 
   url.searchParams.set("key", getRawgApiKey());
 

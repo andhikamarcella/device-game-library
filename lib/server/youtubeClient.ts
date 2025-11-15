@@ -1,5 +1,15 @@
 const YOUTUBE_BASE_URL = "https://www.googleapis.com/youtube/v3";
 
+function buildYoutubeUrl(path: string): URL {
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return new URL(path);
+  }
+
+  const base = YOUTUBE_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  return new URL(`${base}/${normalizedPath}`);
+}
+
 function getYoutubeApiKey(): string {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
@@ -12,7 +22,7 @@ export async function fetchFromYoutube<T>(
   path: string,
   params?: Record<string, string | number | undefined | null>,
 ): Promise<T> {
-  const url = new URL(path.startsWith("http") ? path : `${YOUTUBE_BASE_URL}${path}`);
+  const url = buildYoutubeUrl(path);
   url.searchParams.set("key", getYoutubeApiKey());
   if (params) {
     for (const [key, value] of Object.entries(params)) {

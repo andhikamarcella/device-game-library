@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Globe, Star, Camera, MessageCircle } from "lucide-react";
-import { getGameDetails, getGameReviews, getGameScreenshots } from "@/lib/rawg";
-import type { RawgGameDetails } from "@/lib/rawg";
+import { ArrowLeft, Globe, Star, Camera, MessageCircle, Clapperboard } from "lucide-react";
+import { getGameDetails, getGameReviews, getGameScreenshots, getGameTrailers } from "@/lib/rawg";
+import type { RawgGameDetails, RawgMovie } from "@/lib/rawg";
+import { getGameplayVideos, type YoutubeVideo } from "@/lib/youtube";
 
 export const revalidate = 300;
 
@@ -42,7 +43,14 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const reviewsPromise = getGameReviews(id, 1, 6).catch(
     () => [] as Awaited<ReturnType<typeof getGameReviews>>,
   );
-  const [screenshots, reviews] = await Promise.all([screenshotsPromise, reviewsPromise]);
+  const trailersPromise = getGameTrailers(id).catch(() => [] as RawgMovie[]);
+  const youtubePromise = getGameplayVideos(game.name).catch(() => [] as YoutubeVideo[]);
+  const [screenshots, reviews, trailers, youtubeVideos] = await Promise.all([
+    screenshotsPromise,
+    reviewsPromise,
+    trailersPromise,
+    youtubePromise,
+  ]);
 
   const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
   game.short_screenshots?.forEach((shot) => {
@@ -219,6 +227,72 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
                       loading="lazy"
                     />
                   </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {trailers.length ? (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest">RAWG trailers</h2>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {trailers.slice(0, 2).map((trailer) => {
+                  const sources = trailer.data ?? {};
+                  const src = sources.max ?? sources["1080"] ?? sources["720"] ?? sources[480];
+                  if (!src) {
+                    return null;
+                  }
+                  return (
+                    <figure
+                      key={trailer.id}
+                      className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800"
+                    >
+                      <video
+                        controls
+                        poster={trailer.preview ?? undefined}
+                        className="h-64 w-full object-cover"
+                      >
+                        <source src={src} type="video/mp4" />
+                      </video>
+                      <figcaption className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        {trailer.name}
+                      </figcaption>
+                    </figure>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {youtubeVideos.length ? (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest">Gameplay videos</h2>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {youtubeVideos.slice(0, 3).map((video) => (
+                  <article
+                    key={video.videoId}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
+                  >
+                    <iframe
+                      title={video.title}
+                      src={`https://www.youtube.com/embed/${video.videoId}`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="h-64 w-full"
+                    />
+                    <div className="px-4 py-3 text-sm">
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {video.channelTitle || "YouTube"}
+                      </p>
+                    </div>
+                  </article>
                 ))}
               </div>
             </section>

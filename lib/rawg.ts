@@ -1,4 +1,4 @@
-const RAWG_API_BASE_URL = "https://api.rawg.io/api";
+const RAWG_API_BASE_URL = (process.env.RAWG_BASE_URL ?? "https://api.rawg.io/api").replace(/\/+$/, "");
 
 export type RawgPlatform = {
   platform: {
@@ -37,6 +37,13 @@ export type RawgGameDetails = RawgGame & {
   short_screenshots?: RawgScreenshot[];
 };
 
+export type RawgMovie = {
+  id: number;
+  name: string;
+  preview: string | null;
+  data: Record<string, string | undefined> & { 480?: string; max?: string };
+};
+
 export type RawgScreenshot = {
   id: number;
   image: string;
@@ -64,7 +71,8 @@ function getApiKey(): string {
 
 async function fetchFromRawg<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const apiKey = getApiKey();
-  const url = new URL(`${RAWG_API_BASE_URL}${path}`);
+  const normalizedPath = path.replace(/^\/+/, "");
+  const url = new URL(`${RAWG_API_BASE_URL}/${normalizedPath}`);
 
   url.searchParams.set("key", apiKey);
   if (params) {
@@ -176,6 +184,16 @@ export async function getGameReviews(id: number, page = 1, pageSize = 6): Promis
     page,
     page_size: pageSize,
   });
+
+  return data.results ?? [];
+}
+
+export async function getGameTrailers(id: number): Promise<RawgMovie[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for trailers.");
+  }
+
+  const data = await fetchFromRawg<{ results: RawgMovie[] }>(`/games/${id}/movies`);
 
   return data.results ?? [];
 }
