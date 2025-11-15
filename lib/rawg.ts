@@ -1,4 +1,4 @@
-const RAWG_API_BASE_URL = "https://api.rawg.io/api";
+import { fetchFromRawg } from "@/lib/server/rawgClient";
 
 export type RawgPlatform = {
   platform: {
@@ -18,12 +18,61 @@ export type RawgPlatformSummary = {
 
 export type RawgGame = {
   id: number;
+  slug?: string | null;
   name: string;
   background_image: string | null;
   released: string | null;
   rating: number;
   ratings_count: number;
-  platforms: RawgPlatform[];
+  platforms?: RawgPlatform[];
+};
+
+export type RawgAddedByStatus = Partial<
+  Record<
+    | "yet"
+    | "owned"
+    | "beaten"
+    | "toplay"
+    | "dropped"
+    | "playing"
+    | "completed"
+    | "wishlist"
+    | "custom"
+    | "collecting"
+    | "main"
+    | "replay"
+    | "paused",
+    number
+  >
+>;
+
+export type RawgRatingBreakdown = {
+  id: number;
+  title: string;
+  count: number;
+  percent: number;
+};
+
+export type RawgTag = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgSeriesEntry = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgParentGame = RawgSeriesEntry | null;
+
+export type RawgParentPlatform = {
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
 };
 
 export type RawgGameDetails = RawgGame & {
@@ -35,6 +84,20 @@ export type RawgGameDetails = RawgGame & {
   publishers: { id: number; name: string }[];
   background_image_additional?: string | null;
   short_screenshots?: RawgScreenshot[];
+  playtime?: number | null;
+  added_by_status?: RawgAddedByStatus | null;
+  ratings?: RawgRatingBreakdown[] | null;
+  tags?: RawgTag[] | null;
+  parent_game?: RawgParentGame;
+  parent_platforms?: RawgParentPlatform[] | null;
+  series?: RawgSeriesEntry[] | { results?: RawgSeriesEntry[] | null } | null;
+};
+
+export type RawgMovie = {
+  id: number;
+  name: string;
+  preview: string | null;
+  data: Record<string, string | undefined> & { 480?: string; max?: string };
 };
 
 export type RawgScreenshot = {
@@ -53,45 +116,6 @@ export type RawgReview = {
     username?: string | null;
   } | null;
 };
-
-function getApiKey(): string {
-  const apiKey = process.env.RAWG_API_KEY;
-  if (!apiKey) {
-    throw new Error("RAWG_API_KEY environment variable is not configured.");
-  }
-  return apiKey;
-}
-
-async function fetchFromRawg<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const apiKey = getApiKey();
-  const url = new URL(`${RAWG_API_BASE_URL}${path}`);
-
-  url.searchParams.set("key", apiKey);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-    next: { revalidate: 60 },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const message =
-      (errorBody && (errorBody.detail || errorBody.error || errorBody.message)) ||
-      `RAWG request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  return (await response.json()) as T;
-}
 
 /**
  * Search for games on RAWG by text query.
@@ -178,6 +202,33 @@ export async function getGameReviews(id: number, page = 1, pageSize = 6): Promis
   });
 
   return data.results ?? [];
+}
+
+export async function getGameTrailers(id: number): Promise<RawgMovie[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for trailers.");
+  }
+
+  const data = await fetchFromRawg<{ results: RawgMovie[] }>(`/games/${id}/movies`);
+
+  return data.results ?? [];
+}
+
+export type RawgSimilarGame = RawgGame & {
+  slug: string;
+  parent_platforms?: RawgParentPlatform[] | null;
+};
+
+export async function getSimilarGames(id: number, limit = 6): Promise<RawgSimilarGame[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for similar games.");
+  }
+
+  const data = await fetchFromRawg<{ results: RawgSimilarGame[] }>(`/games/${id}/suggested`, {
+    page_size: limit,
+  });
+
+  return (data.results ?? []).slice(0, limit);
 }
 
 /**
