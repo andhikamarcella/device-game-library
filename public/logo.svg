@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Device &amp; Game Library Tracker logo</title>
+  <desc id="desc">A rounded square badge with a stylised controller and spark accent</desc>
+  <defs>
+    <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="controllerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#badgeGradient)" />
+  <g transform="translate(64 70)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-40 -18h80a14 14 0 0 1 14 14v6c0 17.673-14.327 32-32 32h-44c-17.673 0-32-14.327-32-32v-6a14 14 0 0 1 14-14z" fill="url(#controllerGradient)" />
+    <circle cx="-18" cy="6" r="10" fill="#0ea5e9" opacity="0.8" />
+    <circle cx="18" cy="6" r="10" fill="#facc15" opacity="0.8" />
+    <path d="M-24 0h12m-6-6v12" stroke="#f8fafc" stroke-width="4" />
+    <circle cx="18" cy="6" r="3.5" fill="#1e3a8a" />
+    <circle cx="6" cy="-10" r="3" fill="#38bdf8" />
+    <circle cx="30" cy="-12" r="3" fill="#f97316" />
+  </g>
+  <path d="M98 30c0 6.627-5.373 12-12 12" fill="none" stroke="#f8fafc" stroke-width="6" stroke-linecap="round" />
+</svg>
