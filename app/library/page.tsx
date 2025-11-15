@@ -23,18 +23,31 @@ interface GameMetadata {
   released: string | null;
 }
 
+const SEARCH_STORAGE_KEY = "dgtracker:librarySearch";
+const PAGE_SIZE = 5;
+
+const createDefaultPagination = (): SearchResponse["pagination"] => ({
+  total: 0,
+  page: 1,
+  pageSize: PAGE_SIZE,
+  hasNextPage: false,
+  hasPreviousPage: false,
+});
+
+type StoredSearchState = {
+  query: string;
+  debouncedQuery: string;
+  results: SearchGameResult[];
+  pagination: SearchResponse["pagination"];
+  metadataById: Record<number, GameMetadata>;
+};
+
 export default function DashboardPage() {
   const { games: libraryGames, loading: libraryLoading, upsert, update, remove } = useLibrary();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchGameResult[]>([]);
-  const [pagination, setPagination] = useState<SearchResponse["pagination"]>({
-    total: 0,
-    page: 1,
-    pageSize: 20,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  });
+  const [pagination, setPagination] = useState<SearchResponse["pagination"]>(createDefaultPagination);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [metadataById, setMetadataById] = useState<Record<number, GameMetadata>>({});
@@ -43,6 +56,79 @@ export default function DashboardPage() {
   const [platformFilter, setPlatformFilter] = useState<string | "all">("all");
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOption>("added_date");
+  const [hasHydratedSearchState, setHasHydratedSearchState] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const storedRaw = window.sessionStorage.getItem(SEARCH_STORAGE_KEY);
+      if (!storedRaw) {
+        setHasHydratedSearchState(true);
+        return;
+      }
+
+      const parsed = JSON.parse(storedRaw) as Partial<StoredSearchState> | null;
+      if (!parsed) {
+        setHasHydratedSearchState(true);
+        return;
+      }
+
+      if (typeof parsed.query === "string") {
+        setQuery(parsed.query);
+      }
+
+      if (typeof parsed.debouncedQuery === "string") {
+        setDebouncedQuery(parsed.debouncedQuery);
+      } else if (typeof parsed.query === "string") {
+        setDebouncedQuery(parsed.query.trim());
+      }
+
+      if (Array.isArray(parsed.results)) {
+        setSearchResults(parsed.results);
+      }
+
+      if (parsed.pagination) {
+        setPagination({
+          total: typeof parsed.pagination.total === "number" ? parsed.pagination.total : 0,
+          page: typeof parsed.pagination.page === "number" ? parsed.pagination.page : 1,
+          pageSize: typeof parsed.pagination.pageSize === "number" ? parsed.pagination.pageSize : PAGE_SIZE,
+          hasNextPage: Boolean(parsed.pagination.hasNextPage),
+          hasPreviousPage: Boolean(parsed.pagination.hasPreviousPage),
+        });
+      }
+
+      if (parsed.metadataById && typeof parsed.metadataById === "object") {
+        setMetadataById(parsed.metadataById as Record<number, GameMetadata>);
+      }
+    } catch (error) {
+      console.warn("Failed to restore library search state", error);
+    } finally {
+      setHasHydratedSearchState(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedSearchState || typeof window === "undefined") {
+      return;
+    }
+
+    const state: StoredSearchState = {
+      query,
+      debouncedQuery,
+      results: searchResults,
+      pagination,
+      metadataById,
+    };
+
+    try {
+      window.sessionStorage.setItem(SEARCH_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.warn("Failed to persist library search state", error);
+    }
+  }, [hasHydratedSearchState, query, debouncedQuery, searchResults, pagination, metadataById]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -54,7 +140,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!debouncedQuery) {
       setSearchResults([]);
-      setPagination((prev) => ({ ...prev, total: 0, page: 1, hasNextPage: false, hasPreviousPage: false }));
+      setPagination(createDefaultPagination());
       setSearchError(null);
       setSearchLoading(false);
       return;

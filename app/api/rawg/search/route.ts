@@ -34,6 +34,8 @@ type RawgSearchResponse = {
   previous: string | null;
 };
 
+const PAGE_SIZE = 5;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim() ?? "";
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
     const data = await fetchFromRawg<RawgSearchResponse>("/games", {
       search: query,
       page: normalizedPage,
-      page_size: 20,
+      page_size: PAGE_SIZE,
     });
 
     const results = data.results.map((game) => ({
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
       pagination: {
         total: data.count,
         page: normalizedPage,
-        pageSize: 20,
+        pageSize: PAGE_SIZE,
         hasNextPage: Boolean(data.next),
         hasPreviousPage: Boolean(data.previous) || normalizedPage > 1,
       },
