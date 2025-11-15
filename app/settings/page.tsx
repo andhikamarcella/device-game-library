@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { Download, Upload, RotateCcw, MonitorSmartphone, Contrast, Type, Gauge } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Card } from "@/components/Card";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import { useSettingsStore } from "@/hooks/useSettingsStore";
+import { useThemePreference } from "@/hooks/useThemePreference";
 import type { Device, Game, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ export default function SettingsPage() {
   const { devices, replaceDevices } = useDeviceStore();
   const { games, replaceGames } = useGameStore();
   const { settings, updateSettings } = useSettingsStore();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useThemePreference();
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
@@ -46,8 +46,7 @@ export default function SettingsPage() {
   ];
 
   const handleThemeChange = (value: string) => {
-    setTheme(value);
-    updateSettings({ theme: value as typeof settings.theme });
+    setTheme(value as typeof settings.theme);
   };
 
   const handleAccessibilityToggle = (
@@ -95,9 +94,12 @@ export default function SettingsPage() {
       replaceDevices(payload.devices);
       replaceGames(payload.games);
       if (payload.settings) {
-        updateSettings({ ...settings, ...payload.settings });
-        if (payload.settings.theme) {
-          setTheme(payload.settings.theme);
+        const { theme: importedTheme, ...rest } = payload.settings;
+        if (Object.keys(rest).length > 0) {
+          updateSettings({ ...settings, ...rest });
+        }
+        if (importedTheme) {
+          setTheme(importedTheme as typeof settings.theme);
         }
       }
       setImportSuccess(`Imported ${payload.devices.length} devices and ${payload.games.length} games.`);
@@ -123,7 +125,6 @@ export default function SettingsPage() {
     }
     if (target === "all") {
       updateSettings({
-        theme: "dark",
         lastBackupAt: undefined,
         reduceMotion: false,
         highContrast: false,
@@ -147,7 +148,7 @@ export default function SettingsPage() {
             { label: "Dark", value: "dark" },
             { label: "System", value: "system" },
           ].map((option) => {
-            const isActive = (theme ?? settings.theme) === option.value;
+            const isActive = theme === option.value;
             return (
               <button
                 key={option.value}

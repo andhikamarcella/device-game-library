@@ -18,7 +18,7 @@ A personal web application built with Next.js 14 that lets you track consoles, d
 - [React 18](https://react.dev/)
 - [TypeScript](https://www.typescriptlang.org/)
 - [Tailwind CSS](https://tailwindcss.com/)
-- [next-themes](https://github.com/pacocoursey/next-themes) for theme persistence
+- Custom theme preference provider synchronized with localStorage for flicker-free light/dark switching
 
 ## Getting started
 
