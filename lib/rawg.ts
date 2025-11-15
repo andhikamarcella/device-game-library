@@ -18,12 +18,61 @@ export type RawgPlatformSummary = {
 
 export type RawgGame = {
   id: number;
+  slug?: string | null;
   name: string;
   background_image: string | null;
   released: string | null;
   rating: number;
   ratings_count: number;
-  platforms: RawgPlatform[];
+  platforms?: RawgPlatform[];
+};
+
+export type RawgAddedByStatus = Partial<
+  Record<
+    | "yet"
+    | "owned"
+    | "beaten"
+    | "toplay"
+    | "dropped"
+    | "playing"
+    | "completed"
+    | "wishlist"
+    | "custom"
+    | "collecting"
+    | "main"
+    | "replay"
+    | "paused",
+    number
+  >
+>;
+
+export type RawgRatingBreakdown = {
+  id: number;
+  title: string;
+  count: number;
+  percent: number;
+};
+
+export type RawgTag = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgSeriesEntry = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgParentGame = RawgSeriesEntry | null;
+
+export type RawgParentPlatform = {
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
 };
 
 export type RawgGameDetails = RawgGame & {
@@ -35,6 +84,13 @@ export type RawgGameDetails = RawgGame & {
   publishers: { id: number; name: string }[];
   background_image_additional?: string | null;
   short_screenshots?: RawgScreenshot[];
+  playtime?: number | null;
+  added_by_status?: RawgAddedByStatus | null;
+  ratings?: RawgRatingBreakdown[] | null;
+  tags?: RawgTag[] | null;
+  parent_game?: RawgParentGame;
+  parent_platforms?: RawgParentPlatform[] | null;
+  series?: RawgSeriesEntry[] | { results?: RawgSeriesEntry[] | null } | null;
 };
 
 export type RawgMovie = {
@@ -156,6 +212,23 @@ export async function getGameTrailers(id: number): Promise<RawgMovie[]> {
   const data = await fetchFromRawg<{ results: RawgMovie[] }>(`/games/${id}/movies`);
 
   return data.results ?? [];
+}
+
+export type RawgSimilarGame = RawgGame & {
+  slug: string;
+  parent_platforms?: RawgParentPlatform[] | null;
+};
+
+export async function getSimilarGames(id: number, limit = 6): Promise<RawgSimilarGame[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for similar games.");
+  }
+
+  const data = await fetchFromRawg<{ results: RawgSimilarGame[] }>(`/games/${id}/suggested`, {
+    page_size: limit,
+  });
+
+  return (data.results ?? []).slice(0, limit);
 }
 
 /**
