@@ -86,7 +86,7 @@ function DashboardPageContent() {
   const [query, setQuery] = useState(initialQueryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
   const [results, setResults] = useState<SearchResult[]>([]);
-  const pageSize = 6;
+  const pageSize = 5;
   const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
   const [page, setPage] = useState(initialPageParam);
   const [pageInput, setPageInput] = useState(String(initialPageParam));
@@ -497,7 +497,8 @@ function DashboardPageContent() {
     }
 
     try {
-      const primaryPlatform = game.platforms[0];
+      const normalizedPlatforms = game.platforms ?? [];
+      const primaryPlatform = normalizedPlatforms[0];
       const platformName = primaryPlatform?.name ?? "Unassigned platform";
       const platformIdentifier = primaryPlatform ? `rawg:${primaryPlatform.id}` : "rawg:unassigned";
       const detailScreenshots = detail?.gallery
@@ -516,7 +517,7 @@ function DashboardPageContent() {
         emulatorCore: undefined,
         shaderPreset: undefined,
         region: undefined,
-        tags: game.platforms.map((platform) => platform.name).filter(Boolean),
+        tags: normalizedPlatforms.map((platform) => platform.name).filter(Boolean),
         rating: game.rating ?? undefined,
         hoursPlayed: undefined,
         lastPlayedAt: undefined,
@@ -682,7 +683,8 @@ function DashboardPageContent() {
               const existing = games.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
-              const platformLabels = game.platforms.map((platform) => platform.name).filter(Boolean);
+              const normalizedPlatforms = game.platforms ?? [];
+              const platformLabels = normalizedPlatforms.map((platform) => platform.name).filter(Boolean);
               const ratingLabel = game.rating?.toFixed(1) ?? "—";
               const detailQuery: Record<string, string> = {};
               if (debouncedQuery) {
@@ -700,10 +702,10 @@ function DashboardPageContent() {
               } as const;
 
               return (
-                <article
-                  key={game.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
-                >
+                <div key={game.id} className="space-y-3">
+                  <article
+                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
+                  >
                   <Link
                     href={detailHref}
                     className="relative block aspect-video w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
@@ -758,7 +760,7 @@ function DashboardPageContent() {
                         href={detailHref}
                         className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 transition hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-emerald-300 dark:hover:text-emerald-200 dark:focus-visible:ring-offset-slate-900"
                       >
-                        Lihat detail
+                        Lihat detail & trailer
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                       <button
@@ -786,10 +788,12 @@ function DashboardPageContent() {
                       </button>
                     </div>
                   </div>
-                </article>
+                  </article>
+                </div>
               );
             })}
           </div>
+          
           {(pagination.total > pagination.pageSize || pagination.hasNextPage || pagination.hasPreviousPage) && (
             <nav
               aria-label="RAWG search pagination"

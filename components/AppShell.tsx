@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { LayoutSidebar } from "@/components/LayoutSidebar";
 import { LayoutTopbar } from "@/components/LayoutTopbar";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+      <ServiceWorkerRegistration />
       <LayoutSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <LayoutTopbar onOpenSidebar={() => setSidebarOpen(true)} />
