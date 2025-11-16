@@ -8,13 +8,16 @@ const FALLBACK_COVER = "/fallback/cover-placeholder.svg";
 export function getBestCover(game: CoverArtSource): string {
   const screenshotSources = game.short_screenshots?.map((shot) => shot.image) ?? [];
   const clipPreview = game.clip?.preview ?? null;
-  const best =
-    pickBestRawgImage([
-      game.background_image_additional,
-      game.background_image,
-      ...screenshotSources,
-      clipPreview,
-    ]) ?? FALLBACK_COVER;
+
+  const prioritizedSources: Array<string | null | undefined> = [game.background_image];
+
+  if (!game.background_image) {
+    prioritizedSources.push(game.background_image_additional);
+  }
+
+  prioritizedSources.push(...screenshotSources, clipPreview);
+
+  const best = pickBestRawgImage(prioritizedSources) ?? FALLBACK_COVER;
 
   return best;
 }
