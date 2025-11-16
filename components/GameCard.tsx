@@ -1,15 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, LibraryBig, Sparkles } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
+import { CoverImage } from "@/components/CoverImage";
 import { GameStatusControls } from "@/components/GameStatusControls";
-import PlatformChips from "@/components/PlatformChips";
 import { type UserGame } from "@/hooks/LibraryProvider";
 import { getBestCover } from "@/lib/getCoverArt";
 import { extractGameFeatures } from "@/lib/gameFeatures";
 import { normalizeRawgImageUrl } from "@/lib/images";
-import type { RawgGame } from "@/lib/rawg";
+import type { RawgGame, RawgParentPlatform, RawgPlatform } from "@/lib/rawg";
+import { PlatformIcon } from "@/lib/platformIcons";
 
 export interface SearchGameResult
   extends Pick<
@@ -42,6 +42,30 @@ interface GameCardProps {
   rawgReturnTo?: string;
 }
 
+type PlatformEntry = RawgPlatform | RawgParentPlatform | null | undefined;
+
+type NormalizedPlatform = RawgPlatform["platform"];
+
+const normalizePlatformList = (entries: PlatformEntry[] = []): NormalizedPlatform[] => {
+  const normalized = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      if ("platform" in entry && entry.platform) {
+        return entry.platform;
+      }
+      return null;
+    })
+    .filter((platform): platform is NormalizedPlatform => {
+      if (!platform || typeof platform.id !== "number") return false;
+      const hasLabel =
+        (typeof platform.name === "string" && platform.name.trim().length > 0) ||
+        (typeof platform.slug === "string" && platform.slug.trim().length > 0);
+      return hasLabel;
+    });
+
+  return normalized;
+};
+
 export function GameCard({
   game,
   coverOverride,
@@ -59,6 +83,7 @@ export function GameCard({
     : `/games/${game.id}`;
   const platformEntries =
     (game.parent_platforms?.length ? game.parent_platforms : game.platforms) ?? [];
+  const normalizedPlatforms = normalizePlatformList(platformEntries);
   const featureFlags = extractGameFeatures({ tags: game.tags ?? null });
   const featureBadges: Array<{ label: string }> = [];
 
@@ -82,20 +107,11 @@ export function GameCard({
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur transition hover:border-emerald-400/80 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80">
       <div className="relative h-48 w-full overflow-hidden">
-        {coverImage ? (
-          <Image
-            src={coverImage}
-            alt={game.name}
-            fill
-            priority={false}
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 33vw"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <LibraryBig className="h-12 w-12" />
-          </div>
-        )}
+        <CoverImage
+          gameName={game.name}
+          rawgImage={coverImage}
+          className="absolute inset-0 h-full w-full"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
         <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2 text-xs font-medium text-white">
           {releaseYear ? <span className="rounded-full bg-white/20 px-3 py-1">{releaseYear}</span> : null}
@@ -136,7 +152,23 @@ export function GameCard({
           {game.genres.length ? (
             <p className="text-sm text-slate-600 dark:text-slate-300">{game.genres.map((genre) => genre.name).join(", ")}</p>
           ) : null}
-          <PlatformChips platforms={platformEntries} className="mt-1" limit={4} size="sm" />
+          {normalizedPlatforms.length ? (
+            <div className="mt-1 flex flex-wrap gap-1 text-xs text-slate-600 dark:text-slate-300">
+              {normalizedPlatforms.slice(0, 4).map((platform) => {
+                const label = platform.name ?? platform.slug ?? "Unknown platform";
+                const key = platform.slug ?? `${platform.id}`;
+                return (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-slate-700 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100 dark:shadow-none"
+                  >
+                    <PlatformIcon platform={label} className="h-3.5 w-3.5" />
+                    <span>{label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
           {featureBadges.length ? (
             <div className="flex flex-wrap gap-2">
               {featureBadges.map((badge, index) => (

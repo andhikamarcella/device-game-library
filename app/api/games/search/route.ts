@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { searchGames } from "@/lib/rawg";
+import { buildIgdbImageUrl, type IgdbSearchParams, searchIgdbGames } from "@/lib/igdb";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,26 +23,38 @@ export async function GET(request: Request) {
   }
 
   try {
-    const games = await searchGames(query, {
-      page,
-      pageSize,
+    const searchParamsPayload: IgdbSearchParams = {
+      search: query || undefined,
       ordering: ordering ?? (query ? "-rating" : "-added"),
-      platformId: normalizedPlatformId,
-    });
+      platforms: normalizedPlatformId ? String(normalizedPlatformId) : undefined,
+      page,
+      page_size: pageSize,
+    };
+
+    const games = await searchIgdbGames(searchParamsPayload);
     const results = games.results.map((game) => {
-      const releaseYear = game.released ? Number.parseInt(game.released.slice(0, 4), 10) : null;
+      const releaseYearValue = game.first_release_date
+        ? new Date(game.first_release_date * 1000).getFullYear()
+        : null;
+      const releaseYear =
+        typeof releaseYearValue === "number" && Number.isFinite(releaseYearValue)
+          ? releaseYearValue
+          : null;
       return {
         id: game.id,
         name: game.name,
-        coverImage: game.background_image,
-        releaseYear: Number.isFinite(releaseYear) ? releaseYear : null,
-        rating: game.rating ?? null,
-        ratingsCount: game.ratings_count ?? 0,
+        coverImage: game.cover?.image_id ? buildIgdbImageUrl(game.cover.image_id, "cover_big") : null,
+        releaseYear,
+        rating: typeof game.total_rating === "number" ? game.total_rating : null,
+        ratingsCount: game.total_rating_count ?? 0,
         platforms: (game.platforms ?? [])
-          .map((entry) => ({
-            id: entry.platform.id,
-            name: entry.platform.name,
-            slug: entry.platform.slug,
+          .map((platform) => ({
+            id: platform.id,
+            name: platform.name ?? "Unknown",
+            slug:
+              platform.abbreviation?.toLowerCase() ??
+              platform.name?.toLowerCase().replace(/\s+/g, "-") ??
+              String(platform.id),
           }))
           .filter((platform) => Boolean(platform.name)),
       };
@@ -51,15 +63,15 @@ export async function GET(request: Request) {
     return NextResponse.json({
       results,
       pagination: {
-        total: games.count,
+        total: games.total,
         page,
         pageSize,
-        hasNextPage: Boolean(games.next),
-        hasPreviousPage: Boolean(games.previous) || page > 1,
+        hasNextPage: page * games.pageSize < games.total,
+        hasPreviousPage: page > 1,
       },
     });
   } catch (error) {
-    console.error("RAWG search error", error);
+    console.error("IGDB search error", error);
     const message = error instanceof Error ? error.message : "Unable to search games.";
     const status = message.toLowerCase().includes("provide a search term") ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
