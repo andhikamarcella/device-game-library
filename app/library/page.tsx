@@ -1,10 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, Loader2, Search, SlidersHorizontal, X } from "lucide-react";
 import { GameCard, type SearchGameResult } from "@/components/GameCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { FiltersBar, type SortOption } from "@/components/FiltersBar";
+import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
 import { normalizeRawgImageUrl } from "@/lib/images";
 
@@ -22,6 +23,10 @@ interface SearchResponse {
 interface GameMetadata {
   rating: number | null;
   released: string | null;
+}
+
+interface SimilarResponse {
+  results: SimilarGame[];
 }
 
 const SEARCH_STORAGE_KEY = "dgtracker:librarySearch";
@@ -58,6 +63,10 @@ export default function DashboardPage() {
   const [minRating, setMinRating] = useState<number | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOption>("added_date");
   const [hasHydratedSearchState, setHasHydratedSearchState] = useState(false);
+  const [similarSource, setSimilarSource] = useState<SearchGameResult | null>(null);
+  const [similarResults, setSimilarResults] = useState<SimilarGame[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarError, setSimilarError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -231,6 +240,86 @@ export default function DashboardPage() {
     };
   }, [libraryGames, metadataById]);
 
+  useEffect(() => {
+    if (!similarSource) {
+      setSimilarResults([]);
+      setSimilarError(null);
+      setSimilarLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadSimilar = async () => {
+      try {
+        setSimilarLoading(true);
+        setSimilarError(null);
+        const response = await fetch(`/api/rawg/similar/${similarSource.id}`, { signal: controller.signal });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error ?? "Unable to load similar games.");
+        }
+        const data = (await response.json()) as SimilarResponse;
+        if (cancelled) return;
+        setSimilarResults(data.results ?? []);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setSimilarError(error instanceof Error ? error.message : "Unable to load similar games.");
+        setSimilarResults([]);
+      } finally {
+        if (!cancelled) {
+          setSimilarLoading(false);
+        }
+      }
+    };
+
+    loadSimilar();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [similarSource]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !similarSource) {
+      return;
+    }
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSimilarSource(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [similarSource]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !similarSource) {
+      return;
+    }
+
+    const { body } = document;
+    const previous = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [similarSource]);
+
+  const closeSimilarModal = () => {
+    setSimilarSource(null);
+    setSimilarResults([]);
+    setSimilarError(null);
+    setSimilarLoading(false);
+  };
+
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -387,6 +476,7 @@ export default function DashboardPage() {
                   onAdd={handleAddToLibrary}
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
+                  onShowSimilar={setSimilarSource}
                 />
               );
             })}
@@ -470,6 +560,7 @@ export default function DashboardPage() {
                   userGame={userGame}
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
+                  onShowSimilar={setSimilarSource}
                 />
               );
             })}
@@ -480,6 +571,50 @@ export default function DashboardPage() {
           </p>
         )}
       </section>
+      {similarSource ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-10"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Similar games"
+          onClick={closeSimilarModal}
+        >
+          <div
+            className="relative w-full max-w-5xl rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeSimilarModal}
+              className="absolute right-6 top-6 inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-700/60 dark:bg-slate-900/80 dark:text-slate-200"
+            >
+              Close <X className="h-3.5 w-3.5" />
+            </button>
+            <div className="space-y-2 pr-12">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">Suggested for</p>
+              <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{similarSource.name}</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Explore related titles. Selecting a card opens the full library view for that game.
+              </p>
+            </div>
+            <div className="mt-6 max-h-[70vh] overflow-y-auto pr-2">
+              {similarLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading similar games...
+                </div>
+              ) : similarError ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+                  <AlertTriangle className="h-4 w-4" /> {similarError}
+                </div>
+              ) : similarResults.length ? (
+                <SimilarGamesRow games={similarResults} />
+              ) : (
+                <p className="text-sm text-slate-500 dark:text-slate-400">No similar games available for this title yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

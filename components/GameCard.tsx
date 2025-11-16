@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, LibraryBig } from "lucide-react";
+import { ExternalLink, LibraryBig, Sparkles } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
 import { type UserGame } from "@/hooks/LibraryProvider";
 import { normalizeRawgImageUrl } from "@/lib/images";
@@ -25,9 +25,10 @@ interface GameCardProps {
   onAdd?: (game: SearchGameResult) => void;
   onUpdate?: (rawgId: number, patch: Partial<UserGame>) => void;
   onRemove?: (rawgId: number) => void;
+  onShowSimilar?: (game: SearchGameResult) => void;
 }
 
-export function GameCard({ game, userGame, onAdd, onUpdate, onRemove }: GameCardProps) {
+export function GameCard({ game, userGame, onAdd, onUpdate, onRemove, onShowSimilar }: GameCardProps) {
   const releaseYear = game.released ? new Date(game.released).getFullYear() : null;
   const coverImage = normalizeRawgImageUrl(game.background_image);
 
@@ -61,7 +62,16 @@ export function GameCard({ game, userGame, onAdd, onUpdate, onRemove }: GameCard
         <div className="space-y-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{game.name}</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {onShowSimilar ? (
+                <button
+                  type="button"
+                  onClick={() => onShowSimilar(game)}
+                  className="inline-flex items-center gap-1 rounded-full border border-transparent bg-indigo-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-600 transition hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:text-indigo-300"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Similar games
+                </button>
+              ) : null}
               <Link
                 href={`/library/${game.id}`}
                 className="inline-flex items-center gap-1 rounded-full border border-transparent bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300"

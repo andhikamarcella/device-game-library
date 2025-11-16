@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getPlatformIcon } from "@/components/platform-icons";
 import { normalizeRawgImageUrl } from "@/lib/images";
 
-interface SimilarGame {
+export interface SimilarGame {
   id: number;
   name: string;
   slug?: string | null;
