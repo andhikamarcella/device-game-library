@@ -16,15 +16,15 @@ export type LibraryContextValue = {
   games: UserGame[];
   loading: boolean;
   upsert: (
-    input: Partial<Omit<UserGame, "rawgId" | "createdAt" | "updatedAt">> & {
-      rawgId: number;
+    input: Partial<Omit<UserGame, "igdbId" | "createdAt" | "updatedAt">> & {
+      igdbId: number;
       slug: string;
       title: string;
     },
   ) => UserGame;
-  update: (rawgId: number, patch: Partial<UserGame>) => UserGame | undefined;
-  remove: (rawgId: number) => void;
-  getById: (rawgId: number) => UserGame | undefined;
+  update: (igdbId: number, patch: Partial<UserGame>) => UserGame | undefined;
+  remove: (igdbId: number) => void;
+  getById: (igdbId: number) => UserGame | undefined;
 };
 
 const LibraryContext = createContext<LibraryContextValue | undefined>(undefined);
@@ -66,24 +66,24 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const upsertHandler = useCallback<LibraryContextValue["upsert"]>((input) => {
     const result = upsertUserGame(input);
-    setGames((prev) => sortGames(prev.some((game) => game.rawgId === result.rawgId) ? prev.map((game) => (game.rawgId === result.rawgId ? result : game)) : [result, ...prev]));
+    setGames((prev) => sortGames(prev.some((game) => game.igdbId === result.igdbId) ? prev.map((game) => (game.igdbId === result.igdbId ? result : game)) : [result, ...prev]));
     return result;
   }, []);
 
-  const updateHandler = useCallback<LibraryContextValue["update"]>((rawgId, patch) => {
-    const result = updateUserGame(rawgId, patch);
+  const updateHandler = useCallback<LibraryContextValue["update"]>((igdbId, patch) => {
+    const result = updateUserGame(igdbId, patch);
     if (result) {
-      setGames((prev) => sortGames(prev.map((game) => (game.rawgId === rawgId ? result : game))));
+      setGames((prev) => sortGames(prev.map((game) => (game.igdbId === igdbId ? result : game))));
     }
     return result;
   }, []);
 
-  const removeHandler = useCallback((rawgId: number) => {
-    removeUserGame(rawgId);
-    setGames((prev) => prev.filter((game) => game.rawgId !== rawgId));
+  const removeHandler = useCallback((igdbId: number) => {
+    removeUserGame(igdbId);
+    setGames((prev) => prev.filter((game) => game.igdbId !== igdbId));
   }, []);
 
-  const getByIdHandler = useCallback((rawgId: number) => getUserGame(rawgId), []);
+  const getByIdHandler = useCallback((igdbId: number) => getUserGame(igdbId), []);
 
   const value = useMemo<LibraryContextValue>(
     () => ({ games, loading, upsert: upsertHandler, update: updateHandler, remove: removeHandler, getById: getByIdHandler }),

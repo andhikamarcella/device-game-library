@@ -1,7 +1,7 @@
-import type { RawgGame } from "@/lib/rawg";
+import type { GameSummary } from "@/lib/gameData";
 
 interface SystemRequirementsProps {
-  game: RawgGame;
+  game: GameSummary;
 }
 
 export function SystemRequirements({ game }: SystemRequirementsProps) {

@@ -1,7 +1,7 @@
 import type { FC } from "react";
 import { cn } from "@/lib/utils";
 import { getPlatformIcon } from "@/lib/platformIcons";
-import type { RawgParentPlatform, RawgPlatform } from "@/lib/rawg";
+import type { GameParentPlatform, GamePlatform } from "@/lib/gameData";
 
 type PlatformInfo = {
   id: number;
@@ -9,7 +9,7 @@ type PlatformInfo = {
   slug: string;
 };
 
-type PlatformChipEntry = RawgParentPlatform | RawgPlatform | PlatformInfo | null | undefined;
+type PlatformChipEntry = GameParentPlatform | GamePlatform | PlatformInfo | null | undefined;
 
 interface PlatformChipsProps {
   platforms?: PlatformChipEntry[] | null;

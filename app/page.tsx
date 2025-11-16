@@ -149,7 +149,7 @@ function DashboardPageContent() {
     setPlatformLoading(true);
     setPlatformError(null);
 
-    fetch("/api/platforms")
+    fetch("/api/igdb/platforms")
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json().catch(() => null);
@@ -410,7 +410,7 @@ function DashboardPageContent() {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload) {
       const message =
-        (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat detail game dari RAWG.";
+        (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat detail game dari IGDB.";
       throw new Error(message);
     }
     return payload as DetailMetadata;
@@ -429,7 +429,7 @@ function DashboardPageContent() {
       setWishlistProcessingId(game.id);
 
       const needsMetadata =
-        !existing.rawgId || !existing.coverImage || !existing.heroImage || !existing.screenshotUrls?.length;
+        !existing.igdbId || !existing.coverImage || !existing.heroImage || !existing.screenshotUrls?.length;
 
       let detail: DetailMetadata | null = null;
       let detailError: Error | null = null;
@@ -450,8 +450,8 @@ function DashboardPageContent() {
           .filter((url): url is string => Boolean(url)) ?? [];
 
         const updates: Partial<Game> = {};
-        if (!existing.rawgId) {
-          updates.rawgId = detail?.id ?? game.id;
+        if (!existing.igdbId) {
+          updates.igdbId = detail?.id ?? game.id;
         }
         if (detail?.thumbnail && !existing.coverImage) {
           updates.coverImage = detail.thumbnail;
@@ -500,7 +500,7 @@ function DashboardPageContent() {
       const normalizedPlatforms = game.platforms ?? [];
       const primaryPlatform = normalizedPlatforms[0];
       const platformName = primaryPlatform?.name ?? "Unassigned platform";
-      const platformIdentifier = primaryPlatform ? `rawg:${primaryPlatform.id}` : "rawg:unassigned";
+      const platformIdentifier = primaryPlatform ? `igdb:${primaryPlatform.id}` : "igdb:unassigned";
       const detailScreenshots = detail?.gallery
         ?.map((shot) => shot?.url?.trim())
         .filter((url): url is string => Boolean(url)) ?? [];
@@ -511,7 +511,7 @@ function DashboardPageContent() {
         platformName,
         status: "backlog",
         format: "digital",
-        source: "RAWG",
+        source: "IGDB",
         fileName: game.name,
         folderPath: primaryPlatform?.slug,
         emulatorCore: undefined,
@@ -521,10 +521,10 @@ function DashboardPageContent() {
         rating: game.rating ?? undefined,
         hoursPlayed: undefined,
         lastPlayedAt: undefined,
-        notes: `Wishlist entry imported from RAWG on ${new Date().toLocaleDateString()}.`,
+        notes: `Wishlist entry imported from IGDB on ${new Date().toLocaleDateString()}.`,
         favorite: false,
         wishlist: true,
-        rawgId: detail?.id ?? game.id,
+        igdbId: detail?.id ?? game.id,
         coverImage: detail?.thumbnail ?? game.coverImage ?? undefined,
         heroImage: detail?.backgroundImage ?? detail?.thumbnail ?? game.coverImage ?? undefined,
         screenshotUrls: detailScreenshots.length ? detailScreenshots : undefined,
@@ -550,7 +550,7 @@ function DashboardPageContent() {
     <div className="space-y-6">
       <Card
         title="Discover games"
-        description="Search the RAWG database, filter by console, and save wishlist ideas instantly."
+        description="Search the IGDB database, filter by console, and save wishlist ideas instantly."
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_auto]">
@@ -563,7 +563,7 @@ function DashboardPageContent() {
                 id="dashboard-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Cari judul game dari RAWG..."
+                placeholder="Cari judul game dari IGDB..."
                 className="w-full rounded-xl border border-slate-200 bg-white/95 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
@@ -667,7 +667,7 @@ function DashboardPageContent() {
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Mencari game di RAWG...
+              Mencari game di IGDB...
             </div>
           ) : null}
 
@@ -796,7 +796,7 @@ function DashboardPageContent() {
           
           {(pagination.total > pagination.pageSize || pagination.hasNextPage || pagination.hasPreviousPage) && (
             <nav
-              aria-label="RAWG search pagination"
+              aria-label="IGDB search pagination"
               className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/60 bg-white/70 p-3 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300"
             >
               <span>

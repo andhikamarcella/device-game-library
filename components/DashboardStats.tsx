@@ -187,7 +187,7 @@ export function DashboardStats({ games }: DashboardStatsProps) {
                   <p className="text-xs text-slate-500 dark:text-slate-400">No notes yet. Keep track of your progress from the game page.</p>
                 )}
                 <Link
-                  href={`/games/${currentlyPlaying.rawgId}`}
+                  href={`/games/${currentlyPlaying.igdbId}`}
                   className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
                 >
                   Continue playing
@@ -210,7 +210,7 @@ export function DashboardStats({ games }: DashboardStatsProps) {
                   <p className="text-xs text-slate-500 dark:text-slate-400">Added {formatDate(lastAdded.createdAt)}</p>
                 </div>
                 <Link
-                  href={`/games/${lastAdded.rawgId}`}
+                  href={`/games/${lastAdded.igdbId}`}
                   className="rounded-full border border-emerald-500/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/10 dark:text-emerald-200"
                 >
                   View
@@ -236,7 +236,7 @@ export function DashboardStats({ games }: DashboardStatsProps) {
             {recentGames.map((game) => {
               const statusLabel = game.status.replace(/_/g, " ");
               return (
-              <li key={game.rawgId} className="flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2 transition hover:border-emerald-400/60 hover:bg-emerald-500/5 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10">
+              <li key={game.igdbId} className="flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2 transition hover:border-emerald-400/60 hover:bg-emerald-500/5 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10">
                 <div className="flex flex-1 flex-col">
                   <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{game.title}</span>
                   <span className="text-xs text-slate-500 dark:text-slate-400">Added {formatDate(game.createdAt)}</span>

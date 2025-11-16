@@ -7,7 +7,7 @@ import { DashboardStats } from "@/components/DashboardStats";
 import { FiltersBar, type SortOption } from "@/components/FiltersBar";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
-import { normalizeRawgImageUrl, pickBestRawgImage } from "@/lib/images";
+import { normalizeImageUrl, pickBestImage } from "@/lib/images";
 
 interface SearchResponse {
   results: SearchGameResult[];
@@ -132,7 +132,7 @@ export default function DashboardPage() {
               rating: typeof maybeMetadata.rating === "number" ? maybeMetadata.rating : null,
               released: typeof maybeMetadata.released === "string" ? maybeMetadata.released : null,
               coverImage: maybeMetadata.coverImage
-                ? normalizeRawgImageUrl(maybeMetadata.coverImage)
+                ? normalizeImageUrl(maybeMetadata.coverImage)
                 : null,
             };
             return acc;
@@ -191,7 +191,7 @@ export default function DashboardPage() {
       try {
         setSearchLoading(true);
         setSearchError(null);
-        const response = await fetch(`/api/rawg/search?q=${encodeURIComponent(debouncedQuery)}&page=${pagination.page}`,
+        const response = await fetch(`/api/igdb/search?q=${encodeURIComponent(debouncedQuery)}&page=${pagination.page}`,
           { signal: controller.signal },
         );
         if (!response.ok) {
@@ -208,7 +208,7 @@ export default function DashboardPage() {
               next[game.id] = {
                 rating: game.rating ?? null,
                 released: game.released ?? null,
-                coverImage: normalizeRawgImageUrl(game.background_image),
+                coverImage: normalizeImageUrl(game.background_image),
               };
             }
             return next;
@@ -237,7 +237,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const needsHydration = libraryGames.filter((game) => {
-      const metadata = metadataById[game.rawgId];
+      const metadata = metadataById[game.igdbId];
       if (!metadata) {
         return true;
       }
@@ -263,28 +263,28 @@ export default function DashboardPage() {
     const hydrateMetadata = async () => {
       for (const game of needsHydration) {
         try {
-          const response = await fetch(`/api/rawg/details/${game.rawgId}`);
+          const response = await fetch(`/api/igdb/details/${game.igdbId}`);
           if (!response.ok) {
             continue;
           }
           const data = (await response.json()) as DetailsHydrationResponse;
           if (cancelled) return;
           const coverCandidate =
-            pickBestRawgImage([
+            pickBestImage([
               data.background_image,
               data.background_image_additional,
               ...(data.short_screenshots?.map((shot) => shot.image) ?? []),
             ]) ?? null;
           setMetadataById((prev) => ({
             ...prev,
-            [game.rawgId]: {
-              rating: data.rating ?? prev[game.rawgId]?.rating ?? null,
-              released: data.released ?? prev[game.rawgId]?.released ?? null,
-              coverImage: coverCandidate ?? prev[game.rawgId]?.coverImage ?? null,
+            [game.igdbId]: {
+              rating: data.rating ?? prev[game.igdbId]?.rating ?? null,
+              released: data.released ?? prev[game.igdbId]?.released ?? null,
+              coverImage: coverCandidate ?? prev[game.igdbId]?.coverImage ?? null,
             },
           }));
           if (!game.coverImage && coverCandidate) {
-            update(game.rawgId, { coverImage: coverCandidate });
+            update(game.igdbId, { coverImage: coverCandidate });
           }
         } catch (error) {
           if (cancelled) {
@@ -317,7 +317,7 @@ export default function DashboardPage() {
       try {
         setSimilarLoading(true);
         setSimilarError(null);
-        const response = await fetch(`/api/rawg/similar/${similarSource.id}`, { signal: controller.signal });
+        const response = await fetch(`/api/igdb/similar/${similarSource.id}`, { signal: controller.signal });
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
           throw new Error(payload?.error ?? "Unable to load similar games.");
@@ -390,13 +390,13 @@ export default function DashboardPage() {
 
   const handleAddToLibrary = (game: SearchGameResult) => {
     const metadata = metadataById[game.id];
-    const coverImage = normalizeRawgImageUrl(metadata?.coverImage ?? game.background_image ?? null);
+    const coverImage = normalizeImageUrl(metadata?.coverImage ?? game.background_image ?? null);
     const normalizedPlatforms =
       game.parent_platforms?.map((entry) => entry.platform) ??
       game.platforms?.map((entry) => entry.platform) ??
       [];
     const created = upsert({
-      rawgId: game.id,
+      igdbId: game.id,
       slug: game.slug ?? `${game.id}`,
       title: game.name,
       platforms: normalizedPlatforms.map((platform) => platform.name),
@@ -405,7 +405,7 @@ export default function DashboardPage() {
     });
     setMetadataById((prev) => ({
       ...prev,
-      [created.rawgId]: {
+      [created.igdbId]: {
         rating: game.rating ?? null,
         released: game.released ?? null,
         coverImage,
@@ -413,12 +413,12 @@ export default function DashboardPage() {
     }));
   };
 
-  const handleUpdateLibrary = (rawgId: number, patch: Partial<UserGame>) => {
-    update(rawgId, patch);
+  const handleUpdateLibrary = (igdbId: number, patch: Partial<UserGame>) => {
+    update(igdbId, patch);
   };
 
-  const handleRemoveLibrary = (rawgId: number) => {
-    remove(rawgId);
+  const handleRemoveLibrary = (igdbId: number) => {
+    remove(igdbId);
   };
 
   const libraryPlatforms = useMemo(() => {
@@ -450,8 +450,8 @@ export default function DashboardPage() {
         return true;
       })
       .sort((a, b) => {
-        const metadataA = metadataById[a.rawgId];
-        const metadataB = metadataById[b.rawgId];
+        const metadataA = metadataById[a.igdbId];
+        const metadataB = metadataById[b.igdbId];
         switch (sortOrder) {
           case "title":
             return a.title.localeCompare(b.title);
@@ -463,7 +463,7 @@ export default function DashboardPage() {
             }
             return yearB - yearA;
           }
-          case "rawg_rating": {
+          case "igdb_rating": {
             const ratingA = metadataA?.rating ?? -Infinity;
             const ratingB = metadataB?.rating ?? -Infinity;
             if (ratingA === ratingB) {
@@ -507,7 +507,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Discover games</h1>
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              Search RAWG without exposing your API key. Add favorites to your personal library and keep your progress synced locally.
+              Search IGDB without exposing your API key. Add favorites to your personal library and keep your progress synced locally.
             </p>
           </div>
           <form onSubmit={handleSearchSubmit} className="flex w-full flex-col gap-3 sm:flex-row">
@@ -534,14 +534,14 @@ export default function DashboardPage() {
           ) : null}
           {searchLoading ? (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin" /> Searching RAWG...
+              <Loader2 className="h-4 w-4 animate-spin" /> Searching IGDB...
             </div>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {searchResults.map((result) => {
-              const userGame = libraryGames.find((game) => game.rawgId === result.id);
+              const userGame = libraryGames.find((game) => game.igdbId === result.id);
               const metadata = metadataById[result.id];
-              const coverOverride = normalizeRawgImageUrl(
+              const coverOverride = normalizeImageUrl(
                 metadata?.coverImage ?? result.background_image ?? null,
               );
               return (
@@ -554,7 +554,7 @@ export default function DashboardPage() {
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
                   onShowSimilar={setSimilarSource}
-                  rawgReturnTo={currentLibraryRoute}
+                  detailReturnTo={currentLibraryRoute}
                 />
               );
             })}
@@ -615,12 +615,12 @@ export default function DashboardPage() {
         {filteredLibrary.length ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredLibrary.map((userGame) => {
-              const metadata = metadataById[userGame.rawgId];
-              const coverImage = normalizeRawgImageUrl(
+              const metadata = metadataById[userGame.igdbId];
+              const coverImage = normalizeImageUrl(
                 userGame.coverImage ?? metadata?.coverImage ?? null,
               );
               const cardData: SearchGameResult = {
-                id: userGame.rawgId,
+                id: userGame.igdbId,
                 slug: userGame.slug,
                 name: userGame.title,
                 background_image: coverImage,
@@ -638,14 +638,14 @@ export default function DashboardPage() {
               };
               return (
                 <GameCard
-                  key={userGame.rawgId}
+                  key={userGame.igdbId}
                   game={cardData}
                   coverOverride={coverImage}
                   userGame={userGame}
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
                   onShowSimilar={setSimilarSource}
-                  rawgReturnTo={currentLibraryRoute}
+                  detailReturnTo={currentLibraryRoute}
                 />
               );
             })}

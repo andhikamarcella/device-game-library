@@ -1,8 +1,8 @@
-import type { RawgClip, RawgGameDetails, RawgMovie } from "@/lib/rawg";
+import type { GameClip, GameDetailsPayload, GameTrailer } from "@/lib/gameData";
 
 export type GameTrailerSource =
-  | { type: "rawg-clip"; title: string; youtubeId: string; thumbnailUrl: string }
-  | { type: "rawg-movie"; title: string; youtubeId: string; thumbnailUrl: string }
+  | { type: "igdb-clip"; title: string; youtubeId: string; thumbnailUrl: string }
+  | { type: "igdb-movie"; title: string; youtubeId: string; thumbnailUrl: string }
   | { type: "external"; title: string; youtubeId: string; thumbnailUrl: string }
   | { type: "none" };
 
@@ -76,7 +76,7 @@ function buildThumbnailUrl(youtubeId: string, fallback?: string | null): string 
   return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
 }
 
-function collectClipSources(clip: RawgClip | null | undefined, title: string): GameTrailerSource | null {
+function collectClipSources(clip: GameClip | null | undefined, title: string): GameTrailerSource | null {
   if (!clip) {
     return null;
   }
@@ -85,7 +85,7 @@ function collectClipSources(clip: RawgClip | null | undefined, title: string): G
     const youtubeId = extractYoutubeId(url);
     if (youtubeId) {
       return {
-        type: "rawg-clip",
+        type: "igdb-clip",
         title,
         youtubeId,
         thumbnailUrl: buildThumbnailUrl(youtubeId, clip.preview ?? undefined),
@@ -95,7 +95,7 @@ function collectClipSources(clip: RawgClip | null | undefined, title: string): G
   return null;
 }
 
-function collectMovieSources(movies: RawgMovie[] | null | undefined, title: string): GameTrailerSource | null {
+function collectMovieSources(movies: GameTrailer[] | null | undefined, title: string): GameTrailerSource | null {
   if (!movies || movies.length === 0) {
     return null;
   }
@@ -107,18 +107,18 @@ function collectMovieSources(movies: RawgMovie[] | null | undefined, title: stri
       const youtubeId = extractYoutubeId(url);
       if (youtubeId) {
         return {
-          type: "rawg-movie",
-          title: clipTitle,
-          youtubeId,
-          thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
-        } satisfies GameTrailerSource;
+        type: "igdb-movie",
+        title: clipTitle,
+        youtubeId,
+        thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
+      } satisfies GameTrailerSource;
       }
     }
   }
   return null;
 }
 
-export function extractTrailerFromRawg(game: RawgGameDetails): GameTrailerSource {
+export function extractTrailerFromIgdb(game: GameDetailsPayload): GameTrailerSource {
   const title = game.name || "";
   const clipSource = collectClipSources(game.clip, title);
   if (clipSource) {

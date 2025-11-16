@@ -1,4 +1,4 @@
-import type { RawgGame } from "@/lib/rawg";
+import type { GameSummary } from "@/lib/gameData";
 
 export interface GameFeatureFlags {
   controllerSupport?: "none" | "partial" | "full";
@@ -9,7 +9,7 @@ export interface GameFeatureFlags {
   dolbyAtmos?: boolean;
 }
 
-export function extractGameFeatures(game: Pick<RawgGame, "tags">): GameFeatureFlags {
+export function extractGameFeatures(game: Pick<GameSummary, "tags">): GameFeatureFlags {
   const tags = game.tags ?? [];
   const hasTag = (needle: string) =>
     tags.some((tag) => {

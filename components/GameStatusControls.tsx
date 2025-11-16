@@ -23,8 +23,8 @@ const statusOptions: Array<{ label: string; value: PlayStatus }> = [
 
 interface GameStatusControlsProps {
   userGame: UserGame;
-  onUpdate: (rawgId: number, patch: Partial<UserGame>) => void;
-  onRemove?: (rawgId: number) => void;
+  onUpdate: (igdbId: number, patch: Partial<UserGame>) => void;
+  onRemove?: (igdbId: number) => void;
 }
 
 export function GameStatusControls({ userGame, onUpdate, onRemove }: GameStatusControlsProps) {
@@ -32,25 +32,25 @@ export function GameStatusControls({ userGame, onUpdate, onRemove }: GameStatusC
   const [notesDraft, setNotesDraft] = useState(userGame.notes ?? "");
 
   const handleOwnershipChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onUpdate(userGame.rawgId, { ownership: event.target.value as Ownership });
+    onUpdate(userGame.igdbId, { ownership: event.target.value as Ownership });
   };
 
   const handleStatusChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onUpdate(userGame.rawgId, { status: event.target.value as PlayStatus });
+    onUpdate(userGame.igdbId, { status: event.target.value as PlayStatus });
   };
 
   const handlePlaytimeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = Number.parseFloat(event.target.value);
-    onUpdate(userGame.rawgId, { playtimeHours: Number.isFinite(value) && value >= 0 ? value : 0 });
+    onUpdate(userGame.igdbId, { playtimeHours: Number.isFinite(value) && value >= 0 ? value : 0 });
   };
 
   const handleLastPlayedChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
-    onUpdate(userGame.rawgId, { lastPlayedAt: value ? new Date(value).toISOString() : null });
+    onUpdate(userGame.igdbId, { lastPlayedAt: value ? new Date(value).toISOString() : null });
   };
 
   const handleNotesSave = () => {
-    onUpdate(userGame.rawgId, { notes: notesDraft.trim() ? notesDraft.trim() : null });
+    onUpdate(userGame.igdbId, { notes: notesDraft.trim() ? notesDraft.trim() : null });
     setNotesOpen(false);
   };
 
@@ -91,7 +91,7 @@ export function GameStatusControls({ userGame, onUpdate, onRemove }: GameStatusC
           <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Personal rating</span>
           <RatingStars
             value={userGame.personalRating ?? null}
-            onChange={(next) => onUpdate(userGame.rawgId, { personalRating: next })}
+            onChange={(next) => onUpdate(userGame.igdbId, { personalRating: next })}
           />
         </div>
         <label className="flex flex-col gap-1">
@@ -129,7 +129,7 @@ export function GameStatusControls({ userGame, onUpdate, onRemove }: GameStatusC
         {onRemove ? (
           <button
             type="button"
-            onClick={() => onRemove(userGame.rawgId)}
+            onClick={() => onRemove(userGame.igdbId)}
             className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-200 dark:hover:border-red-800 dark:hover:bg-red-900/40"
           >
             <Trash2 className="h-4 w-4" /> Remove

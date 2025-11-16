@@ -16,7 +16,7 @@ export type Game = {
   title: string;
   platformId: string;
   platformName: string;
-  rawgId?: number;
+  igdbId?: number;
   region?: string;
   status: GameStatus;
   format: GameFormat;

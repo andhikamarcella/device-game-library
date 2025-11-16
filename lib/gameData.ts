@@ -1,0 +1,669 @@
+import {
+  buildIgdbImageUrl,
+  getIgdbGameDetails,
+  resolveIgdbImage,
+  searchIgdbGames as searchIgdbGamesInternal,
+  searchIgdbPlatforms as searchIgdbPlatformsInternal,
+  type IgdbGame,
+  type IgdbGameDetails,
+  type IgdbImageAsset,
+  type IgdbPlatformRef,
+  type IgdbSearchParams,
+  type IgdbSimilarGame,
+  type IgdbVideo,
+} from "@/lib/igdb";
+
+export type GamePlatformRequirement = {
+  minimum?: string;
+  recommended?: string;
+};
+
+export type GamePlatform = {
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  requirements?: GamePlatformRequirement;
+};
+
+export type GamePlatformSummary = {
+  id: number;
+  name: string;
+  slug: string;
+  year_start: number | null;
+  image_background: string | null;
+};
+
+export type GameEsrbRating = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
+export type GameMetacriticPlatform = {
+  metascore: number | null;
+  url?: string | null;
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+};
+
+export type GameStore = {
+  id: number;
+  url?: string | null;
+  url_en?: string | null;
+  url_ru?: string | null;
+  store: {
+    id: number;
+    name: string;
+    slug: string;
+    domain?: string | null;
+    games_count?: number | null;
+    image_background?: string | null;
+  };
+};
+
+export type GameSummary = {
+  id: number;
+  slug?: string | null;
+  name: string;
+  background_image: string | null;
+  background_image_additional?: string | null;
+  short_screenshots?: GameScreenshot[];
+  clip?: GameClip | null;
+  released: string | null;
+  rating: number | null;
+  ratings_count?: number | null;
+  metacritic?: number | null;
+  playtime?: number | null;
+  genres?: Array<{ id: number; name: string }> | null;
+  platforms?: GamePlatform[] | null;
+  parent_platforms?: GameParentPlatform[] | null;
+  tags?: GameTag[] | null;
+  stores?: GameStore[] | null;
+};
+
+export type GameAddedByStatus = Partial<
+  Record<
+    | "yet"
+    | "owned"
+    | "beaten"
+    | "toplay"
+    | "dropped"
+    | "playing"
+    | "completed"
+    | "wishlist"
+    | "custom"
+    | "collecting"
+    | "main"
+    | "replay"
+    | "paused",
+    number
+  >
+>;
+
+export type GameRatingBreakdown = {
+  id: number;
+  title: string;
+  count: number;
+  percent: number;
+};
+
+export type GameTag = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type GameSeriesEntry = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type GameParentGame = GameSeriesEntry | null;
+
+export type GameParentPlatform = {
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+};
+
+export type GameReactionSummary = Record<string, number>;
+
+export type GamePlaytimeDistribution = Record<string, number>;
+
+export type GameRelatedGame = {
+  id: number;
+  slug?: string | null;
+  name: string;
+  background_image?: string | null;
+  released?: string | null;
+  rating?: number | null;
+  ratings_count?: number | null;
+  parent_platforms?: GameParentPlatform[] | null;
+};
+
+export type GameSimilarEntry = GameSummary;
+
+export type GameAchievement = {
+
+  id: number;
+  name: string;
+  description: string | null;
+  image: string | null;
+  percent: number | null;
+};
+
+export type GameClip = {
+  clip?: string | null;
+  clips?: Record<string, string | undefined> | null;
+  preview?: string | null;
+  video?: string | null;
+};
+
+export type GameDetailsPayload = GameSummary & {
+  genres: { id: number; name: string }[];
+  description?: string | null;
+  description_raw?: string | null;
+  website?: string | null;
+  reddit_url?: string | null;
+  reddit_name?: string | null;
+  reddit_count?: number | null;
+  twitch_count?: number | null;
+  youtube_count?: number | null;
+  developers: { id: number; name: string }[];
+  publishers: { id: number; name: string }[];
+  added_by_status?: GameAddedByStatus | null;
+  ratings?: GameRatingBreakdown[] | null;
+  parent_game?: GameParentGame;
+  parent_platforms?: GameParentPlatform[] | null;
+  series?: GameSeriesEntry[] | { results?: GameSeriesEntry[] | null } | null;
+  clip?: GameClip | null;
+  movies?: GameTrailer[] | null;
+  esrb_rating?: GameEsrbRating | null;
+  metacritic?: number | null;
+  metacritic_platforms?: GameMetacriticPlatform[] | null;
+  additions?: GameRelatedGame[] | null;
+  dlcs?: GameRelatedGame[] | null;
+  expansions?: GameRelatedGame[] | null;
+  reactions?: GameReactionSummary | null;
+  playtime_distribution?: GamePlaytimeDistribution | null;
+};
+
+export type GameTrailer = {
+  id: number;
+  name: string;
+  preview: string | null;
+  data: Record<string, string | undefined> & { 480?: string; max?: string };
+};
+
+export type GameScreenshot = {
+  id: number;
+  image: string;
+  width?: number;
+  height?: number;
+};
+
+export type GameReview = {
+  id: number;
+  text?: string | null;
+  rating?: number | string | null;
+  created?: string | null;
+  user?: {
+    username?: string | null;
+  } | null;
+};
+
+export interface GameSearchParams {
+  search?: string;
+  ordering?: string;
+  platforms?: string;
+  genres?: string;
+  tags?: string;
+  dates?: string;
+  metacritic?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export type GameSearchResponse = {
+  results: GameSummary[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+};
+
+export async function searchGames(params: GameSearchParams = {}): Promise<GameSearchResponse> {
+  const response = await searchIgdbGamesInternal({
+    search: params.search,
+    ordering: params.ordering,
+    platforms: params.platforms,
+    genres: params.genres,
+    tags: params.tags,
+    dates: params.dates,
+    metacritic: params.metacritic,
+    page: params.page,
+    page_size: params.page_size,
+  } satisfies IgdbSearchParams);
+
+  const results = response.results.map(mapIgdbGameToGameSummary);
+  const hasNext = response.page * response.pageSize < response.total;
+  const hasPrev = response.page > 1;
+
+  return {
+    results,
+    count: response.total,
+    next: hasNext ? "igdb://next" : null,
+    previous: hasPrev ? "igdb://prev" : null,
+  };
+}
+
+/**
+ * Fetch detailed information for a single IGDB game.
+ */
+export async function getGameDetails(id: number): Promise<GameDetailsPayload> {
+  const details = await loadIgdbDetails(id);
+  return mapIgdbDetailsToGameDetails(details);
+}
+
+export async function getGameScreenshots(
+  id: number,
+  page = 1,
+  pageSize = 12,
+): Promise<GameScreenshot[]> {
+  const details = await loadIgdbDetails(id);
+  const shots = mapScreenshots(details.screenshots);
+  const safeSize = Math.max(pageSize, 1);
+  const offset = Math.max(page - 1, 0) * safeSize;
+  return shots.slice(offset, offset + safeSize);
+}
+
+export async function getGameReviews(_id: number, _page = 1, _pageSize = 6): Promise<GameReview[]> {
+  return [];
+}
+
+export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
+  const details = await loadIgdbDetails(id);
+  return mapVideos(details.videos, details.name);
+}
+
+export async function getGameAchievements(_id: number, _pageSize = 10): Promise<GameAchievement[]> {
+  return [];
+}
+
+export async function getGameAdditions(id: number, pageSize = 6): Promise<GameRelatedGame[]> {
+  const details = await loadIgdbDetails(id);
+  const additions = mapRelatedGames(details.dlcs).concat(mapRelatedGames(details.expansions));
+  return additions.slice(0, Math.max(pageSize, 1));
+}
+
+export async function getGameSeriesEntries(id: number, pageSize = 10): Promise<GameRelatedGame[]> {
+  const details = await loadIgdbDetails(id);
+  const series = mapSeries(details);
+  return series.slice(0, Math.max(pageSize, 1));
+}
+
+export async function getSimilarGamesForGame(id: number, limit = 6): Promise<GameSimilarEntry[]> {
+  const details = await loadIgdbDetails(id);
+  const similar = mapSimilar(details.similar_games).filter((game) => game.id !== id);
+  return similar.slice(0, Math.max(limit, 1));
+}
+
+/**
+ * Retrieve a list of IGDB platforms, optionally filtered by a search query.
+ */
+export async function searchPlatforms(query = "", _page = 1, pageSize = 40): Promise<GamePlatformSummary[]> {
+  const platforms = await searchIgdbPlatformsInternal(query);
+  return platforms.slice(0, Math.max(pageSize, 1)).map((platform) => ({
+    id: platform.id,
+    name: platform.name,
+    slug: platform.slug ?? slugify(platform.name),
+    year_start: platform.generation ?? null,
+    image_background: null,
+  }));
+}
+
+const igdbDetailCache = new Map<number, Promise<IgdbGameDetails>>();
+
+async function loadIgdbDetails(id: number): Promise<IgdbGameDetails> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid IGDB game id must be provided.");
+  }
+
+  let request = igdbDetailCache.get(id);
+  if (!request) {
+    request = (async () => {
+      const details = await getIgdbGameDetails(id);
+      if (!details) {
+        throw new Error(`Game ${id} not found on IGDB.`);
+      }
+      return details;
+    })();
+    igdbDetailCache.set(id, request);
+  }
+
+  try {
+    return await request;
+  } catch (error) {
+    igdbDetailCache.delete(id);
+    throw error;
+  }
+}
+
+const YOUTUBE_THUMB_HOST = "https://img.youtube.com/vi/";
+const YOUTUBE_WATCH_HOST = "https://www.youtube.com/watch?v=";
+
+const slugify = (value: string | null | undefined): string => {
+  if (!value) {
+    return "";
+  }
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+const toIsoDate = (value?: number | null): string | null => {
+  if (!value || !Number.isFinite(value)) {
+    return null;
+  }
+  try {
+    const date = new Date(value * 1000);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().split("T")[0] ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const uniqueById = <T extends { id: number }>(items: T[]): T[] => {
+  const seen = new Set<number>();
+  const result: T[] = [];
+  for (const item of items) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+const buildYoutubeUrl = (videoId: string): string => `${YOUTUBE_WATCH_HOST}${videoId}`;
+const buildYoutubeThumb = (videoId: string): string => `${YOUTUBE_THUMB_HOST}${videoId}/hqdefault.jpg`;
+
+const mapPlatformRef = (platform?: IgdbPlatformRef | null): GamePlatform | null => {
+  if (!platform || !Number.isFinite(platform.id)) {
+    return null;
+  }
+  const label = platform.name ?? `Platform ${platform.id}`;
+  return {
+    platform: {
+      id: platform.id,
+      name: label,
+      slug: platform.abbreviation?.toLowerCase() ?? slugify(label),
+    },
+  };
+};
+
+const uniquePlatforms = <T extends { platform: { id: number } }>(entries: T[]): T[] => {
+  const seen = new Set<number>();
+  const result: T[] = [];
+  for (const entry of entries) {
+    const id = entry.platform.id;
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push(entry);
+  }
+  return result;
+};
+
+const mapPlatforms = (platforms?: IgdbPlatformRef[] | null): GamePlatform[] => {
+  if (!platforms?.length) {
+    return [];
+  }
+  const mapped = platforms
+    .map((platform) => mapPlatformRef(platform))
+    .filter((platform): platform is GamePlatform => Boolean(platform));
+  return uniquePlatforms(mapped);
+};
+
+const mapParentPlatforms = (platforms?: IgdbPlatformRef[] | null): GameParentPlatform[] => {
+  if (!platforms?.length) {
+    return [];
+  }
+  const mapped = platforms
+    .map((platform) => {
+      if (!platform || !Number.isFinite(platform.id)) {
+        return null;
+      }
+      const label = platform.name ?? `Platform ${platform.id}`;
+      return {
+        platform: {
+          id: platform.id,
+          name: label,
+          slug: platform.abbreviation?.toLowerCase() ?? slugify(label),
+        },
+      } satisfies GameParentPlatform;
+    })
+    .filter((platform): platform is GameParentPlatform => Boolean(platform));
+  return uniquePlatforms(mapped);
+};
+
+const mapKeywords = (keywords?: IgdbGameDetails["keywords"]): GameTag[] => {
+  if (!keywords?.length) {
+    return [];
+  }
+  return uniqueById(
+    keywords
+      .filter((keyword) => keyword && typeof keyword.id === "number")
+      .map((keyword) => ({
+        id: keyword!.id,
+        name: keyword!.name ?? slugify(keyword!.slug ?? `Keyword ${keyword!.id}`),
+        slug: keyword!.slug ?? slugify(keyword!.name ?? `keyword-${keyword!.id}`),
+      })),
+  );
+};
+
+const mapGenres = (genres?: IgdbGameDetails["genres"]): Array<{ id: number; name: string }> => {
+  if (!genres?.length) {
+    return [];
+  }
+  return uniqueById(
+    genres
+      .filter((genre) => genre && typeof genre.id === "number" && genre.name)
+      .map((genre) => ({ id: genre!.id, name: genre!.name ?? `Genre ${genre!.id}` })),
+  );
+};
+
+const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
+  if (!assets?.length) {
+    return [];
+  }
+  return assets
+    .filter((asset) => asset && asset.image_id)
+    .map((asset) => ({
+      id: asset.id,
+      image: buildIgdbImageUrl(asset.image_id, "screenshot_big"),
+      width: asset.width,
+      height: asset.height,
+    }));
+};
+
+const mapSimilar = (similar?: IgdbSimilarGame[]): GameSimilarEntry[] => {
+  if (!similar?.length) {
+    return [];
+  }
+  return similar
+    .filter((entry) => entry && Number.isFinite(entry.id))
+    .map((entry) => ({
+      ...mapIgdbGameToGameSummary(entry),
+      slug: entry.slug ?? slugify(entry.name),
+      parent_platforms: mapParentPlatforms(entry.platforms),
+    }));
+};
+
+const mapRelatedGames = (list?: IgdbSimilarGame[] | null): GameRelatedGame[] => {
+  if (!list?.length) {
+    return [];
+  }
+  return list
+    .filter((entry) => entry && Number.isFinite(entry.id))
+    .map((entry) => ({
+      id: entry.id,
+      slug: entry.slug ?? slugify(entry.name),
+      name: entry.name,
+      background_image: resolveIgdbImage(entry.cover),
+      released: null,
+      rating: typeof entry.total_rating === "number" ? entry.total_rating : null,
+      ratings_count: entry.total_rating_count ?? null,
+      parent_platforms: mapParentPlatforms(entry.platforms),
+    }));
+};
+
+const mapSeries = (details: IgdbGameDetails): GameRelatedGame[] => {
+  const parent = details.parent_game ? mapRelatedGames([details.parent_game])[0] : null;
+  const remasters = mapRelatedGames(details.remasters);
+  const remakes = mapRelatedGames(details.remakes);
+  const ports = mapRelatedGames(details.expansions);
+  return [parent, ...remasters, ...remakes, ...ports].filter(
+    (entry): entry is GameRelatedGame => Boolean(entry),
+  );
+};
+
+const relatedToSeriesEntry = (entry?: GameRelatedGame | null): GameSeriesEntry | null => {
+  if (!entry) {
+    return null;
+  }
+  return {
+    id: entry.id,
+    name: entry.name,
+    slug: entry.slug ?? slugify(entry.name),
+  };
+};
+
+const mapVideos = (videos?: IgdbVideo[], gameName?: string): GameTrailer[] => {
+  if (!videos?.length) {
+    return [];
+  }
+  let index = 1;
+  return videos
+    .filter((video) => Boolean(video?.video_id))
+    .map((video) => {
+      const videoId = video!.video_id.trim();
+      const name = video!.name ?? `${gameName ?? "Trailer"} ${index}`;
+      const url = buildYoutubeUrl(videoId);
+      const movie: GameTrailer = {
+        id: index,
+        name,
+        preview: buildYoutubeThumb(videoId),
+        data: { 480: url, max: url },
+      };
+      index += 1;
+      return movie;
+    });
+};
+
+const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
+  const source = videos?.find((video) => video?.video_id);
+  if (!source?.video_id) {
+    return null;
+  }
+  const url = buildYoutubeUrl(source.video_id);
+  return {
+    clip: url,
+    video: url,
+    preview: buildYoutubeThumb(source.video_id),
+    clips: { full: url, featured: url },
+  };
+};
+
+const mapCompanies = (
+  details: IgdbGameDetails,
+  role: "developer" | "publisher",
+): Array<{ id: number; name: string }> => {
+  const companies = details.involved_companies ?? [];
+  return uniqueById(
+    companies
+      .filter((entry) => Boolean(entry?.company) && Boolean(entry?.[role]))
+      .map((entry) => ({
+        id: entry!.company!.id,
+        name: entry!.company!.name ?? `Company ${entry!.company!.id}`,
+      })),
+  );
+};
+
+const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
+  const cover = resolveIgdbImage(game.cover);
+  return {
+    id: game.id,
+    slug: game.slug ?? slugify(game.name),
+    name: game.name,
+    background_image: cover,
+    background_image_additional: cover,
+    short_screenshots: [],
+    clip: null,
+    released: toIsoDate(game.first_release_date),
+    rating: typeof game.total_rating === "number" ? game.total_rating : null,
+    ratings_count: typeof game.total_rating_count === "number" ? game.total_rating_count : null,
+    metacritic: null,
+    playtime: null,
+    genres: mapGenres(game.genres),
+    platforms: mapPlatforms(game.platforms),
+    parent_platforms: mapParentPlatforms(game.platforms),
+    tags: [],
+    stores: [],
+  };
+};
+
+const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPayload => {
+  const base = mapIgdbGameToGameSummary(details);
+  const screenshots = mapScreenshots(details.screenshots);
+  const descriptionParts = [details.summary, details.storyline].filter((part): part is string => Boolean(part));
+  const descriptionRaw = descriptionParts.join("\n\n");
+  const seriesRelated = mapSeries(details);
+  const parentSeriesEntry = relatedToSeriesEntry(seriesRelated[0]);
+  const seriesEntries = seriesRelated.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    slug: entry.slug ?? slugify(entry.name),
+  }));
+  return {
+    ...base,
+    background_image_additional:
+      base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
+    short_screenshots: screenshots,
+    clip: mapClip(details.videos, details.name),
+    movies: mapVideos(details.videos, details.name),
+    genres: mapGenres(details.genres),
+    description: descriptionRaw || null,
+    description_raw: descriptionRaw || null,
+    website: details.websites?.[0]?.url ?? null,
+    reddit_url: null,
+    reddit_name: null,
+    reddit_count: null,
+    twitch_count: null,
+    youtube_count: null,
+    developers: mapCompanies(details, "developer"),
+    publishers: mapCompanies(details, "publisher"),
+    added_by_status: {},
+    ratings: [],
+    parent_game: parentSeriesEntry,
+    series: seriesEntries,
+    esrb_rating: null,
+    metacritic: null,
+    metacritic_platforms: [],
+    additions: mapRelatedGames(details.dlcs),
+    dlcs: mapRelatedGames(details.dlcs),
+    expansions: mapRelatedGames(details.expansions),
+    reactions: {},
+    playtime_distribution: {},
+    tags: mapKeywords(details.keywords),
+  };
+};
