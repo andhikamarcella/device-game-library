@@ -17,6 +17,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'images.igdb.com',
+        pathname: '/igdb/image/upload/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'i.ytimg.com',
         pathname: '/vi/**',
       },

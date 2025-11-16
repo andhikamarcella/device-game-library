@@ -17,6 +17,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
+import { CoverImage } from "@/components/CoverImage";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
@@ -27,6 +28,8 @@ import { SystemRequirements } from "@/components/game/SystemRequirements";
 import {
   type RawgAchievement,
   type RawgGameDetails,
+  type RawgParentPlatform,
+  type RawgPlatform,
   type RawgMovie,
   type RawgRelatedGame,
   type RawgScreenshot,
@@ -36,6 +39,7 @@ import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeRawgImageUrl } from "@/lib/images";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
+import { PlatformIcon } from "@/lib/platformIcons";
 
 export type GameReview = {
   id: number;
@@ -114,6 +118,30 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
+};
+
+type PlatformEntry = RawgPlatform | RawgParentPlatform | null | undefined;
+
+type NormalizedPlatform = RawgPlatform["platform"];
+
+const normalizePlatformList = (entries: PlatformEntry[] = []): NormalizedPlatform[] => {
+  const normalized = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      if ("platform" in entry && entry.platform) {
+        return entry.platform;
+      }
+      return null;
+    })
+    .filter((platform): platform is NormalizedPlatform => {
+      if (!platform || typeof platform.id !== "number") return false;
+      const hasLabel =
+        (typeof platform.name === "string" && platform.name.trim().length > 0) ||
+        (typeof platform.slug === "string" && platform.slug.trim().length > 0);
+      return hasLabel;
+    });
+
+  return normalized;
 };
 
 const formatReleaseDate = (value: string | null) => {
@@ -198,8 +226,9 @@ export function GameDetails({
     return `${base}?returnTo=${encodeURIComponent(backTarget)}`;
   };
   const parentPlatforms = game.parent_platforms ?? [];
-  const fallbackPlatforms = game.platforms ?? [];
-  const platformEntries = (parentPlatforms.length ? parentPlatforms : fallbackPlatforms) ?? [];
+  const directPlatforms = game.platforms ?? [];
+  const availablePlatformEntries = (directPlatforms.length ? directPlatforms : parentPlatforms) ?? [];
+  const availablePlatforms = normalizePlatformList(availablePlatformEntries);
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -211,8 +240,7 @@ export function GameDetails({
       ? game.ratings_count.toLocaleString()
       : "0";
   const bestCover = getBestCover(game);
-  const heroImage = normalizeRawgImageUrl(bestCover);
-  const thumbnailImage = heroImage;
+  const rawgCoverImage = normalizeRawgImageUrl(bestCover);
   const description = game.description_raw ?? game.description ?? "No description available.";
   const playtimeHours = typeof game.playtime === "number" && game.playtime > 0 ? Math.round(game.playtime) : null;
   const addedByStatusEntries = Object.entries(game.added_by_status ?? {})
@@ -304,20 +332,24 @@ export function GameDetails({
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
-        {heroImage ? (
-          <div className="relative h-72 w-full overflow-hidden">
-            <Image src={heroImage} alt={`${game.name} artwork`} fill className="object-cover" sizes="100vw" priority={false} />
-            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
-          </div>
-        ) : null}
+        <div className="relative h-72 w-full overflow-hidden">
+          <CoverImage
+            gameName={game.name}
+            rawgImage={rawgCoverImage}
+            className="absolute inset-0 h-full w-full"
+          />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
+        </div>
         <div className="space-y-8 p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-start">
-              {thumbnailImage ? (
-                <div className="relative mx-auto h-40 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-800">
-                  <Image src={thumbnailImage} alt={`${game.name} cover art`} fill className="object-cover" sizes="128px" />
-                </div>
-              ) : null}
+              <div className="relative mx-auto h-40 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-800">
+                <CoverImage
+                  gameName={game.name}
+                  rawgImage={rawgCoverImage}
+                  className="h-full w-full"
+                />
+              </div>
               <div className="space-y-3">
                 <div className="space-y-1">
                   <h1 className="text-3xl font-bold text-slate-900 dark:text-white sm:text-4xl">{game.name}</h1>
@@ -328,12 +360,26 @@ export function GameDetails({
                     </p>
                   ) : null}
                 </div>
-                {platformEntries.length ? (
+                {availablePlatforms.length ? (
                   <section className="space-y-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Available on
                     </h3>
-                    <PlatformChips platforms={platformEntries} className="mt-1" />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {availablePlatforms.map((platform) => {
+                        const label = platform.name ?? platform.slug ?? "Unknown platform";
+                        const key = platform.slug ?? `${platform.id}`;
+                        return (
+                          <span
+                            key={key}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100 dark:shadow-none"
+                          >
+                            <PlatformIcon platform={label} className="h-4 w-4" />
+                            <span>{label}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   </section>
                 ) : null}
                 <FeatureBadges game={game} />
