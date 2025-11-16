@@ -1,10 +1,11 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
-import { DeviceProvider } from "@/hooks/useDeviceStore";
-import { GameProvider } from "@/hooks/useGameStore";
 import { SettingsProvider, useSettingsStore } from "@/hooks/useSettingsStore";
 import { ThemePreferenceProvider } from "@/hooks/useThemePreference";
+import { DeviceProvider } from "@/hooks/useDeviceStore";
+import { GameProvider } from "@/hooks/useGameStore";
+import { LibraryProvider } from "@/components/LibraryProvider";
 
 function AccessibilitySettingsSync() {
   const { settings, initialized } = useSettingsStore();
@@ -31,7 +32,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemePreferenceProvider>
         <AccessibilitySettingsSync />
         <DeviceProvider>
-          <GameProvider>{children}</GameProvider>
+          <GameProvider>
+            <LibraryProvider>{children}</LibraryProvider>
+          </GameProvider>
         </DeviceProvider>
       </ThemePreferenceProvider>
     </SettingsProvider>
