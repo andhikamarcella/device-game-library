@@ -1,83 +1,136 @@
 import { NextResponse } from "next/server";
-import { getGameDetails, getGameScreenshots, getGameReviews } from "@/lib/gameData";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+import { getIgdbImageUrl, igdbRequest } from "@/lib/igdb";
+
+type Params = { params: { id: string } };
+
+type IgdbDetailRecord = {
+  id: number;
+  name: string;
+  summary?: string | null;
+  storyline?: string | null;
+  first_release_date?: number | null;
+  aggregated_rating?: number | null;
+  rating?: number | null;
+  aggregated_rating_count?: number | null;
+  rating_count?: number | null;
+  platforms?: Array<{ id: number; name?: string | null }>;
+  genres?: Array<{ id: number; name?: string | null }>;
+  cover?: { image_id?: string | null };
+  screenshots?: Array<{ id?: number; image_id?: string | null }>;
+};
+
+const formatReleaseDate = (timestamp?: number | null): string | null => {
+  if (!timestamp) {
+    return null;
+  }
+  const date = new Date(timestamp * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString().split("T")[0] ?? null;
+};
+
+export async function GET(_request: Request, { params }: Params) {
   const id = Number.parseInt(params.id, 10);
 
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: "Invalid game id." }, { status: 400 });
   }
 
+  const query = `
+    fields
+      id,
+      name,
+      summary,
+      storyline,
+      first_release_date,
+      aggregated_rating,
+      rating,
+      aggregated_rating_count,
+      rating_count,
+      platforms.id,
+      platforms.name,
+      genres.id,
+      genres.name,
+      cover.image_id,
+      screenshots.id,
+      screenshots.image_id;
+    where id = ${id};
+    limit 1;
+  `;
+
   try {
-    const [details, screenshots, reviews] = await Promise.all([
-      getGameDetails(id),
-      getGameScreenshots(id, 1, 12),
-      getGameReviews(id, 1, 6),
-    ]);
+    const data = await igdbRequest<IgdbDetailRecord[]>("games", query);
+    const game = data[0];
 
-    const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
-    details.short_screenshots?.forEach((shot) => {
-      if (shot?.image) {
-        screenshotMap.set(shot.image, shot);
-      }
-    });
-    screenshots.forEach((shot) => {
-      if (shot?.image) {
-        screenshotMap.set(shot.image, shot);
-      }
-    });
+    if (!game) {
+      return NextResponse.json({ error: "Game not found." }, { status: 404 });
+    }
 
-    const gallery = Array.from(screenshotMap.values()).map((shot) => ({
-      id: shot.id,
-      url: shot.image,
-      width: shot.width ?? null,
-      height: shot.height ?? null,
-    }));
-
-    const cleanedReviews = reviews
-      .map((review) => {
-        const rawText = review.text ?? "";
-        const text = rawText.replace(/<[^>]+>/g, "").trim();
-        if (!text) return null;
-        const parsedRating =
-          typeof review.rating === "number"
-            ? review.rating
-            : typeof review.rating === "string"
-              ? Number.parseFloat(review.rating)
-              : NaN;
+    const coverImageUrl = getIgdbImageUrl(game.cover?.image_id, "cover");
+    const screenshotEntries = (game.screenshots ?? [])
+      .map((shot, index) => {
+        const url = getIgdbImageUrl(shot.image_id, "screenshot");
+        if (!url) {
+          return null;
+        }
         return {
-          id: review.id,
-          text,
-          rating: Number.isFinite(parsedRating) ? parsedRating : null,
-          createdAt: review.created ?? null,
-          author: review.user?.username ?? "IGDB user",
+          id: shot.id ?? index,
+          url,
         };
       })
-      .filter((review): review is NonNullable<typeof review> => Boolean(review));
+      .filter((entry): entry is { id: number; url: string } => Boolean(entry));
+
+    const screenshotUrls = screenshotEntries.map((entry) => entry.url);
+    const thumbnail = coverImageUrl ?? screenshotUrls[0] ?? null;
+    const backgroundImage = screenshotUrls[0] ?? coverImageUrl ?? null;
+    const description = game.storyline ?? game.summary ?? "";
+    const summary = game.summary ?? "";
+    const rating =
+      typeof game.aggregated_rating === "number"
+        ? game.aggregated_rating
+        : typeof game.rating === "number"
+          ? game.rating
+          : null;
+    const ratingsCount =
+      typeof game.aggregated_rating_count === "number"
+        ? game.aggregated_rating_count
+        : typeof game.rating_count === "number"
+          ? game.rating_count
+          : 0;
+    const platforms = (game.platforms ?? [])
+      .map((platform) => platform?.name?.trim())
+      .filter((name): name is string => Boolean(name));
+    const genres = (game.genres ?? [])
+      .map((genre) => genre?.name?.trim())
+      .filter((name): name is string => Boolean(name));
 
     const response = {
-      id: details.id,
-      name: details.name,
-      description: details.description_raw ?? details.description ?? "",
-      backgroundImage: details.background_image_additional ?? details.background_image,
-      thumbnail: details.background_image ?? details.background_image_additional ?? gallery[0]?.url ?? null,
-      released: details.released,
-      rating: details.rating,
-      ratingsCount: details.ratings_count,
-      website: details.website ?? null,
-      genres: details.genres?.map((genre) => genre.name) ?? [],
-      platforms: details.platforms?.map((entry) => entry.platform.name) ?? [],
-      developers: details.developers?.map((developer) => developer.name) ?? [],
-      publishers: details.publishers?.map((publisher) => publisher.name) ?? [],
-      gallery,
-      reviews: cleanedReviews,
+      id: game.id,
+      name: game.name,
+      description,
+      summary,
+      thumbnail,
+      backgroundImage,
+      released: formatReleaseDate(game.first_release_date),
+      rating,
+      ratingsCount,
+      website: null,
+      genres,
+      platforms,
+      developers: [] as string[],
+      publishers: [] as string[],
+      coverImageUrl,
+      screenshotUrls,
+      gallery: screenshotEntries,
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { status: 200 });
   } catch (error) {
     console.error("IGDB detail error", error);
     const message = error instanceof Error ? error.message : "Unable to load game details.";
-    const status = message.includes("404") ? 404 : 500;
+    const status = /404/.test(message) ? 404 : 500;
     return NextResponse.json({ error: status === 404 ? "Game not found." : message }, { status });
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Search, SlidersHorizontal, X } from "lucide-react";
 import { GameCard, type SearchGameResult } from "@/components/GameCard";
 import { DashboardStats } from "@/components/DashboardStats";
@@ -22,7 +22,8 @@ interface SearchResponse {
 
 interface GameMetadata {
   rating: number | null;
-  released: string | null;
+  releaseYear: number | null;
+  ratingsCount: number | null;
   coverImage: string | null;
 }
 
@@ -32,6 +33,23 @@ interface SimilarResponse {
 
 const SEARCH_STORAGE_KEY = "dgtracker:librarySearch";
 const PAGE_SIZE = 5;
+
+type DiscoverSortOption =
+  | "popular_desc"
+  | "popular_asc"
+  | "rating_desc"
+  | "rating_asc"
+  | "release_desc"
+  | "release_asc";
+
+const DISCOVER_SORT_OPTIONS: Array<{ value: DiscoverSortOption; label: string }> = [
+  { value: "popular_desc", label: "Most popular" },
+  { value: "popular_asc", label: "Least popular" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "rating_asc", label: "Lowest rated" },
+  { value: "release_desc", label: "Newest releases" },
+  { value: "release_asc", label: "Oldest releases" },
+];
 
 const createDefaultPagination = (): SearchResponse["pagination"] => ({
   total: 0,
@@ -47,6 +65,7 @@ type StoredSearchState = {
   results: SearchGameResult[];
   pagination: SearchResponse["pagination"];
   metadataById: Record<number, GameMetadata>;
+  sortOrder: DiscoverSortOption;
 };
 
 export default function DashboardPage() {
@@ -58,6 +77,7 @@ export default function DashboardPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [metadataById, setMetadataById] = useState<Record<number, GameMetadata>>({});
+  const [searchSortOrder, setSearchSortOrder] = useState<DiscoverSortOption>("popular_desc");
   const [ownershipFilter, setOwnershipFilter] = useState<Ownership | "all">("all");
   const [statusFilter, setStatusFilter] = useState<PlayStatus | "all">("all");
   const [platformFilter, setPlatformFilter] = useState<string | "all">("all");
@@ -69,6 +89,8 @@ export default function DashboardPage() {
   const [similarLoading, setSimilarLoading] = useState(false);
   const [similarError, setSimilarError] = useState<string | null>(null);
   const [currentLibraryRoute, setCurrentLibraryRoute] = useState("/library");
+  const [pageInputValue, setPageInputValue] = useState("1");
+  const previousQueryRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -127,10 +149,22 @@ export default function DashboardPage() {
             if (!Number.isFinite(id) || !value || typeof value !== "object") {
               return acc;
             }
-            const maybeMetadata = value as Partial<GameMetadata>;
+            const maybeMetadata = value as Partial<GameMetadata> & { released?: string | null };
+            const storedRelease = maybeMetadata.releaseYear ?? maybeMetadata.released;
+            const releaseYear =
+              typeof storedRelease === "number"
+                ? storedRelease
+                : typeof storedRelease === "string"
+                  ? (() => {
+                      const parsedYear = Number.parseInt(storedRelease.slice(0, 4), 10);
+                      return Number.isFinite(parsedYear) ? parsedYear : null;
+                    })()
+                  : null;
             acc[id] = {
               rating: typeof maybeMetadata.rating === "number" ? maybeMetadata.rating : null,
-              released: typeof maybeMetadata.released === "string" ? maybeMetadata.released : null,
+              releaseYear,
+              ratingsCount:
+                typeof maybeMetadata.ratingsCount === "number" ? maybeMetadata.ratingsCount : null,
               coverImage: maybeMetadata.coverImage
                 ? normalizeImageUrl(maybeMetadata.coverImage)
                 : null,
@@ -140,6 +174,13 @@ export default function DashboardPage() {
           {},
         );
         setMetadataById(sanitizedEntries);
+      }
+
+      if (
+        parsed.sortOrder &&
+        DISCOVER_SORT_OPTIONS.some((option) => option.value === parsed.sortOrder)
+      ) {
+        setSearchSortOrder(parsed.sortOrder);
       }
     } catch (error) {
       console.warn("Failed to restore library search state", error);
@@ -159,6 +200,7 @@ export default function DashboardPage() {
       results: searchResults,
       pagination,
       metadataById,
+      sortOrder: searchSortOrder,
     };
 
     try {
@@ -166,7 +208,15 @@ export default function DashboardPage() {
     } catch (error) {
       console.warn("Failed to persist library search state", error);
     }
-  }, [hasHydratedSearchState, query, debouncedQuery, searchResults, pagination, metadataById]);
+  }, [
+    hasHydratedSearchState,
+    query,
+    debouncedQuery,
+    searchResults,
+    pagination,
+    metadataById,
+    searchSortOrder,
+  ]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -174,6 +224,32 @@ export default function DashboardPage() {
     }, 400);
     return () => window.clearTimeout(timeout);
   }, [query]);
+
+  useEffect(() => {
+    if (!hasHydratedSearchState) {
+      return;
+    }
+    if (previousQueryRef.current === null) {
+      previousQueryRef.current = debouncedQuery;
+      return;
+    }
+    if (previousQueryRef.current === debouncedQuery) {
+      return;
+    }
+    previousQueryRef.current = debouncedQuery;
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+  }, [debouncedQuery, hasHydratedSearchState]);
+
+  useEffect(() => {
+    if (!hasHydratedSearchState) {
+      return;
+    }
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }));
+  }, [searchSortOrder, hasHydratedSearchState]);
+
+  useEffect(() => {
+    setPageInputValue(String(pagination.page));
+  }, [pagination.page]);
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -191,28 +267,69 @@ export default function DashboardPage() {
       try {
         setSearchLoading(true);
         setSearchError(null);
-        const response = await fetch(`/api/igdb/search?q=${encodeURIComponent(debouncedQuery)}&page=${pagination.page}`,
-          { signal: controller.signal },
-        );
-        if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to search games.");
+        const currentPage = pagination.page;
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(PAGE_SIZE),
+          sort: searchSortOrder,
+        });
+        params.set("q", debouncedQuery);
+        const response = await fetch(`/api/games/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | Partial<SearchResponse>
+          | { error?: string }
+          | null;
+        if (!response.ok || !payload || typeof payload !== "object") {
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+          throw new Error(message);
         }
-        const data = (await response.json()) as SearchResponse;
+        const data = payload as Partial<SearchResponse>;
         if (cancelled) return;
-        setSearchResults(data.results);
-        setPagination(data.pagination);
-          setMetadataById((prev) => {
-            const next = { ...prev };
-            for (const game of data.results) {
-              next[game.id] = {
-                rating: game.rating ?? null,
-                released: game.released ?? null,
-                coverImage: normalizeImageUrl(game.background_image),
-              };
+        const normalizedResults = Array.isArray(data.results) ? (data.results as SearchGameResult[]) : [];
+        const paginationPayload = data.pagination;
+        const nextPagination = paginationPayload
+          ? {
+              total:
+                typeof paginationPayload.total === "number"
+                  ? paginationPayload.total
+                  : normalizedResults.length,
+              page:
+                typeof paginationPayload.page === "number" && paginationPayload.page > 0
+                  ? paginationPayload.page
+                  : currentPage,
+              pageSize:
+                typeof paginationPayload.pageSize === "number" && paginationPayload.pageSize > 0
+                  ? paginationPayload.pageSize
+                  : PAGE_SIZE,
+              hasNextPage: Boolean(paginationPayload.hasNextPage),
+              hasPreviousPage: Boolean(paginationPayload.hasPreviousPage),
             }
-            return next;
-          });
+          : {
+              total: normalizedResults.length,
+              page: currentPage,
+              pageSize: PAGE_SIZE,
+              hasNextPage: normalizedResults.length === PAGE_SIZE,
+              hasPreviousPage: currentPage > 1,
+            };
+        setSearchResults(normalizedResults);
+        setPagination(nextPagination);
+        setMetadataById((prev) => {
+          const next = { ...prev };
+          for (const game of normalizedResults) {
+            const resolvedCover = normalizeImageUrl(
+              game.coverImageUrl ?? game.screenshotUrls[0] ?? next[game.id]?.coverImage ?? null,
+            );
+            next[game.id] = {
+              rating: game.rating ?? next[game.id]?.rating ?? null,
+              releaseYear: game.releaseYear ?? next[game.id]?.releaseYear ?? null,
+              ratingsCount: game.ratingsCount ?? next[game.id]?.ratingsCount ?? null,
+              coverImage: resolvedCover ?? next[game.id]?.coverImage ?? null,
+            };
+          }
+          return next;
+        });
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -220,6 +337,7 @@ export default function DashboardPage() {
         }
         setSearchError(error instanceof Error ? error.message : "Unable to search games.");
         setSearchResults([]);
+        setPagination(createDefaultPagination());
       } finally {
         if (!cancelled) {
           setSearchLoading(false);
@@ -233,7 +351,7 @@ export default function DashboardPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [debouncedQuery, pagination.page]);
+  }, [debouncedQuery, pagination.page, searchSortOrder]);
 
   useEffect(() => {
     const needsHydration = libraryGames.filter((game) => {
@@ -254,6 +372,7 @@ export default function DashboardPage() {
 
     type DetailsHydrationResponse = {
       rating: number | null;
+      ratings_count?: number | null;
       released: string | null;
       background_image: string | null;
       background_image_additional: string | null;
@@ -275,14 +394,27 @@ export default function DashboardPage() {
               data.background_image_additional,
               ...(data.short_screenshots?.map((shot) => shot.image) ?? []),
             ]) ?? null;
-          setMetadataById((prev) => ({
-            ...prev,
-            [game.igdbId]: {
-              rating: data.rating ?? prev[game.igdbId]?.rating ?? null,
-              released: data.released ?? prev[game.igdbId]?.released ?? null,
-              coverImage: coverCandidate ?? prev[game.igdbId]?.coverImage ?? null,
-            },
-          }));
+          setMetadataById((prev) => {
+            const current = prev[game.igdbId];
+            const parsedYear =
+              data.released && data.released.length >= 4
+                ? Number.parseInt(data.released.slice(0, 4), 10)
+                : NaN;
+            const releaseYear = Number.isFinite(parsedYear) ? parsedYear : current?.releaseYear ?? null;
+            const ratingsCount =
+              typeof data.ratings_count === "number"
+                ? data.ratings_count
+                : current?.ratingsCount ?? null;
+            return {
+              ...prev,
+              [game.igdbId]: {
+                rating: data.rating ?? current?.rating ?? null,
+                releaseYear,
+                ratingsCount,
+                coverImage: coverCandidate ?? current?.coverImage ?? null,
+              },
+            };
+          });
           if (!game.coverImage && coverCandidate) {
             update(game.igdbId, { coverImage: coverCandidate });
           }
@@ -318,13 +450,17 @@ export default function DashboardPage() {
         setSimilarLoading(true);
         setSimilarError(null);
         const response = await fetch(`/api/igdb/similar/${similarSource.id}`, { signal: controller.signal });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error ?? "Unable to load similar games.");
+        const payload = (await response.json().catch(() => null)) as
+          | Partial<SimilarResponse>
+          | { error?: string }
+          | null;
+        if (!response.ok || !payload || typeof payload !== "object") {
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load similar games.";
+          throw new Error(message);
         }
-        const data = (await response.json()) as SimilarResponse;
+        const data = payload as Partial<SimilarResponse>;
         if (cancelled) return;
-        setSimilarResults(data.results ?? []);
+        setSimilarResults(Array.isArray(data.results) ? data.results : []);
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -388,18 +524,37 @@ export default function DashboardPage() {
     setDebouncedQuery(query.trim());
   };
 
+  const totalDiscoverPages = Math.max(
+    1,
+    Math.ceil(Math.max(pagination.total, searchResults.length) / pagination.pageSize),
+  );
+
+  const handlePageJumpSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pageInputValue) {
+      setPageInputValue(String(pagination.page));
+      return;
+    }
+    const parsed = Number.parseInt(pageInputValue, 10);
+    if (!Number.isFinite(parsed)) {
+      setPageInputValue(String(pagination.page));
+      return;
+    }
+    const nextPage = Math.min(Math.max(parsed, 1), totalDiscoverPages);
+    setPagination((prev) => ({ ...prev, page: nextPage }));
+  };
+
   const handleAddToLibrary = (game: SearchGameResult) => {
     const metadata = metadataById[game.id];
-    const coverImage = normalizeImageUrl(metadata?.coverImage ?? game.background_image ?? null);
-    const normalizedPlatforms =
-      game.parent_platforms?.map((entry) => entry.platform) ??
-      game.platforms?.map((entry) => entry.platform) ??
-      [];
+    const coverImage = normalizeImageUrl(
+      metadata?.coverImage ?? game.coverImageUrl ?? game.screenshotUrls[0] ?? null,
+    );
+    const platformNames = (game.platforms ?? []).map((platform) => platform.name);
     const created = upsert({
       igdbId: game.id,
       slug: game.slug ?? `${game.id}`,
       title: game.name,
-      platforms: normalizedPlatforms.map((platform) => platform.name),
+      platforms: platformNames,
       coverImage,
       playtimeHours: 0,
     });
@@ -407,8 +562,9 @@ export default function DashboardPage() {
       ...prev,
       [created.igdbId]: {
         rating: game.rating ?? null,
-        released: game.released ?? null,
-        coverImage,
+        releaseYear: game.releaseYear ?? prev[created.igdbId]?.releaseYear ?? null,
+        ratingsCount: game.ratingsCount ?? prev[created.igdbId]?.ratingsCount ?? null,
+        coverImage: coverImage ?? prev[created.igdbId]?.coverImage ?? null,
       },
     }));
   };
@@ -456,8 +612,8 @@ export default function DashboardPage() {
           case "title":
             return a.title.localeCompare(b.title);
           case "release_year": {
-            const yearA = metadataA?.released ? Number.parseInt(metadataA.released.slice(0, 4), 10) : 0;
-            const yearB = metadataB?.released ? Number.parseInt(metadataB.released.slice(0, 4), 10) : 0;
+            const yearA = metadataA?.releaseYear ?? 0;
+            const yearB = metadataB?.releaseYear ?? 0;
             if (yearA === yearB) {
               return a.title.localeCompare(b.title);
             }
@@ -500,6 +656,11 @@ export default function DashboardPage() {
       });
   }, [libraryGames, metadataById, ownershipFilter, statusFilter, platformFilter, minRating, sortOrder]);
 
+  const hasSearchQuery = debouncedQuery.length > 0;
+  const discoverCanGoPrevious = pagination.hasPreviousPage || pagination.page > 1;
+  const discoverCanGoNext = pagination.hasNextPage || pagination.page < totalDiscoverPages;
+  const showDiscoverPagination = hasSearchQuery && (totalDiscoverPages > 1);
+
   return (
     <div className="space-y-10">
       <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
@@ -510,23 +671,39 @@ export default function DashboardPage() {
               Search IGDB without exposing your API key. Add favorites to your personal library and keep your progress synced locally.
             </p>
           </div>
-          <form onSubmit={handleSearchSubmit} className="flex w-full flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search game titles..."
-                className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <button
-              type="submit"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-            >
-              <Search className="h-4 w-4" /> Search
-            </button>
-          </form>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <form onSubmit={handleSearchSubmit} className="flex w-full flex-col gap-3 sm:flex-row lg:flex-1">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search game titles..."
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+              >
+                <Search className="h-4 w-4" /> Search
+              </button>
+            </form>
+            <label className="flex w-full flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 lg:w-60">
+              Sort results
+              <select
+                value={searchSortOrder}
+                onChange={(event) => setSearchSortOrder(event.target.value as DiscoverSortOption)}
+                className="h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {DISCOVER_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           {searchError ? (
             <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
               {searchError}
@@ -542,12 +719,17 @@ export default function DashboardPage() {
               const userGame = libraryGames.find((game) => game.igdbId === result.id);
               const metadata = metadataById[result.id];
               const coverOverride = normalizeImageUrl(
-                metadata?.coverImage ?? result.background_image ?? null,
+                metadata?.coverImage ?? result.coverImageUrl ?? result.screenshotUrls[0] ?? null,
               );
+              const cardData: SearchGameResult = {
+                ...result,
+                genres: Array.isArray(result.genres) ? result.genres : [],
+                coverImageUrl: coverOverride ?? result.coverImageUrl,
+              };
               return (
                 <GameCard
                   key={result.id}
-                  game={result}
+                  game={cardData}
                   coverOverride={coverOverride}
                   userGame={userGame}
                   onAdd={handleAddToLibrary}
@@ -562,27 +744,51 @@ export default function DashboardPage() {
           {debouncedQuery && !searchLoading && !searchResults.length ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">No games found for this search term.</p>
           ) : null}
-          {debouncedQuery && (pagination.hasNextPage || pagination.hasPreviousPage) ? (
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 p-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-              <button
-                type="button"
-                onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                disabled={!pagination.hasPreviousPage || searchLoading}
-                className="rounded-lg border border-slate-200 px-4 py-2 font-medium text-slate-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-              >
-                Previous
-              </button>
-              <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Page {pagination.page} • {pagination.total} results
-              </span>
-              <button
-                type="button"
-                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-                disabled={!pagination.hasNextPage || searchLoading}
-                className="rounded-lg border border-slate-200 px-4 py-2 font-medium text-slate-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-              >
-                Next
-              </button>
+          {showDiscoverPagination ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/80 p-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/70 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={!discoverCanGoPrevious || searchLoading}
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-medium text-slate-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
+                  disabled={!discoverCanGoNext || searchLoading}
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-medium text-slate-700 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <span>
+                  Page {pagination.page} of {totalDiscoverPages} • {pagination.total} results
+                </span>
+                <form onSubmit={handlePageJumpSubmit} className="flex items-center gap-2 text-[11px] normal-case">
+                  <label htmlFor="discover-page-input" className="font-semibold text-slate-600 dark:text-slate-300">
+                    Jump to
+                  </label>
+                  <input
+                    id="discover-page-input"
+                    type="number"
+                    min={1}
+                    max={totalDiscoverPages}
+                    value={pageInputValue}
+                    onChange={(event) => setPageInputValue(event.target.value)}
+                    className="h-9 w-16 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-emerald-400 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:bg-emerald-50 dark:border-emerald-500/70 dark:text-emerald-200 dark:hover:bg-emerald-500/10"
+                  >
+                    Go
+                  </button>
+                </form>
+              </div>
             </div>
           ) : null}
         </div>
@@ -621,20 +827,22 @@ export default function DashboardPage() {
               );
               const cardData: SearchGameResult = {
                 id: userGame.igdbId,
-                slug: userGame.slug,
+                slug: userGame.slug ?? `${userGame.igdbId}`,
                 name: userGame.title,
-                background_image: coverImage,
+                summary: userGame.notes ?? "",
+                coverImageUrl: coverImage,
+                screenshotUrls: [],
+                releaseYear: metadata?.releaseYear ?? null,
                 rating: metadata?.rating ?? null,
-                genres: [],
+                ratingsCount: metadata?.ratingsCount ?? 0,
                 platforms: userGame.platforms.map((platform, index) => ({
-                  platform: {
-                    id: index,
-                    name: platform,
-                    slug: platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
-                  },
+                  id: index,
+                  name: platform,
+                  slug: platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+                  abbreviation: null,
                 })),
-                playtime: userGame.playtimeHours,
-                released: metadata?.released ?? null,
+                genres: [],
+                popularity: metadata?.rating ?? null,
               };
               return (
                 <GameCard
