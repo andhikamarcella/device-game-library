@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const pageSizeParam = searchParams.get("pageSize");
   const ordering = searchParams.get("ordering") ?? undefined;
   const pageSizeCandidate = pageSizeParam ? Number.parseInt(pageSizeParam, 10) : undefined;
-  const pageSize = pageSizeCandidate && pageSizeCandidate > 0 ? Math.min(pageSizeCandidate, 40) : 6;
+  const pageSize = pageSizeCandidate && pageSizeCandidate > 0 ? Math.min(pageSizeCandidate, 40) : 5;
   const normalizedPlatformId =
     typeof platformId === "number" && Number.isFinite(platformId) ? platformId : undefined;
 
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         releaseYear: Number.isFinite(releaseYear) ? releaseYear : null,
         rating: game.rating ?? null,
         ratingsCount: game.ratings_count ?? 0,
-        platforms: game.platforms
+        platforms: (game.platforms ?? [])
           .map((entry) => ({
             id: entry.platform.id,
             name: entry.platform.name,

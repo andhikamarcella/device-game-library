@@ -11,6 +11,7 @@ import { useGameStore } from "@/hooks/useGameStore";
 import type { GameDraft } from "@/hooks/useGameStore";
 import { Game, GameFormat, GameStatus, Device } from "@/lib/types";
 import { cn, formatDateTime, parseTags, sortGames, cycleStatus } from "@/lib/utils";
+import { truncateText } from "@/lib/text";
 
 const statusFilters: Array<{ label: string; value: GameStatus | "all" }> = [
   { label: "All", value: "all" },
@@ -1021,7 +1022,7 @@ export default function GamesPage() {
       const nextNotes = formState.notes.trim()
         ? formState.notes
         : detail.description
-            ? `${detail.description.slice(0, 480)}${detail.description.length > 480 ? "…" : ""}`
+            ? truncateText(detail.description, 480)
             : "";
 
       setFormState((prev) => {
