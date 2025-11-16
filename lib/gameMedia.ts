@@ -1,0 +1,134 @@
+import type { RawgClip, RawgGameDetails, RawgMovie } from "@/lib/rawg";
+
+export type GameTrailerSource =
+  | { type: "rawg-clip"; title: string; youtubeId: string; thumbnailUrl: string }
+  | { type: "rawg-movie"; title: string; youtubeId: string; thumbnailUrl: string }
+  | { type: "external"; title: string; youtubeId: string; thumbnailUrl: string }
+  | { type: "none" };
+
+const YOUTUBE_ID_PATTERNS = [
+  /youtu\.be\/([^?&#/]+)/i,
+  /youtube\.com\/(?:watch\?.*v=|embed\/|v\/)([^?&#/]+)/i,
+  /youtube\.com\/shorts\/([^?&#/]+)/i,
+  /i\.ytimg\.com\/vi\/([^/]+)/i,
+  /img\.youtube\.com\/vi\/([^/]+)/i,
+];
+
+function extractYoutubeId(url: string | null | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed.startsWith("http") ? trimmed : `https:${trimmed}`);
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
+      const idFromQuery = parsed.searchParams.get("v");
+      if (idFromQuery) {
+        return idFromQuery;
+      }
+      const pathnameMatch = YOUTUBE_ID_PATTERNS.find((pattern) => {
+        const result = parsed.href.match(pattern);
+        if (result && result[1]) {
+          return true;
+        }
+        return false;
+      });
+      if (pathnameMatch) {
+        const match = parsed.href.match(pathnameMatch);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+      const fallback = parsed.pathname.split("/").filter(Boolean).pop();
+      if (fallback) {
+        return fallback;
+      }
+    }
+    if (host.includes("ytimg.com") || host.includes("img.youtube.com")) {
+      for (const pattern of YOUTUBE_ID_PATTERNS) {
+        const match = parsed.href.match(pattern);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    }
+  } catch (error) {
+    for (const pattern of YOUTUBE_ID_PATTERNS) {
+      const match = trimmed.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildThumbnailUrl(youtubeId: string, fallback?: string | null): string {
+  if (fallback && fallback.trim()) {
+    return fallback;
+  }
+  return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+}
+
+function collectClipSources(clip: RawgClip | null | undefined, title: string): GameTrailerSource | null {
+  if (!clip) {
+    return null;
+  }
+  const possibleUrls = [clip.video, clip.clip, ...(clip.clips ? Object.values(clip.clips) : [])];
+  for (const url of possibleUrls) {
+    const youtubeId = extractYoutubeId(url);
+    if (youtubeId) {
+      return {
+        type: "rawg-clip",
+        title,
+        youtubeId,
+        thumbnailUrl: buildThumbnailUrl(youtubeId, clip.preview ?? undefined),
+      } satisfies GameTrailerSource;
+    }
+  }
+  return null;
+}
+
+function collectMovieSources(movies: RawgMovie[] | null | undefined, title: string): GameTrailerSource | null {
+  if (!movies || movies.length === 0) {
+    return null;
+  }
+  for (const movie of movies) {
+    const clipTitle = movie.name || title;
+    const dataValues = Object.values(movie.data ?? {});
+    const urlCandidates = [movie.preview, ...dataValues];
+    for (const url of urlCandidates) {
+      const youtubeId = extractYoutubeId(url);
+      if (youtubeId) {
+        return {
+          type: "rawg-movie",
+          title: clipTitle,
+          youtubeId,
+          thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
+        } satisfies GameTrailerSource;
+      }
+    }
+  }
+  return null;
+}
+
+export function extractTrailerFromRawg(game: RawgGameDetails): GameTrailerSource {
+  const title = game.name || "";
+  const clipSource = collectClipSources(game.clip, title);
+  if (clipSource) {
+    return clipSource;
+  }
+
+  const movieSource = collectMovieSources(game.movies, title);
+  if (movieSource) {
+    return movieSource;
+  }
+
+  return { type: "none" };
+}
