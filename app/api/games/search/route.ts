@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { searchGames } from "@/lib/rawg";
+import { RawgSearchParams, searchGames } from "@/lib/rawg";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,12 +23,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const games = await searchGames(query, {
-      page,
-      pageSize,
+    const searchParamsPayload: RawgSearchParams = {
+      search: query || undefined,
       ordering: ordering ?? (query ? "-rating" : "-added"),
-      platformId: normalizedPlatformId,
-    });
+      platforms: normalizedPlatformId ? String(normalizedPlatformId) : undefined,
+      page,
+      page_size: pageSize,
+    };
+
+    const games = await searchGames(searchParamsPayload);
     const results = games.results.map((game) => {
       const releaseYear = game.released ? Number.parseInt(game.released.slice(0, 4), 10) : null;
       return {
