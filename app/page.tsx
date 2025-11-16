@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -16,16 +17,55 @@ type SearchPlatform = {
   id: number;
   name: string;
   slug: string;
+  abbreviation?: string | null;
 };
 
 type SearchResult = {
   id: number;
+  slug: string | null;
   name: string;
-  coverImage: string | null;
+  summary: string;
+  coverUrl: string | null;
+  coverImageUrl?: string | null;
+  screenshots: string[];
+  screenshotUrls?: string[];
   releaseYear: number | null;
   rating: number | null;
   ratingsCount: number;
   platforms: SearchPlatform[];
+  genres: string[];
+};
+
+const getResultCover = (game: SearchResult | null | undefined): string | null => {
+  if (!game) {
+    return null;
+  }
+  if (game.coverUrl) {
+    return game.coverUrl;
+  }
+  if (game.coverImageUrl) {
+    return game.coverImageUrl;
+  }
+  if (Array.isArray(game.screenshots) && game.screenshots.length) {
+    return game.screenshots[0];
+  }
+  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
+    return game.screenshotUrls[0];
+  }
+  return null;
+};
+
+const getResultScreenshots = (game: SearchResult | null | undefined): string[] => {
+  if (!game) {
+    return [];
+  }
+  if (Array.isArray(game.screenshots) && game.screenshots.length) {
+    return game.screenshots;
+  }
+  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
+    return game.screenshotUrls;
+  }
+  return [];
 };
 
 type SearchResponse = {
@@ -41,9 +81,17 @@ type SearchResponse = {
 
 type DetailMetadata = {
   id: number;
+  name?: string;
+  description?: string;
   thumbnail: string | null;
   backgroundImage: string | null;
+  coverImageUrl?: string | null;
+  screenshotUrls?: string[];
   gallery: Array<{ id: number; url: string | null }>;
+  genres?: string[];
+  platforms?: string[];
+  rating?: number | null;
+  ratingsCount?: number | null;
 };
 
 type PlatformOption = {
@@ -52,9 +100,33 @@ type PlatformOption = {
   slug: string;
   yearStart: number | null;
   image: string | null;
+  abbreviation?: string | null;
 };
 
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
+
+const DISCOVER_SORT_OPTIONS = [
+  { value: "popular_desc", label: "Most popular" },
+  { value: "popular_asc", label: "Least popular" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "rating_asc", label: "Lowest rated" },
+  { value: "release_desc", label: "Newest releases" },
+  { value: "release_asc", label: "Oldest releases" },
+] as const;
+
+type DiscoverSortOption = (typeof DISCOVER_SORT_OPTIONS)[number]["value"];
+
+const mapSortOrderToApiParam = (
+  value: DiscoverSortOption,
+): "popular" | "rating" | "release_date" => {
+  if (value.startsWith("rating")) {
+    return "rating";
+  }
+  if (value.startsWith("release")) {
+    return "release_date";
+  }
+  return "popular";
+};
 
 const parsePlatformValue = (value: string | null): string => {
   if (!value) {
@@ -71,6 +143,15 @@ const parsePageValue = (value: string | null): number => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 };
 
+const parseSortValue = (value: string | null): DiscoverSortOption => {
+  if (!value) {
+    return "popular_desc";
+  }
+  return DISCOVER_SORT_OPTIONS.some((option) => option.value === value)
+    ? (value as DiscoverSortOption)
+    : "popular_desc";
+};
+
 function DashboardPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -79,15 +160,20 @@ function DashboardPageContent() {
   const initialQueryParam = searchParams.get("q") ?? "";
   const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
   const initialPageParam = parsePageValue(searchParams.get("page"));
+  const initialSortParam = parseSortValue(searchParams.get("sort"));
 
   const { devices } = useDeviceStore();
   const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
+
+  const trackedGames = Array.isArray(games) ? games : [];
+  const trackedDevices = Array.isArray(devices) ? devices : [];
 
   const [query, setQuery] = useState(initialQueryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
   const [results, setResults] = useState<SearchResult[]>([]);
   const pageSize = 5;
   const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
+  const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
   const [page, setPage] = useState(initialPageParam);
   const [pageInput, setPageInput] = useState(String(initialPageParam));
   const lastSyncedSearchRef = useRef(searchParams.toString());
@@ -108,6 +194,7 @@ function DashboardPageContent() {
   const [platformSearch, setPlatformSearch] = useState("");
   const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+  const safeResults = Array.isArray(results) ? results : [];
 
   useEffect(() => {
     const currentSearch = searchParams.toString();
@@ -118,6 +205,7 @@ function DashboardPageContent() {
     const nextQueryParam = searchParams.get("q") ?? "";
     const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
     const nextPageParam = parsePageValue(searchParams.get("page"));
+    const nextSortParam = parseSortValue(searchParams.get("sort"));
     const trimmed = nextQueryParam.trim();
 
     setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
@@ -125,6 +213,7 @@ function DashboardPageContent() {
     setPage((current) => (current === nextPageParam ? current : nextPageParam));
     setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
     setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
+    setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
 
     skipPageResetRef.current = true;
     lastSyncedSearchRef.current = currentSearch;
@@ -149,19 +238,41 @@ function DashboardPageContent() {
     setPlatformLoading(true);
     setPlatformError(null);
 
-    fetch("/api/platforms")
+    fetch("/api/igdb/platforms")
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load platforms.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load platforms.";
+          throw new Error(message);
         }
-        return (await response.json()) as PlatformOption[];
+        return payload;
       })
-      .then((data) => {
-        if (!cancelled) {
-          const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
-          setPlatforms(sorted);
+      .then((payload) => {
+        if (cancelled) {
+          return;
         }
+        type ApiPlatform = {
+          id: number;
+          name: string;
+          slug?: string | null;
+          generation?: number | null;
+          abbreviation?: string | null;
+        };
+        const rawList = Array.isArray((payload as { platforms?: ApiPlatform[] } | null)?.platforms)
+          ? ((payload as { platforms: ApiPlatform[] }).platforms ?? [])
+          : Array.isArray(payload)
+            ? (payload as ApiPlatform[])
+            : [];
+        const normalized = rawList.map((platform) => ({
+          id: platform.id,
+          name: platform.name,
+          slug: platform.slug ?? `igdb-${platform.id}`,
+          yearStart: typeof platform.generation === "number" ? platform.generation : null,
+          image: null,
+          abbreviation: platform.abbreviation ?? null,
+        }));
+        const sorted = [...normalized].sort((a, b) => a.name.localeCompare(b.name));
+        setPlatforms(sorted);
       })
       .catch((fetchError) => {
         if (cancelled) return;
@@ -210,36 +321,46 @@ function DashboardPageContent() {
     setError(null);
     setHasSearched(true);
 
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-    });
+    const apiParams = new URLSearchParams();
     if (debouncedQuery) {
-      params.set("q", debouncedQuery);
+      apiParams.set("q", debouncedQuery);
     }
     if (selectedPlatform !== "all") {
-      params.set("platform", selectedPlatform);
+      apiParams.set("platformId", selectedPlatform);
     }
+    const apiSortParam = mapSortOrderToApiParam(sortOrder);
+    if (apiSortParam !== "popular") {
+      apiParams.set("sort", apiSortParam);
+    }
+    const searchPath = apiParams.toString();
 
-    fetch(`/api/games/search?${params.toString()}`, {
+    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to search games.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+          throw new Error(message);
         }
-        return response.json() as Promise<SearchResponse>;
+        return payload;
       })
-      .then((data) => {
-        setResults(data.results);
-        setPagination({
-          total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? page,
-          pageSize: data.pagination?.pageSize ?? pageSize,
-          hasNextPage: Boolean(data.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
-        });
+      .then((payload) => {
+        const data = payload as Partial<SearchResponse> | null;
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
+        setResults(normalizedResults);
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : pageSize,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setPagination(nextPagination);
       })
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") {
@@ -263,7 +384,7 @@ function DashboardPageContent() {
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, selectedPlatform, page, pageSize]);
+  }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder]);
 
   useEffect(() => {
     if (skipPageResetRef.current) {
@@ -271,7 +392,7 @@ function DashboardPageContent() {
       return;
     }
     setPage(1);
-  }, [debouncedQuery, selectedPlatform]);
+  }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
     const nextValue = String(pagination.page > 0 ? pagination.page : page);
@@ -289,6 +410,9 @@ function DashboardPageContent() {
     if (page > 1) {
       params.set("page", String(page));
     }
+    if (sortOrder !== "popular_desc") {
+      params.set("sort", sortOrder);
+    }
 
     const nextSearch = params.toString();
     if (nextSearch === lastSyncedSearchRef.current) {
@@ -297,7 +421,7 @@ function DashboardPageContent() {
 
     lastSyncedSearchRef.current = nextSearch;
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false });
-  }, [debouncedQuery, selectedPlatform, page, pathname, router]);
+  }, [debouncedQuery, selectedPlatform, sortOrder, page, pathname, router]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -312,27 +436,26 @@ function DashboardPageContent() {
 
   const statusCounts = statusLabels.map((status) => ({
     status,
-    count: games.filter((game) => game.status === status).length,
+    count: trackedGames.filter((game) => game.status === status).length,
   }));
 
   const filteredPlatforms = useMemo(() => {
+    const availablePlatforms = Array.isArray(platforms) ? platforms : [];
     if (!platformSearch.trim()) {
-      return platforms;
+      return availablePlatforms;
     }
     const term = platformSearch.trim().toLowerCase();
-    return platforms.filter((platform) => platform.name.toLowerCase().includes(term));
+    return availablePlatforms.filter((platform) => platform.name.toLowerCase().includes(term));
   }, [platformSearch, platforms]);
 
   const selectedPlatformId = selectedPlatform !== "all" ? Number.parseInt(selectedPlatform, 10) : null;
 
-  const displayedPlatforms = useMemo(() => {
-    const top = filteredPlatforms.slice(0, 40);
-    if (selectedPlatformId && !top.some((platform) => platform.id === selectedPlatformId)) {
-      const selectedMatch = platforms.find((platform) => platform.id === selectedPlatformId);
-      return selectedMatch ? [selectedMatch, ...top] : top;
-    }
-    return top;
-  }, [filteredPlatforms, platforms, selectedPlatformId]);
+  const sortedPlatforms = useMemo(() => {
+    const normalized = Array.isArray(filteredPlatforms) ? filteredPlatforms : [];
+    return [...normalized].sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredPlatforms]);
+
+  const platformButtons = sortedPlatforms;
 
   const retroPrioritySlugs = [
     "nes",
@@ -367,16 +490,16 @@ function DashboardPageContent() {
     return [...prioritized, ...fallback].slice(0, 8);
   }, [platforms]);
 
-  const totalGames = games.length || 1;
-  const recentGames = [...games]
+  const totalGames = trackedGames.length || 1;
+  const recentGames = [...trackedGames]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
-  const playingGames = games.filter((game) => game.status === "playing");
-  const wishlistGames = games.filter((game) => game.wishlist);
+  const playingGames = trackedGames.filter((game) => game.status === "playing");
+  const wishlistGames = trackedGames.filter((game) => game.wishlist);
   const totalPages = Math.max(
     1,
-    Math.ceil(Math.max(pagination.total, results.length) / Math.max(pagination.pageSize, 1)),
+    Math.ceil(Math.max(pagination.total, safeResults.length) / Math.max(pagination.pageSize, 1)),
   );
   const currentPage = pagination.page > 0 ? pagination.page : page;
   const canGoNext = pagination.hasNextPage || currentPage < totalPages;
@@ -418,7 +541,7 @@ function DashboardPageContent() {
 
   const handleAddToWishlist = async (game: SearchResult) => {
     const normalizedTitle = game.name.trim().toLowerCase();
-    const existing = games.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
+    const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
 
     if (existing) {
       if (existing.wishlist) {
@@ -445,22 +568,29 @@ function DashboardPageContent() {
 
       try {
         toggleWishlistGame(existing.id);
-        const detailScreenshots = detail?.gallery
-          ?.map((shot) => shot?.url?.trim())
-          .filter((url): url is string => Boolean(url)) ?? [];
+        const detailScreenshots = detail?.screenshotUrls?.length
+          ? detail.screenshotUrls
+          : detail?.gallery
+              ?.map((shot) => shot?.url?.trim())
+              .filter((url): url is string => Boolean(url)) ?? [];
+        const fallbackScreenshots = detailScreenshots.length
+          ? detailScreenshots
+          : getResultScreenshots(game);
 
         const updates: Partial<Game> = {};
         if (!existing.igdbId) {
           updates.igdbId = detail?.id ?? game.id;
         }
-        if (detail?.thumbnail && !existing.coverImage) {
-          updates.coverImage = detail.thumbnail;
+        const preferredThumbnail = detail?.thumbnail ?? detail?.coverImageUrl ?? getResultCover(game);
+        if (preferredThumbnail && !existing.coverImage) {
+          updates.coverImage = preferredThumbnail;
         }
-        if ((detail?.backgroundImage || detail?.thumbnail) && !existing.heroImage) {
-          updates.heroImage = detail?.backgroundImage ?? detail?.thumbnail ?? undefined;
+        const preferredHero = detail?.backgroundImage ?? preferredThumbnail ?? null;
+        if (preferredHero && !existing.heroImage) {
+          updates.heroImage = preferredHero;
         }
-        if (detailScreenshots.length && (!existing.screenshotUrls || existing.screenshotUrls.length === 0)) {
-          updates.screenshotUrls = detailScreenshots;
+        if (fallbackScreenshots.length && (!existing.screenshotUrls || existing.screenshotUrls.length === 0)) {
+          updates.screenshotUrls = fallbackScreenshots;
         }
 
         if (Object.keys(updates).length > 0) {
@@ -501,9 +631,12 @@ function DashboardPageContent() {
       const primaryPlatform = normalizedPlatforms[0];
       const platformName = primaryPlatform?.name ?? "Unassigned platform";
       const platformIdentifier = primaryPlatform ? `igdb:${primaryPlatform.id}` : "igdb:unassigned";
-      const detailScreenshots = detail?.gallery
-        ?.map((shot) => shot?.url?.trim())
-        .filter((url): url is string => Boolean(url)) ?? [];
+      const detailScreenshots = detail?.screenshotUrls?.length
+        ? detail.screenshotUrls
+        : detail?.gallery
+            ?.map((shot) => shot?.url?.trim())
+            .filter((url): url is string => Boolean(url)) ?? [];
+      const fallbackScreenshots = detailScreenshots.length ? detailScreenshots : getResultScreenshots(game);
 
       addGame({
         title: game.name,
@@ -525,9 +658,10 @@ function DashboardPageContent() {
         favorite: false,
         wishlist: true,
         igdbId: detail?.id ?? game.id,
-        coverImage: detail?.thumbnail ?? game.coverImage ?? undefined,
-        heroImage: detail?.backgroundImage ?? detail?.thumbnail ?? game.coverImage ?? undefined,
-        screenshotUrls: detailScreenshots.length ? detailScreenshots : undefined,
+        coverImage: (detail?.thumbnail ?? detail?.coverImageUrl ?? getResultCover(game)) ?? undefined,
+        heroImage:
+          (detail?.backgroundImage ?? detail?.thumbnail ?? detail?.coverImageUrl ?? getResultCover(game)) ?? undefined,
+        screenshotUrls: fallbackScreenshots.length ? fallbackScreenshots : undefined,
       });
 
       const tone = detailError ? "info" : "success";
@@ -585,8 +719,8 @@ function DashboardPageContent() {
                   <option value="loading" disabled>
                     Memuat daftar platform...
                   </option>
-                ) : displayedPlatforms.length ? (
-                  displayedPlatforms.map((platform) => (
+                ) : platformButtons.length ? (
+                  platformButtons.map((platform) => (
                     <option key={platform.id} value={String(platform.id)}>
                       {platform.name}
                     </option>
@@ -619,6 +753,23 @@ function DashboardPageContent() {
               <Search className="mr-2 h-4 w-4" />
               Search
             </button>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <label className="flex w-full flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 sm:w-64">
+              Sort results
+              <select
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as DiscoverSortOption)}
+                className="h-11 rounded-xl border border-slate-200 bg-white/95 px-3 text-sm font-medium text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {DISCOVER_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-100/60 p-2 dark:bg-slate-800/60">
@@ -673,18 +824,20 @@ function DashboardPageContent() {
 
           {error ? <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
 
-          {!loading && !error && hasSearched && results.length === 0 ? (
+          {!loading && !error && hasSearched && safeResults.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">Tidak ada game yang cocok. Coba judul atau console lain.</p>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {results.map((game) => {
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {safeResults.map((game) => {
               const normalizedTitle = game.name.trim().toLowerCase();
-              const existing = games.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
+              const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
               const normalizedPlatforms = game.platforms ?? [];
               const platformLabels = normalizedPlatforms.map((platform) => platform.name).filter(Boolean);
+              const imageUrl = getResultCover(game);
+              const screenshotPreviews = getResultScreenshots(game).slice(0, 4);
               const ratingLabel = game.rating?.toFixed(1) ?? "—";
               const detailQuery: Record<string, string> = {};
               if (debouncedQuery) {
@@ -708,17 +861,19 @@ function DashboardPageContent() {
                   >
                   <Link
                     href={detailHref}
-                    className="relative block aspect-video w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
+                    className="relative block aspect-[3/4] w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]"
                   >
-                    {game.coverImage ? (
-                      <img
-                        src={game.coverImage}
+                    {imageUrl ? (
+                      <Image
+                        src={imageUrl}
                         alt={`${game.name} cover`}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
                         className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-widest text-slate-500">
-                        No image
+                        No cover available
                       </div>
                     )}
                     <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-xs text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
@@ -754,6 +909,21 @@ function DashboardPageContent() {
                       ) : (
                         <p className="text-xs text-slate-500 dark:text-slate-400">Platform tidak tersedia</p>
                       )}
+                      {screenshotPreviews.length ? (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {screenshotPreviews.map((url, index) => (
+                            <Image
+                              key={`${game.id}-shot-${index}`}
+                              src={url}
+                              alt={`${game.name} screenshot ${index + 1}`}
+                              width={160}
+                              height={90}
+                              className="h-24 w-40 flex-shrink-0 rounded-xl object-cover"
+                              sizes="160px"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex items-center justify-between gap-3 pt-1">
                       <Link
@@ -862,10 +1032,10 @@ function DashboardPageContent() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card title="Devices" description="Tracked consoles & devices">
-          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{devices.length}</p>
+          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{trackedDevices.length}</p>
         </Card>
         <Card title="Games" description="Total items in your library">
-          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{games.length}</p>
+          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{trackedGames.length}</p>
         </Card>
         <Card title="Wishlist" description="Games you want to add soon">
           <p className="text-3xl font-semibold text-slate-900 dark:text-white">{wishlistGames.length}</p>
@@ -965,13 +1135,13 @@ function DashboardPageContent() {
 
         <Card title="Favorite platforms" description="Devices with the largest libraries">
           <div className="space-y-3">
-            {devices.length === 0 ? (
+            {trackedDevices.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Add your first device to begin tracking.</p>
             ) : (
-              devices
+              trackedDevices
                 .map((device) => ({
                   device,
-                  count: games.filter((game) => game.platformId === device.id).length,
+                  count: trackedGames.filter((game) => game.platformId === device.id).length,
                 }))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 4)
