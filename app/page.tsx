@@ -897,11 +897,157 @@ function DashboardPageContent() {
                 query: detailQuery,
               } as const;
 
+              const isActiveMediaPreview = mediaPreview?.gameId === game.id;
+
               return (
-                <article
-                  key={game.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
-                >
+                <div key={game.id} className="space-y-3">
+                  {isActiveMediaPreview ? (
+                    <section
+                      role="region"
+                      aria-label={`Media preview untuk ${mediaPreview?.title ?? game.name}`}
+                      aria-busy={mediaLoading}
+                      className="rounded-3xl border border-emerald-500/30 bg-white/95 p-4 text-slate-700 shadow-2xl shadow-emerald-900/5 dark:border-emerald-500/20 dark:bg-slate-900/95 dark:text-slate-200"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                          <Clapperboard className="h-5 w-5" aria-hidden="true" />
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+                              Trailer & gameplay preview
+                            </p>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                              {mediaPreview?.title ?? game.name}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setMediaPreview(null)}
+                          className="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-200"
+                        >
+                          <X className="h-4 w-4" /> Tutup media
+                        </button>
+                      </div>
+
+                      <div className="mt-4 space-y-4">
+                        {mediaError ? (
+                          <p className="text-sm text-rose-600 dark:text-rose-300">{mediaError}</p>
+                        ) : null}
+                        {mediaLoading ? (
+                          <p className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Memuat trailer dan gameplay...
+                          </p>
+                        ) : null}
+                        {!mediaLoading &&
+                        !mediaError &&
+                        mediaTrailers.length === 0 &&
+                        mediaVideos.length === 0 &&
+                        mediaPlatformVideos.length === 0 ? (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Tidak ada trailer atau video gameplay yang ditemukan untuk judul ini.
+                          </p>
+                        ) : null}
+
+                        {mediaTrailers.length ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {mediaTrailers.slice(0, 2).map((trailer) => {
+                              const sources = trailer.data ?? {};
+                              const src = sources.max ?? sources["1080"] ?? sources["720"] ?? sources["480"] ?? null;
+                              if (!src) {
+                                return null;
+                              }
+                              return (
+                                <figure
+                                  key={trailer.id}
+                                  className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800"
+                                >
+                                  <video controls poster={trailer.preview ?? undefined} className="h-48 w-full object-cover">
+                                    <source src={src} type="video/mp4" />
+                                  </video>
+                                  <figcaption className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                    {trailer.name}
+                                  </figcaption>
+                                </figure>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+
+                        {mediaVideos.length ? (
+                          <div className="grid gap-3 md:grid-cols-3">
+                            {mediaVideos.slice(0, 3).map((video) => (
+                              <article
+                                key={video.videoId}
+                                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
+                              >
+                                <div className="aspect-video">
+                                  <iframe
+                                    src={`https://www.youtube.com/embed/${video.videoId}`}
+                                    title={video.title}
+                                    className="h-full w-full"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                </div>
+                                <div className="space-y-1 px-3 py-2">
+                                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h4>
+                                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    {video.channelTitle}
+                                  </p>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {mediaPlatformVideos.length ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                              <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                              <h4 className="text-xs font-semibold uppercase tracking-[0.3em]">Gameplay per console</h4>
+                            </div>
+                            <div className="space-y-4">
+                              {mediaPlatformVideos.map((group) => (
+                                <div key={group.slug} className="space-y-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    {group.name}
+                                  </p>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {group.videos.map((video) => (
+                                      <article
+                                        key={`${group.slug}-${video.videoId}`}
+                                        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
+                                      >
+                                        <div className="aspect-video">
+                                          <iframe
+                                            src={`https://www.youtube.com/embed/${video.videoId}`}
+                                            title={`${video.title} - ${group.name}`}
+                                            className="h-full w-full"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                          />
+                                        </div>
+                                        <div className="space-y-1 px-3 py-2">
+                                          <h5 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h5>
+                                          <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                            {video.channelTitle || "YouTube"}
+                                          </p>
+                                        </div>
+                                      </article>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <article
+                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
+                  >
                   <Link
                     href={detailHref}
                     className="relative block aspect-video w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
@@ -1003,150 +1149,12 @@ function DashboardPageContent() {
                       </button>
                     </div>
                   </div>
-                </article>
+                  </article>
+                </div>
               );
             })}
           </div>
-          {mediaPreview ? (
-            <div
-              role="dialog"
-              aria-modal="true"
-              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-              onClick={() => setMediaPreview(null)}
-            >
-              <div
-                className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => setMediaPreview(null)}
-                  className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-slate-900/10 text-slate-500 transition hover:bg-slate-900/20 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
-                  aria-label="Tutup media"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <div className="max-h-[80vh] overflow-y-auto space-y-4 p-6 text-slate-700 dark:text-slate-200">
-                  <div className="flex items-center gap-3">
-                    <Clapperboard className="h-5 w-5" aria-hidden="true" />
-                    <div>
-                      <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                        Trailer & gameplay preview
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{mediaPreview.title}</p>
-                    </div>
-                  </div>
-                  {mediaError ? (
-                    <p className="text-sm text-rose-600 dark:text-rose-300">{mediaError}</p>
-                  ) : null}
-                  {mediaLoading ? (
-                    <p className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Memuat trailer dan gameplay...
-                    </p>
-                  ) : null}
-                  {!mediaLoading &&
-                  !mediaError &&
-                  mediaTrailers.length === 0 &&
-                  mediaVideos.length === 0 &&
-                  mediaPlatformVideos.length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Tidak ada trailer atau video gameplay yang ditemukan untuk judul ini.
-                    </p>
-                  ) : null}
-                  {mediaTrailers.length ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {mediaTrailers.slice(0, 2).map((trailer) => {
-                        const sources = trailer.data ?? {};
-                        const src = sources.max ?? sources["1080"] ?? sources["720"] ?? sources["480"] ?? null;
-                        if (!src) {
-                          return null;
-                        }
-                        return (
-                          <figure
-                            key={trailer.id}
-                            className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800"
-                          >
-                            <video controls poster={trailer.preview ?? undefined} className="h-48 w-full object-cover">
-                              <source src={src} type="video/mp4" />
-                            </video>
-                            <figcaption className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                              {trailer.name}
-                            </figcaption>
-                          </figure>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  {mediaVideos.length ? (
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {mediaVideos.slice(0, 3).map((video) => (
-                        <article
-                          key={video.videoId}
-                          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
-                        >
-                          <div className="aspect-video">
-                            <iframe
-                              src={`https://www.youtube.com/embed/${video.videoId}`}
-                              title={video.title}
-                              className="h-full w-full"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                            />
-                          </div>
-                          <div className="space-y-1 px-3 py-2">
-                            <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h4>
-                            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{video.channelTitle}</p>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {mediaPlatformVideos.length ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                        <Clapperboard className="h-4 w-4" aria-hidden="true" />
-                        <h4 className="text-xs font-semibold uppercase tracking-[0.3em]">Gameplay per console</h4>
-                      </div>
-                      <div className="space-y-4">
-                        {mediaPlatformVideos.map((group) => (
-                          <div key={group.slug} className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              {group.name}
-                            </p>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              {group.videos.map((video) => (
-                                <article
-                                  key={`${group.slug}-${video.videoId}`}
-                                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
-                                >
-                                  <div className="aspect-video">
-                                    <iframe
-                                      src={`https://www.youtube.com/embed/${video.videoId}`}
-                                      title={`${video.title} - ${group.name}`}
-                                      className="h-full w-full"
-                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                      allowFullScreen
-                                    />
-                                  </div>
-                                  <div className="space-y-1 px-3 py-2">
-                                    <h5 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h5>
-                                    <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                      {video.channelTitle || "YouTube"}
-                                    </p>
-                                  </div>
-                                </article>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          
           {(pagination.total > pagination.pageSize || pagination.hasNextPage || pagination.hasPreviousPage) && (
             <nav
               aria-label="RAWG search pagination"
