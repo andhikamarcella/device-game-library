@@ -83,6 +83,9 @@ function DashboardPageContent() {
   const { devices } = useDeviceStore();
   const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
 
+  const trackedGames = Array.isArray(games) ? games : [];
+  const trackedDevices = Array.isArray(devices) ? devices : [];
+
   const [query, setQuery] = useState(initialQueryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -108,6 +111,7 @@ function DashboardPageContent() {
   const [platformSearch, setPlatformSearch] = useState("");
   const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+  const safeResults = Array.isArray(results) ? results : [];
 
   useEffect(() => {
     const currentSearch = searchParams.toString();
@@ -151,14 +155,16 @@ function DashboardPageContent() {
 
     fetch("/api/platforms")
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load platforms.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load platforms.";
+          throw new Error(message);
         }
-        return (await response.json()) as PlatformOption[];
+        return payload;
       })
-      .then((data) => {
+      .then((payload) => {
         if (!cancelled) {
+          const data = Array.isArray(payload) ? (payload as PlatformOption[]) : [];
           const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
           setPlatforms(sorted);
         }
@@ -225,21 +231,29 @@ function DashboardPageContent() {
       signal: controller.signal,
     })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to search games.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+          throw new Error(message);
         }
-        return response.json() as Promise<SearchResponse>;
+        return payload;
       })
-      .then((data) => {
-        setResults(data.results);
-        setPagination({
-          total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? page,
-          pageSize: data.pagination?.pageSize ?? pageSize,
-          hasNextPage: Boolean(data.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
-        });
+      .then((payload) => {
+        const data = payload as Partial<SearchResponse> | null;
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
+        setResults(normalizedResults);
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : pageSize,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setPagination(nextPagination);
       })
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") {
@@ -312,27 +326,32 @@ function DashboardPageContent() {
 
   const statusCounts = statusLabels.map((status) => ({
     status,
-    count: games.filter((game) => game.status === status).length,
+    count: trackedGames.filter((game) => game.status === status).length,
   }));
 
   const filteredPlatforms = useMemo(() => {
+    const availablePlatforms = Array.isArray(platforms) ? platforms : [];
     if (!platformSearch.trim()) {
-      return platforms;
+      return availablePlatforms;
     }
     const term = platformSearch.trim().toLowerCase();
-    return platforms.filter((platform) => platform.name.toLowerCase().includes(term));
+    return availablePlatforms.filter((platform) => platform.name.toLowerCase().includes(term));
   }, [platformSearch, platforms]);
 
   const selectedPlatformId = selectedPlatform !== "all" ? Number.parseInt(selectedPlatform, 10) : null;
 
   const displayedPlatforms = useMemo(() => {
-    const top = filteredPlatforms.slice(0, 40);
+    const normalizedFiltered = Array.isArray(filteredPlatforms) ? filteredPlatforms : [];
+    const availablePlatforms = Array.isArray(platforms) ? platforms : [];
+    const top = normalizedFiltered.slice(0, 40);
     if (selectedPlatformId && !top.some((platform) => platform.id === selectedPlatformId)) {
-      const selectedMatch = platforms.find((platform) => platform.id === selectedPlatformId);
+      const selectedMatch = availablePlatforms.find((platform) => platform.id === selectedPlatformId);
       return selectedMatch ? [selectedMatch, ...top] : top;
     }
     return top;
   }, [filteredPlatforms, platforms, selectedPlatformId]);
+
+  const platformButtons = Array.isArray(displayedPlatforms) ? displayedPlatforms : [];
 
   const retroPrioritySlugs = [
     "nes",
@@ -367,16 +386,16 @@ function DashboardPageContent() {
     return [...prioritized, ...fallback].slice(0, 8);
   }, [platforms]);
 
-  const totalGames = games.length || 1;
-  const recentGames = [...games]
+  const totalGames = trackedGames.length || 1;
+  const recentGames = [...trackedGames]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
-  const playingGames = games.filter((game) => game.status === "playing");
-  const wishlistGames = games.filter((game) => game.wishlist);
+  const playingGames = trackedGames.filter((game) => game.status === "playing");
+  const wishlistGames = trackedGames.filter((game) => game.wishlist);
   const totalPages = Math.max(
     1,
-    Math.ceil(Math.max(pagination.total, results.length) / Math.max(pagination.pageSize, 1)),
+    Math.ceil(Math.max(pagination.total, safeResults.length) / Math.max(pagination.pageSize, 1)),
   );
   const currentPage = pagination.page > 0 ? pagination.page : page;
   const canGoNext = pagination.hasNextPage || currentPage < totalPages;
@@ -418,7 +437,7 @@ function DashboardPageContent() {
 
   const handleAddToWishlist = async (game: SearchResult) => {
     const normalizedTitle = game.name.trim().toLowerCase();
-    const existing = games.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
+    const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
 
     if (existing) {
       if (existing.wishlist) {
@@ -585,8 +604,8 @@ function DashboardPageContent() {
                   <option value="loading" disabled>
                     Memuat daftar platform...
                   </option>
-                ) : displayedPlatforms.length ? (
-                  displayedPlatforms.map((platform) => (
+                ) : platformButtons.length ? (
+                  platformButtons.map((platform) => (
                     <option key={platform.id} value={String(platform.id)}>
                       {platform.name}
                     </option>
@@ -673,14 +692,14 @@ function DashboardPageContent() {
 
           {error ? <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
 
-          {!loading && !error && hasSearched && results.length === 0 ? (
+          {!loading && !error && hasSearched && safeResults.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">Tidak ada game yang cocok. Coba judul atau console lain.</p>
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {results.map((game) => {
+            {safeResults.map((game) => {
               const normalizedTitle = game.name.trim().toLowerCase();
-              const existing = games.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
+              const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
               const normalizedPlatforms = game.platforms ?? [];
@@ -862,10 +881,10 @@ function DashboardPageContent() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Card title="Devices" description="Tracked consoles & devices">
-          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{devices.length}</p>
+          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{trackedDevices.length}</p>
         </Card>
         <Card title="Games" description="Total items in your library">
-          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{games.length}</p>
+          <p className="text-3xl font-semibold text-slate-900 dark:text-white">{trackedGames.length}</p>
         </Card>
         <Card title="Wishlist" description="Games you want to add soon">
           <p className="text-3xl font-semibold text-slate-900 dark:text-white">{wishlistGames.length}</p>
@@ -965,13 +984,13 @@ function DashboardPageContent() {
 
         <Card title="Favorite platforms" description="Devices with the largest libraries">
           <div className="space-y-3">
-            {devices.length === 0 ? (
+            {trackedDevices.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Add your first device to begin tracking.</p>
             ) : (
-              devices
+              trackedDevices
                 .map((device) => ({
                   device,
-                  count: games.filter((game) => game.platformId === device.id).length,
+                  count: trackedGames.filter((game) => game.platformId === device.id).length,
                 }))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 4)

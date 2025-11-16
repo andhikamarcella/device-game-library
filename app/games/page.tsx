@@ -713,16 +713,18 @@ export default function GamesPage() {
 
     fetch("/api/platforms", { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load platform list.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load platform list.";
+          throw new Error(message);
         }
-        return (await response.json()) as PlatformOption[];
+        return payload;
       })
-      .then((data) => {
+      .then((payload) => {
         if (cancelled) {
           return;
         }
+        const data = Array.isArray(payload) ? (payload as PlatformOption[]) : [];
         const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
         setGamePlatforms(sorted);
         setGamePlatformsFetched(true);
@@ -770,21 +772,29 @@ export default function GamesPage() {
 
     fetch(`/api/games/search?${params.toString()}`, { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Tidak dapat mencari game di IGDB.");
+          const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat mencari game di IGDB.";
+          throw new Error(message);
         }
-        return (await response.json()) as GameSearchResponse;
+        return payload;
       })
-      .then((data) => {
-        setIgdbResults(data.results);
-        setIgdbPagination({
-          total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? igdbPage,
-          pageSize: data.pagination?.pageSize ?? IGDB_MODAL_PAGE_SIZE,
-          hasNextPage: Boolean(data.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
-        });
+      .then((payload) => {
+        const data = payload as Partial<GameSearchResponse> | null;
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as IgdbSearchResult[]) : [];
+        setIgdbResults(normalizedResults);
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : igdbPage,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : IGDB_MODAL_PAGE_SIZE,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setIgdbPagination(nextPagination);
       })
       .catch((error) => {
         if (error.name === "AbortError") {
@@ -1062,9 +1072,11 @@ export default function GamesPage() {
   };
 
   const igdbCurrentPage = igdbPagination.page > 0 ? igdbPagination.page : igdbPage;
+  const safeIgdbResults = Array.isArray(igdbResults) ? igdbResults : [];
+  const igdbPageSizeValue = Math.max(igdbPagination.pageSize, 1);
   const igdbTotalPages = Math.max(
     1,
-    Math.ceil(Math.max(igdbPagination.total, igdbResults.length) / Math.max(igdbPagination.pageSize, 1)),
+    Math.ceil(Math.max(igdbPagination.total, safeIgdbResults.length) / igdbPageSizeValue),
   );
   const igdbCanGoPrevious = igdbPagination.hasPreviousPage || igdbCurrentPage > 1;
   const igdbCanGoNext = igdbPagination.hasNextPage || igdbCurrentPage < igdbTotalPages;
@@ -1466,7 +1478,7 @@ export default function GamesPage() {
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              {igdbResults.map((game) => {
+              {safeIgdbResults.map((game) => {
                 const releaseLabel = game.releaseYear ? `Rilis ${game.releaseYear}` : "Tahun rilis tidak diketahui";
                 const isApplying = igdbSelectionLoadingId === game.id;
                 const ratingLabel =
@@ -1533,7 +1545,7 @@ export default function GamesPage() {
                 );
               })}
             </div>
-            {igdbHasSearched && !igdbLoading && igdbResults.length === 0 ? (
+            {igdbHasSearched && !igdbLoading && safeIgdbResults.length === 0 ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tidak ada hasil untuk pencarian ini. Coba judul lain atau pilih console yang berbeda.
               </p>
