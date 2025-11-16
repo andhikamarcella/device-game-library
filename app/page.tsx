@@ -59,6 +59,12 @@ type GameplayPreview = {
   channelTitle: string;
 };
 
+type PlatformGameplayPreview = {
+  slug: string;
+  name: string;
+  videos: GameplayPreview[];
+};
+
 type PlatformOption = {
   id: number;
   name: string;
@@ -124,6 +130,7 @@ function DashboardPageContent() {
   const [mediaPreview, setMediaPreview] = useState<{ gameId: number; title: string } | null>(null);
   const [mediaTrailers, setMediaTrailers] = useState<TrailerPreview[]>([]);
   const [mediaVideos, setMediaVideos] = useState<GameplayPreview[]>([]);
+  const [mediaPlatformVideos, setMediaPlatformVideos] = useState<PlatformGameplayPreview[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
@@ -208,6 +215,7 @@ function DashboardPageContent() {
       setMediaPreview(null);
       setMediaTrailers([]);
       setMediaVideos([]);
+      setMediaPlatformVideos([]);
       setMediaLoading(false);
       setMediaError(null);
       return;
@@ -222,6 +230,7 @@ function DashboardPageContent() {
       setMediaPreview(null);
       setMediaTrailers([]);
       setMediaVideos([]);
+      setMediaPlatformVideos([]);
       setMediaLoading(false);
       setMediaError(null);
       return;
@@ -239,23 +248,68 @@ function DashboardPageContent() {
     if (!previewGameId || !previewTitle) {
       setMediaTrailers([]);
       setMediaVideos([]);
+      setMediaPlatformVideos([]);
       setMediaLoading(false);
       setMediaError(null);
       return;
     }
 
+    const platformCandidates = results.find((game) => game.id === previewGameId)?.platforms ?? [];
+    const limitedPlatforms = platformCandidates.filter((platform) => platform?.name).slice(0, 6);
+
     let cancelled = false;
     const trailerController = new AbortController();
     const youtubeController = new AbortController();
+    const platformControllers: AbortController[] = [];
+
+    const fetchPlatformVideos = async (): Promise<PlatformGameplayPreview[]> => {
+      if (!limitedPlatforms.length) {
+        return [];
+      }
+      const platformGroups = await Promise.all(
+        limitedPlatforms.map(async (platform) => {
+          const controller = new AbortController();
+          platformControllers.push(controller);
+          try {
+            const response = await fetch(
+              `/api/youtube/gameplay?q=${encodeURIComponent(previewTitle)}&platform=${encodeURIComponent(platform.name)}&limit=2`,
+              { signal: controller.signal },
+            );
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload) {
+              const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat video gameplay.";
+              throw new Error(message);
+            }
+            const rawResults = (payload as { results?: GameplayPreview[] }).results ?? [];
+            if (!rawResults.length) {
+              return null;
+            }
+            return {
+              slug: platform.slug,
+              name: platform.name,
+              videos: rawResults.filter((item): item is GameplayPreview => Boolean(item)).slice(0, 2),
+            } satisfies PlatformGameplayPreview;
+          } catch (platformError) {
+            if (platformError instanceof DOMException && platformError.name === "AbortError") {
+              return null;
+            }
+            console.warn("Platform gameplay error", platformError);
+            return null;
+          }
+        }),
+      );
+      return platformGroups.filter((group): group is PlatformGameplayPreview => Boolean(group));
+    };
 
     setMediaLoading(true);
     setMediaError(null);
     setMediaTrailers([]);
     setMediaVideos([]);
+    setMediaPlatformVideos([]);
 
     const fetchMedia = async () => {
       try {
-        const [trailerResults, youtubeResults] = await Promise.all([
+        const [trailerResults, youtubeResults, platformResults] = await Promise.all([
           fetch(`/api/rawg/movies/${previewGameId}`, { signal: trailerController.signal }).then(async (response) => {
             const payload = await response.json().catch(() => null);
             if (!response.ok || !payload) {
@@ -276,6 +330,7 @@ function DashboardPageContent() {
             const rawResults = (payload as { results?: GameplayPreview[] }).results ?? [];
             return rawResults.filter((item): item is GameplayPreview => Boolean(item));
           }),
+          fetchPlatformVideos(),
         ]);
 
         if (cancelled) {
@@ -284,6 +339,7 @@ function DashboardPageContent() {
 
         setMediaTrailers(trailerResults);
         setMediaVideos(youtubeResults);
+        setMediaPlatformVideos(platformResults);
       } catch (error) {
         if (cancelled) {
           return;
@@ -294,6 +350,7 @@ function DashboardPageContent() {
         setMediaError(error instanceof Error ? error.message : "Tidak dapat memuat media permainan.");
         setMediaTrailers([]);
         setMediaVideos([]);
+        setMediaPlatformVideos([]);
       } finally {
         if (!cancelled) {
           setMediaLoading(false);
@@ -307,8 +364,9 @@ function DashboardPageContent() {
       cancelled = true;
       trailerController.abort();
       youtubeController.abort();
+      platformControllers.forEach((controller) => controller.abort());
     };
-  }, [previewGameId, previewTitle]);
+  }, [previewGameId, previewTitle, results]);
 
   useEffect(() => {
     if (!mediaPreview) {
@@ -986,7 +1044,11 @@ function DashboardPageContent() {
                       <Loader2 className="h-4 w-4 animate-spin" /> Memuat trailer dan gameplay...
                     </p>
                   ) : null}
-                  {!mediaLoading && !mediaError && mediaTrailers.length === 0 && mediaVideos.length === 0 ? (
+                  {!mediaLoading &&
+                  !mediaError &&
+                  mediaTrailers.length === 0 &&
+                  mediaVideos.length === 0 &&
+                  mediaPlatformVideos.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                       Tidak ada trailer atau video gameplay yang ditemukan untuk judul ini.
                     </p>
@@ -1037,6 +1099,48 @@ function DashboardPageContent() {
                           </div>
                         </article>
                       ))}
+                    </div>
+                  ) : null}
+
+                  {mediaPlatformVideos.length ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                        <h4 className="text-xs font-semibold uppercase tracking-[0.3em]">Gameplay per console</h4>
+                      </div>
+                      <div className="space-y-4">
+                        {mediaPlatformVideos.map((group) => (
+                          <div key={group.slug} className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              {group.name}
+                            </p>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {group.videos.map((video) => (
+                                <article
+                                  key={`${group.slug}-${video.videoId}`}
+                                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
+                                >
+                                  <div className="aspect-video">
+                                    <iframe
+                                      src={`https://www.youtube.com/embed/${video.videoId}`}
+                                      title={`${video.title} - ${group.name}`}
+                                      className="h-full w-full"
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                      allowFullScreen
+                                    />
+                                  </div>
+                                  <div className="space-y-1 px-3 py-2">
+                                    <h5 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h5>
+                                    <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                      {video.channelTitle || "YouTube"}
+                                    </p>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                 </div>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, Loader2, MapPin, Star } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
@@ -63,10 +63,23 @@ interface YoutubeResponse {
   }>;
 }
 
+interface PlatformVideoGroup {
+  slug: string;
+  name: string;
+  videos: YoutubeResponse["results"];
+}
+
 export default function GameDetailsPage() {
   const params = useParams<{ id: string }>();
   const gameId = Number.parseInt(params.id, 10);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { games, upsert, update, remove } = useLibrary();
+  const currentRoute = useMemo(() => {
+    const base = pathname || `/library/${params.id}`;
+    const query = searchParams?.toString();
+    return query ? `${base}?${query}` : base;
+  }, [pathname, searchParams, params.id]);
   const userGame = useMemo(() => games.find((item) => item.rawgId === gameId), [games, gameId]);
 
   const [details, setDetails] = useState<GameDetailsResponse | null>(null);
@@ -74,6 +87,9 @@ export default function GameDetailsPage() {
   const [trailers, setTrailers] = useState<MoviesResponse["results"]>([]);
   const [similar, setSimilar] = useState<SimilarResponse["results"]>([]);
   const [youtube, setYoutube] = useState<YoutubeResponse["results"]>([]);
+  const [platformVideos, setPlatformVideos] = useState<PlatformVideoGroup[]>([]);
+  const [platformVideoError, setPlatformVideoError] = useState<string | null>(null);
+  const [platformVideoLoading, setPlatformVideoLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -164,6 +180,88 @@ export default function GameDetailsPage() {
   }, [gameId]);
 
   useEffect(() => {
+    if (!details?.name) {
+      setPlatformVideos([]);
+      setPlatformVideoError(null);
+      setPlatformVideoLoading(false);
+      return;
+    }
+
+    const platforms = (details.parent_platforms ?? []).map((platform) => ({
+      slug: platform.slug ?? String(platform.id),
+      name: platform.name,
+    }));
+
+    if (!platforms.length) {
+      setPlatformVideos([]);
+      setPlatformVideoError(null);
+      setPlatformVideoLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const limitedPlatforms = platforms.filter((platform) => platform.name).slice(0, 6);
+    if (!limitedPlatforms.length) {
+      setPlatformVideos([]);
+      setPlatformVideoError(null);
+      setPlatformVideoLoading(false);
+      return;
+    }
+
+    setPlatformVideoLoading(true);
+    setPlatformVideoError(null);
+
+    Promise.all(
+      limitedPlatforms.map(async (platform) => {
+        try {
+          const response = await fetch(
+            `/api/youtube/gameplay?q=${encodeURIComponent(details.name)}&platform=${encodeURIComponent(platform.name)}&limit=2`,
+          );
+          const payload = (await response.json().catch(() => null)) as YoutubeResponse | { error?: string } | null;
+          if (!response.ok || !payload) {
+            throw new Error((payload as { error?: string } | null)?.error ?? "Unable to load platform videos.");
+          }
+          const results = (payload as YoutubeResponse).results ?? [];
+          if (!results.length) {
+            return null;
+          }
+          return { slug: platform.slug, name: platform.name, videos: results.slice(0, 2) } satisfies PlatformVideoGroup;
+        } catch (platformError) {
+          console.warn("Platform gameplay fetch error", platformError);
+          return null;
+        }
+      }),
+    )
+      .then((groups) => {
+        if (cancelled) {
+          return;
+        }
+        const filtered = groups.filter((group): group is PlatformVideoGroup => Boolean(group));
+        setPlatformVideos(filtered);
+        if (!filtered.length) {
+          setPlatformVideoError("Gameplay per console tidak tersedia.");
+        } else {
+          setPlatformVideoError(null);
+        }
+      })
+      .catch((platformError) => {
+        if (!cancelled) {
+          setPlatformVideos([]);
+          setPlatformVideoError(platformError instanceof Error ? platformError.message : "Unable to load platform videos.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPlatformVideoLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [details]);
+
+  useEffect(() => {
     if (!details || !userGame) {
       return;
     }
@@ -235,6 +333,8 @@ export default function GameDetailsPage() {
       playtimeHours: details.playtime ?? 0,
     });
   };
+
+  const rawgDetailHref = `/games/${details.id}?returnTo=${encodeURIComponent(currentRoute)}`;
 
   return (
     <div className="space-y-10">
@@ -319,7 +419,7 @@ export default function GameDetailsPage() {
                 </button>
               )}
               <Link
-                href={`/games/${details.id}`}
+                href={rawgDetailHref}
                 className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold text-white/90 transition hover:border-white/40 hover:text-white"
               >
                 RAWG detail page <ExternalLink className="h-4 w-4" />
@@ -376,6 +476,54 @@ export default function GameDetailsPage() {
       ) : null}
 
       <YoutubeVideoGrid videos={youtube.slice(0, 3)} />
+
+      {platformVideoLoading ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Memuat gameplay berdasarkan console...</p>
+      ) : null}
+
+      {platformVideoError && !platformVideoLoading ? (
+        <p className="text-sm text-rose-600 dark:text-rose-300">{platformVideoError}</p>
+      ) : null}
+
+      {platformVideos.length ? (
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Gameplay by console</h2>
+            <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">YouTube kategori</span>
+          </div>
+          <div className="space-y-6">
+            {platformVideos.map((group) => (
+              <div key={group.slug} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {group.name}
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {group.videos.map((video) => (
+                    <article
+                      key={`${group.slug}-${video.videoId}`}
+                      className="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
+                    >
+                      <iframe
+                        title={`${video.title} - ${group.name}`}
+                        src={`https://www.youtube.com/embed/${video.videoId}`}
+                        className="h-56 w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                      <div className="px-4 py-3 text-sm">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {video.channelTitle || "YouTube"}
+                        </p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {stores.length ? (
         <section className="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">

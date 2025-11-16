@@ -67,6 +67,15 @@ export default function DashboardPage() {
   const [similarResults, setSimilarResults] = useState<SimilarGame[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [similarError, setSimilarError] = useState<string | null>(null);
+  const [currentLibraryRoute, setCurrentLibraryRoute] = useState("/library");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const { pathname, search } = window.location;
+    setCurrentLibraryRoute(search ? `${pathname}${search}` : pathname);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -477,6 +486,7 @@ export default function DashboardPage() {
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
                   onShowSimilar={setSimilarSource}
+                  rawgReturnTo={currentLibraryRoute}
                 />
               );
             })}
@@ -561,6 +571,7 @@ export default function DashboardPage() {
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}
                   onShowSimilar={setSimilarSource}
+                  rawgReturnTo={currentLibraryRoute}
                 />
               );
             })}

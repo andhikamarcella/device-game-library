@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Globe, Star, Camera, MessageCircle, Clapperboard, BarChart3, Users, Tag, Layers } from "lucide-react";
+import { ArrowLeft, Globe, Star, MessageCircle, Clapperboard, BarChart3, Users, Tag, Layers } from "lucide-react";
+import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { getPlatformIcon } from "@/components/platform-icons";
 import {
   getGameDetails,
@@ -12,7 +13,7 @@ import {
   type RawgMovie,
   type RawgSimilarGame,
 } from "@/lib/rawg";
-import { getGameplayVideos, type YoutubeVideo } from "@/lib/youtube";
+import { getGameplayVideos, getGameplayVideosByPlatform, type PlatformVideoGroup, type YoutubeVideo } from "@/lib/youtube";
 
 export const revalidate = 300;
 
@@ -46,6 +47,13 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     throw error;
   }
 
+  const platformDetails =
+    game.platforms?.map((entry) => ({
+      id: entry.platform.id,
+      name: entry.platform.name,
+      slug: entry.platform.slug,
+    })) ?? [];
+
   const screenshotsPromise = getGameScreenshots(id, 1, 12).catch(
     () => [] as Awaited<ReturnType<typeof getGameScreenshots>>,
   );
@@ -55,12 +63,16 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const trailersPromise = getGameTrailers(id).catch(() => [] as RawgMovie[]);
   const youtubePromise = getGameplayVideos(game.name).catch(() => [] as YoutubeVideo[]);
   const similarPromise = getSimilarGames(id).catch(() => [] as RawgSimilarGame[]);
-  const [screenshots, reviews, trailers, youtubeVideos, similarGames] = await Promise.all([
+  const platformGameplayPromise = getGameplayVideosByPlatform(game.name, platformDetails).catch(
+    () => [] as PlatformVideoGroup[],
+  );
+  const [screenshots, reviews, trailers, youtubeVideos, similarGames, platformGameplay] = await Promise.all([
     screenshotsPromise,
     reviewsPromise,
     trailersPromise,
     youtubePromise,
     similarPromise,
+    platformGameplayPromise,
   ]);
 
   const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
@@ -112,12 +124,6 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     const parsed = new Date(game.released);
     return Number.isNaN(parsed.getTime()) ? "Unknown" : parsed.toLocaleDateString();
   })();
-  const platformDetails =
-    game.platforms?.map((entry) => ({
-      id: entry.platform.id,
-      name: entry.platform.name,
-      slug: entry.platform.slug,
-    })) ?? [];
   const seenPlatformSlugs = new Set<string>();
   const uniquePlatforms = platformDetails.filter((platform) => {
     const slug = (platform.slug ?? platform.name?.toLowerCase()) ?? null;
@@ -228,6 +234,9 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const qParam = getSingleParamValue(searchParams?.q)?.trim();
   const platformParam = getSingleParamValue(searchParams?.platform)?.trim();
   const pageParam = getSingleParamValue(searchParams?.page)?.trim();
+  const returnToParam = getSingleParamValue(searchParams?.returnTo)?.trim();
+
+  const sanitizedReturnTo = returnToParam && returnToParam.startsWith("/") ? returnToParam : null;
 
   if (qParam) {
     backParams.set("q", qParam);
@@ -242,7 +251,8 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     }
   }
 
-  const backHref = backParams.size > 0 ? `/?${backParams.toString()}` : "/";
+  const backHref = sanitizedReturnTo ?? (backParams.size > 0 ? `/?${backParams.toString()}` : "/");
+  const backLabel = sanitizedReturnTo?.startsWith("/library") ? "Back to library" : "Back to search";
 
   return (
     <div className="space-y-6">
@@ -251,7 +261,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
         className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to search
+        {backLabel}
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
@@ -419,35 +429,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
             </section>
           ) : null}
 
-          {gallery.length ? (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                <Camera className="h-4 w-4" aria-hidden="true" />
-                <h2 className="text-sm font-semibold uppercase tracking-widest">Screenshots</h2>
-                <span className="text-xs text-slate-500 dark:text-slate-400">Scroll to explore the gallery</span>
-              </div>
-              <div
-                className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory"
-                role="list"
-                aria-label={`Screenshots for ${game.name}`}
-              >
-                {gallery.map((shot) => (
-                  <div
-                    key={`${shot.id}-${shot.image}`}
-                    className="relative h-44 w-64 flex-shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-800 dark:bg-slate-800"
-                    role="listitem"
-                  >
-                    <img
-                      src={shot.image}
-                      alt={`${game.name} screenshot`}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          {gallery.length ? <ScreenshotGallery screenshots={gallery} /> : null}
 
           {similarGames.length ? (
             <section className="space-y-3">
@@ -569,6 +551,46 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
                       </p>
                     </div>
                   </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {platformGameplay.length ? (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                <h2 className="text-sm font-semibold uppercase tracking-widest">Gameplay by console</h2>
+              </div>
+              <div className="space-y-4">
+                {platformGameplay.map((group) => (
+                  <div key={group.slug} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                      {group.name}
+                    </p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {group.videos.slice(0, 2).map((video) => (
+                        <article
+                          key={`${group.slug}-${video.videoId}`}
+                          className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
+                        >
+                          <iframe
+                            title={`${video.title} - ${group.name}`}
+                            src={`https://www.youtube.com/embed/${video.videoId}`}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="h-56 w-full"
+                          />
+                          <div className="px-4 py-3 text-sm">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
+                            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              {video.channelTitle || "YouTube"}
+                            </p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>

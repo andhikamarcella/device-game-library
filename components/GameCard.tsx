@@ -26,11 +26,15 @@ interface GameCardProps {
   onUpdate?: (rawgId: number, patch: Partial<UserGame>) => void;
   onRemove?: (rawgId: number) => void;
   onShowSimilar?: (game: SearchGameResult) => void;
+  rawgReturnTo?: string;
 }
 
-export function GameCard({ game, userGame, onAdd, onUpdate, onRemove, onShowSimilar }: GameCardProps) {
+export function GameCard({ game, userGame, onAdd, onUpdate, onRemove, onShowSimilar, rawgReturnTo }: GameCardProps) {
   const releaseYear = game.released ? new Date(game.released).getFullYear() : null;
   const coverImage = normalizeRawgImageUrl(game.background_image);
+  const rawgDetailHref = rawgReturnTo
+    ? `/games/${game.id}?returnTo=${encodeURIComponent(rawgReturnTo)}`
+    : `/games/${game.id}`;
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur transition hover:border-emerald-400/80 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80">
@@ -79,7 +83,7 @@ export function GameCard({ game, userGame, onAdd, onUpdate, onRemove, onShowSimi
                 Library view <ExternalLink className="h-3.5 w-3.5" />
               </Link>
               <Link
-                href={`/games/${game.id}`}
+                href={rawgDetailHref}
                 className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-400/70 hover:text-emerald-600 dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-emerald-400/60 dark:hover:text-emerald-300"
               >
                 RAWG detail <ExternalLink className="h-3.5 w-3.5" />
