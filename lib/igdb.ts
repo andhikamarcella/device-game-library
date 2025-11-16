@@ -1,7 +1,4 @@
-export interface IgdbToken {
-  accessToken: string;
-  expiresAt: number;
-}
+import { getTwitchAccessToken, type TwitchAccessToken } from "@/lib/twitch";
 
 export interface IgdbCover {
   id: number;
@@ -125,8 +122,6 @@ export interface IgdbPlatformSummary {
   generation?: number | null;
 }
 
-let cachedToken: IgdbToken | null = null;
-
 const getEnvOrThrow = (key: string): string => {
   const value = process.env[key];
   if (!value) {
@@ -154,7 +149,7 @@ const getBaseUrl = (): string => getEnvOrThrow("IGDB_BASE_URL");
 const igdbRequest = async (
   endpoint: string,
   query: string,
-  token: IgdbToken,
+  token: TwitchAccessToken,
 ): Promise<Response> => {
   const clientId = getEnvOrThrow("TWITCH_CLIENT_ID");
   const baseUrl = getBaseUrl();
@@ -172,49 +167,6 @@ const igdbRequest = async (
   });
 };
 
-export async function getIgdbToken(): Promise<IgdbToken> {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now) {
-    return cachedToken;
-  }
-
-  const clientId = getEnvOrThrow("TWITCH_CLIENT_ID");
-  const clientSecret = getEnvOrThrow("TWITCH_CLIENT_SECRET");
-
-  const tokenUrl = new URL("https://id.twitch.tv/oauth2/token");
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "client_credentials",
-  });
-
-  const response = await fetch(tokenUrl.toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body.toString(),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to retrieve Twitch token (${response.status})`);
-  }
-
-  const data = (await response.json()) as {
-    access_token?: string;
-    expires_in?: number;
-  };
-
-  if (!data.access_token || typeof data.expires_in !== "number") {
-    throw new Error("Invalid Twitch token response");
-  }
-
-  const expiresAt = now + Math.max(data.expires_in - 60, 60) * 1000;
-  cachedToken = { accessToken: data.access_token, expiresAt };
-  return cachedToken;
-}
-
 const sanitizeSearchTerm = (term: string): string => term.replace(/"/g, '\\"');
 
 export async function searchIgdbGameCoverByName(name: string): Promise<string | null> {
@@ -222,7 +174,7 @@ export async function searchIgdbGameCoverByName(name: string): Promise<string | 
   if (!trimmed) return null;
 
   try {
-    const token = await getIgdbToken();
+    const token = await getTwitchAccessToken();
     const sanitizedName = sanitizeSearchTerm(trimmed);
     const query = `search "${sanitizedName}";\nfields id,name,cover.image_id;\nlimit 1;`;
 
@@ -265,7 +217,7 @@ const parseCommaSeparatedSlugs = (value?: string): string[] => {
 
 const keywordCache = new Map<string, number>();
 
-async function fetchKeywordIds(slugs: string[], token: IgdbToken): Promise<number[]> {
+async function fetchKeywordIds(slugs: string[], token: TwitchAccessToken): Promise<number[]> {
   const unique = Array.from(new Set(slugs));
   const missing = unique.filter((slug) => !keywordCache.has(slug));
 
@@ -334,7 +286,7 @@ const clampPageSize = (size?: number): number => {
 };
 
 export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSearchResponse> {
-  const token = await getIgdbToken();
+  const token = await getTwitchAccessToken();
   const pageSize = clampPageSize(params.page_size);
   const page = params.page && params.page > 0 ? Math.floor(params.page) : 1;
   const offset = (page - 1) * pageSize;
@@ -423,7 +375,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 }
 
 export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | null> {
-  const token = await getIgdbToken();
+  const token = await getTwitchAccessToken();
   const query = `fields id,name,slug,summary,storyline,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.abbreviation,genres.id,genres.name,themes.id,themes.name,keywords.id,keywords.name,game_modes.id,game_modes.name,player_perspectives.id,player_perspectives.name,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,websites.url,websites.category,videos.name,videos.video_id,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height,similar_games.id,similar_games.name,similar_games.slug,similar_games.cover.image_id,similar_games.total_rating,similar_games.total_rating_count,similar_games.platforms.id,similar_games.platforms.name,dlcs.id,dlcs.name,dlcs.slug,dlcs.cover.image_id,expansions.id,expansions.name,expansions.slug,expansions.cover.image_id,remakes.id,remakes.name,remakes.slug,remakes.cover.image_id,remasters.id,remasters.name,remasters.slug,remasters.cover.image_id,parent_game.id,parent_game.name,parent_game.slug,parent_game.cover.image_id;where id = ${id};limit 1;`;
 
   const response = await igdbRequest("/games", query, token);
@@ -439,7 +391,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
 }
 
 export async function searchIgdbPlatforms(query: string): Promise<IgdbPlatformSummary[]> {
-  const token = await getIgdbToken();
+  const token = await getTwitchAccessToken();
   const sanitized = sanitizeSearchTerm(query.trim());
   const clauses = ["fields id,name,slug,abbreviation,generation;", "limit 50;"];
   if (sanitized) {
