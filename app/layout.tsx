@@ -78,6 +78,7 @@ export const metadata: Metadata = {
   },
   description:
     "Kelola koleksi perangkat dan game kamu dengan metadata RAWG, wishlist, dan cadangan lokal yang aman.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
