@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         releaseYear: Number.isFinite(releaseYear) ? releaseYear : null,
         rating: game.rating ?? null,
         ratingsCount: game.ratings_count ?? 0,
-        platforms: game.platforms
+        platforms: (game.platforms ?? [])
           .map((entry) => ({
             id: entry.platform.id,
             name: entry.platform.name,
