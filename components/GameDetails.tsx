@@ -603,7 +603,7 @@ export function GameDetails({
             <Trophy className="h-4 w-4" aria-hidden="true" />
             <h2 className="text-sm font-semibold uppercase tracking-widest">Achievements</h2>
           </div>
-          <AchievementsList achievements={achievements} />
+          <AchievementsList achievements={achievements} gameTitle={game.name} />
         </section>
       ) : null}
 
@@ -620,7 +620,7 @@ export function GameDetails({
               return (
                 <Link
                   key={addition.id}
-                  href={`/games/${addition.slug ?? addition.id}`}
+                  href={`/games/${addition.id}`}
                   className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70"
                 >
                   <div className="relative h-40 w-full overflow-hidden">
@@ -665,7 +665,7 @@ export function GameDetails({
             {seriesEntries.slice(0, 6).map((entry) => (
               <Link
                 key={entry.id}
-                href={`/games/${entry.slug ?? entry.id}`}
+                href={`/games/${entry.id}`}
                 className="group flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/70 p-4 transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900/70"
               >
                 <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{formatReleaseDate(entry.released ?? null)}</p>
@@ -696,7 +696,7 @@ export function GameDetails({
               return (
                 <Link
                   key={similar.id}
-                  href={`/games/${similar.slug ?? similar.id}`}
+                  href={`/games/${similar.id}`}
                   className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70"
                 >
                   <div className="relative h-40 w-full overflow-hidden">

@@ -2,15 +2,21 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { Trophy } from "lucide-react";
+import { Trophy, Youtube } from "lucide-react";
 import type { RawgAchievement } from "@/lib/rawg";
 
 interface AchievementsListProps {
   achievements: RawgAchievement[];
   initialVisible?: number;
+  gameTitle: string;
 }
 
-export function AchievementsList({ achievements, initialVisible = 10 }: AchievementsListProps) {
+const buildTutorialLink = (gameTitle: string, achievementName: string) =>
+  `https://www.youtube.com/results?search_query=${encodeURIComponent(
+    `${gameTitle} ${achievementName} achievement guide`,
+  )}`;
+
+export function AchievementsList({ achievements, initialVisible = 10, gameTitle }: AchievementsListProps) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? achievements : achievements.slice(0, initialVisible);
   const hasOverflow = achievements.length > initialVisible;
@@ -37,12 +43,24 @@ export function AchievementsList({ achievements, initialVisible = 10 }: Achievem
               {achievement.description ? (
                 <p className="text-xs text-slate-600 dark:text-slate-400">{achievement.description}</p>
               ) : null}
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                {typeof achievement.percent === "number" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-semibold dark:bg-slate-800/70">
+                    <Trophy className="h-3 w-3" aria-hidden="true" />
+                    {achievement.percent.toFixed(1)}% unlocked
+                  </span>
+                ) : null}
+                <a
+                  href={buildTutorialLink(gameTitle, achievement.name)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+                >
+                  <Youtube className="h-3 w-3" aria-hidden="true" />
+                  Watch tutorial
+                </a>
+              </div>
             </div>
-            {typeof achievement.percent === "number" ? (
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">
-                {achievement.percent.toFixed(1)}%
-              </span>
-            ) : null}
           </li>
         ))}
       </ul>
