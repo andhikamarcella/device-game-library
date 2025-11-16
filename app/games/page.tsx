@@ -94,16 +94,24 @@ type IgdbSearchPlatform = {
   id: number;
   name: string;
   slug: string;
+  abbreviation?: string | null;
 };
 
 type IgdbSearchResult = {
   id: number;
+  slug: string | null;
   name: string;
-  coverImage: string | null;
+  summary: string;
+  coverUrl: string | null;
+  coverImageUrl?: string | null;
+  screenshots: string[];
+  screenshotUrls?: string[];
   releaseYear: number | null;
   rating: number | null;
   ratingsCount: number;
   platforms: IgdbSearchPlatform[];
+  genres: string[];
+  popularity: number | null;
 };
 
 type GameSearchResponse = {
@@ -121,8 +129,11 @@ type IgdbDetailMetadata = {
   id: number;
   name?: string;
   description?: string;
+  summary?: string;
   thumbnail: string | null;
   backgroundImage: string | null;
+  coverImageUrl?: string | null;
+  screenshotUrls?: string[];
   gallery: Array<{ id: number; url: string | null }>;
   genres?: string[];
   platforms?: string[];
@@ -136,9 +147,71 @@ type PlatformOption = {
   slug: string;
   yearStart: number | null;
   image: string | null;
+  abbreviation?: string | null;
 };
 
 const IGDB_MODAL_PAGE_SIZE = 6;
+
+const getResultCover = (game: IgdbSearchResult | null | undefined): string | null => {
+  if (!game) {
+    return null;
+  }
+  if (game.coverUrl) {
+    return game.coverUrl;
+  }
+  if (game.coverImageUrl) {
+    return game.coverImageUrl;
+  }
+  if (Array.isArray(game.screenshots) && game.screenshots.length) {
+    return game.screenshots[0];
+  }
+  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
+    return game.screenshotUrls[0];
+  }
+  return null;
+};
+
+const getResultScreenshots = (game: IgdbSearchResult | null | undefined): string[] => {
+  if (!game) {
+    return [];
+  }
+  if (Array.isArray(game.screenshots) && game.screenshots.length) {
+    return game.screenshots;
+  }
+  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
+    return game.screenshotUrls;
+  }
+  return [];
+};
+
+type IgdbSortOption =
+  | "popular_desc"
+  | "popular_asc"
+  | "rating_desc"
+  | "rating_asc"
+  | "release_desc"
+  | "release_asc";
+
+const mapIgdbSortToApiParam = (
+  sort: IgdbSortOption,
+): "popular" | "rating" | "release_date" => {
+  if (sort.startsWith("rating")) {
+    return "rating";
+  }
+  if (sort.startsWith("release")) {
+    return "release_date";
+  }
+  return "popular";
+};
+
+const IGDB_SORT_OPTIONS: Array<{ value: IgdbSortOption; label: string }> = [
+  { value: "popular_desc", label: "Most popular" },
+  { value: "popular_asc", label: "Least popular" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "rating_asc", label: "Lowest rated" },
+  { value: "release_desc", label: "Newest releases" },
+  { value: "release_asc", label: "Oldest releases" },
+];
 
 function GameForm({
   value,
@@ -420,13 +493,20 @@ type GameDetailApiResponse = {
   id: number;
   name?: string;
   description?: string;
+  summary?: string;
   thumbnail: string | null;
   backgroundImage: string | null;
+  coverImageUrl?: string | null;
+  screenshotUrls?: string[];
   gallery: Array<{ id: number; url: string | null }>;
   genres?: string[];
   platforms?: string[];
   rating?: number | null;
   ratingsCount?: number | null;
+  released?: string | null;
+  website?: string | null;
+  developers?: string[];
+  publishers?: string[];
 };
 
 type RemoteMetadata = {
@@ -471,13 +551,15 @@ function GameDetail({ game }: { game: Game }) {
       })
       .then((data) => {
         if (cancelled) return;
-        const screenshots = (data.gallery ?? [])
-          .map((shot) => shot?.url?.trim())
-          .filter((url): url is string => Boolean(url));
+        const screenshots = data.screenshotUrls?.length
+          ? data.screenshotUrls
+          : (data.gallery ?? [])
+              .map((shot) => shot?.url?.trim())
+              .filter((url): url is string => Boolean(url));
 
         const metadata: RemoteMetadata = {
-          thumbnail: data.thumbnail ?? null,
-          heroImage: data.backgroundImage ?? null,
+          thumbnail: data.thumbnail ?? data.coverImageUrl ?? null,
+          heroImage: data.backgroundImage ?? data.thumbnail ?? data.coverImageUrl ?? null,
           screenshots,
         };
         setRemoteMetadata(metadata);
@@ -687,6 +769,8 @@ export default function GamesPage() {
   const [igdbPlatformError, setGamePlatformError] = useState<string | null>(null);
   const [igdbPlatformSearch, setGamePlatformSearch] = useState("");
   const [igdbPlatformsFetched, setGamePlatformsFetched] = useState(false);
+  const [igdbSortOrder, setIgdbSortOrder] = useState<IgdbSortOption>("popular_desc");
+  const [igdbPageInput, setIgdbPageInput] = useState("1");
 
   useEffect(() => {
     if (draftGame) {
@@ -711,19 +795,40 @@ export default function GamesPage() {
     setGamePlatformLoading(true);
     setGamePlatformError(null);
 
-    fetch("/api/platforms", { signal: controller.signal })
+    fetch("/api/igdb/platforms", { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load platform list.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load platform list.";
+          throw new Error(message);
         }
-        return (await response.json()) as PlatformOption[];
+        return payload;
       })
-      .then((data) => {
+      .then((payload) => {
         if (cancelled) {
           return;
         }
-        const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
+        type ApiPlatform = {
+          id: number;
+          name: string;
+          slug?: string | null;
+          generation?: number | null;
+          abbreviation?: string | null;
+        };
+        const data = Array.isArray((payload as { platforms?: ApiPlatform[] } | null)?.platforms)
+          ? ((payload as { platforms: ApiPlatform[] }).platforms ?? [])
+          : Array.isArray(payload)
+            ? (payload as ApiPlatform[])
+            : [];
+        const normalized = data.map((platform) => ({
+          id: platform.id,
+          name: platform.name,
+          slug: platform.slug ?? `igdb-${platform.id}`,
+          yearStart: typeof platform.generation === "number" ? platform.generation : null,
+          image: null,
+          abbreviation: platform.abbreviation ?? null,
+        }));
+        const sorted = [...normalized].sort((a, b) => a.name.localeCompare(b.name));
         setGamePlatforms(sorted);
         setGamePlatformsFetched(true);
       })
@@ -753,38 +858,48 @@ export default function GamesPage() {
       return;
     }
 
-    const params = new URLSearchParams({
-      page: String(igdbPage),
-      pageSize: String(IGDB_MODAL_PAGE_SIZE),
-    });
+    const apiParams = new URLSearchParams();
     if (igdbCommittedQuery) {
-      params.set("q", igdbCommittedQuery);
+      apiParams.set("q", igdbCommittedQuery);
     }
     if (igdbCommittedPlatform !== "all") {
-      params.set("platform", igdbCommittedPlatform);
+      apiParams.set("platformId", igdbCommittedPlatform);
     }
+    const apiSortParam = mapIgdbSortToApiParam(igdbSortOrder);
+    if (apiSortParam !== "popular") {
+      apiParams.set("sort", apiSortParam);
+    }
+    const searchPath = apiParams.toString();
 
     const controller = new AbortController();
     setIgdbLoading(true);
     setIgdbError(null);
 
-    fetch(`/api/games/search?${params.toString()}`, { signal: controller.signal })
+    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Tidak dapat mencari game di IGDB.");
+          const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat mencari game di IGDB.";
+          throw new Error(message);
         }
-        return (await response.json()) as GameSearchResponse;
+        return payload;
       })
-      .then((data) => {
-        setIgdbResults(data.results);
-        setIgdbPagination({
-          total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? igdbPage,
-          pageSize: data.pagination?.pageSize ?? IGDB_MODAL_PAGE_SIZE,
-          hasNextPage: Boolean(data.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
-        });
+      .then((payload) => {
+        const data = payload as Partial<GameSearchResponse> | null;
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as IgdbSearchResult[]) : [];
+        setIgdbResults(normalizedResults);
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : igdbPage,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : IGDB_MODAL_PAGE_SIZE,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setIgdbPagination(nextPagination);
       })
       .catch((error) => {
         if (error.name === "AbortError") {
@@ -806,7 +921,11 @@ export default function GamesPage() {
       });
 
     return () => controller.abort();
-  }, [isModalOpen, igdbHasSearched, igdbCommittedQuery, igdbCommittedPlatform, igdbPage]);
+  }, [isModalOpen, igdbHasSearched, igdbCommittedQuery, igdbCommittedPlatform, igdbPage, igdbSortOrder]);
+
+  useEffect(() => {
+    setIgdbPage(1);
+  }, [igdbSortOrder]);
 
   const filteredGames = useMemo(() => {
     let result = [...games];
@@ -993,9 +1112,11 @@ export default function GamesPage() {
     setIgdbError(null);
     try {
       const detail = await fetchIgdbDetailMetadata(result.id);
-      const screenshotList = (detail.gallery ?? [])
-        .map((shot) => shot?.url?.trim())
-        .filter((url): url is string => Boolean(url));
+      const screenshotList = detail.screenshotUrls?.length
+        ? detail.screenshotUrls
+        : (detail.gallery ?? [])
+            .map((shot) => shot?.url?.trim())
+            .filter((url): url is string => Boolean(url));
 
       const tagSet = new Set<string>();
       detail.genres?.forEach((genre) => {
@@ -1027,8 +1148,8 @@ export default function GamesPage() {
 
       setFormState((prev) => {
         const nextTags = Array.from(tagSet).join(", ");
-        const nextCover = detail.thumbnail ?? result.coverImage ?? prev.coverImage ?? "";
-        const nextHero = detail.backgroundImage ?? detail.thumbnail ?? prev.heroImage ?? "";
+        const nextCover = detail.thumbnail ?? detail.coverImageUrl ?? result.coverImageUrl ?? prev.coverImage ?? "";
+        const nextHero = detail.backgroundImage ?? detail.thumbnail ?? detail.coverImageUrl ?? result.coverImageUrl ?? prev.heroImage ?? "";
         const nextScreenshots = screenshotList.length ? screenshotList.join("\n") : prev.screenshotUrls;
         const nextFolder = prev.folderPath || result.platforms[0]?.slug || "";
         const nextFormat = editingGame ? prev.format : "digital";
@@ -1062,12 +1183,33 @@ export default function GamesPage() {
   };
 
   const igdbCurrentPage = igdbPagination.page > 0 ? igdbPagination.page : igdbPage;
+  const safeIgdbResults = Array.isArray(igdbResults) ? igdbResults : [];
+  const igdbPageSizeValue = Math.max(igdbPagination.pageSize, 1);
   const igdbTotalPages = Math.max(
     1,
-    Math.ceil(Math.max(igdbPagination.total, igdbResults.length) / Math.max(igdbPagination.pageSize, 1)),
+    Math.ceil(Math.max(igdbPagination.total, safeIgdbResults.length) / igdbPageSizeValue),
   );
   const igdbCanGoPrevious = igdbPagination.hasPreviousPage || igdbCurrentPage > 1;
   const igdbCanGoNext = igdbPagination.hasNextPage || igdbCurrentPage < igdbTotalPages;
+
+  useEffect(() => {
+    setIgdbPageInput(String(igdbCurrentPage));
+  }, [igdbCurrentPage]);
+
+  const handleIgdbPageJumpSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!igdbPageInput) {
+      setIgdbPageInput(String(igdbCurrentPage));
+      return;
+    }
+    const parsed = Number.parseInt(igdbPageInput, 10);
+    if (!Number.isFinite(parsed)) {
+      setIgdbPageInput(String(igdbCurrentPage));
+      return;
+    }
+    const nextPage = Math.min(Math.max(parsed, 1), igdbTotalPages);
+    setIgdbPage(nextPage);
+  };
 
   return (
     <div className="space-y-6">
@@ -1381,7 +1523,7 @@ export default function GamesPage() {
             </div>
             <form
               onSubmit={handleIgdbSearchSubmit}
-              className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto]"
+              className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]"
             >
               <div className="relative min-w-0">
                 <label htmlFor="library-igdb-query" className="sr-only">
@@ -1415,7 +1557,7 @@ export default function GamesPage() {
                 >
                   <option value="all">Semua platform</option>
                   {filteredGamePlatforms.length ? (
-                    filteredGamePlatforms.slice(0, 60).map((platform) => (
+                    filteredGamePlatforms.map((platform) => (
                       <option key={platform.id} value={String(platform.id)}>
                         {platform.name}
                       </option>
@@ -1437,6 +1579,26 @@ export default function GamesPage() {
                   placeholder="Filter nama console"
                   className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                 />
+              </div>
+              <div className="space-y-2">
+                <label
+                  htmlFor="library-igdb-sort"
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300"
+                >
+                  Urutkan hasil
+                </label>
+                <select
+                  id="library-igdb-sort"
+                  value={igdbSortOrder}
+                  onChange={(event) => setIgdbSortOrder(event.target.value as IgdbSortOption)}
+                  className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  {IGDB_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button
                 type="submit"
@@ -1466,22 +1628,23 @@ export default function GamesPage() {
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              {igdbResults.map((game) => {
+              {safeIgdbResults.map((game) => {
                 const releaseLabel = game.releaseYear ? `Rilis ${game.releaseYear}` : "Tahun rilis tidak diketahui";
                 const isApplying = igdbSelectionLoadingId === game.id;
                 const ratingLabel =
                   typeof game.rating === "number" && !Number.isNaN(game.rating)
                     ? game.rating.toFixed(1)
                     : "—";
+                const previewImage = getResultCover(game);
                 return (
                   <article
                     key={game.id}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-sm transition-colors duration-200 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100"
                   >
-                    <div className="relative aspect-video w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-                      {game.coverImage ? (
+                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-200 dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]">
+                      {previewImage ? (
                         <img
-                          src={game.coverImage}
+                          src={previewImage}
                           alt={`${game.name} cover art`}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
@@ -1533,7 +1696,7 @@ export default function GamesPage() {
                 );
               })}
             </div>
-            {igdbHasSearched && !igdbLoading && igdbResults.length === 0 ? (
+            {igdbHasSearched && !igdbLoading && safeIgdbResults.length === 0 ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tidak ada hasil untuk pencarian ini. Coba judul lain atau pilih console yang berbeda.
               </p>
@@ -1546,31 +1709,53 @@ export default function GamesPage() {
                 <span>
                   Halaman {igdbCurrentPage} dari {igdbTotalPages}
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleIgdbPageChange("previous")}
-                    disabled={!igdbCanGoPrevious}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
-                      !igdbCanGoPrevious
-                        ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
-                        : "border-slate-300 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                    }`}
-                  >
-                    Sebelumnya
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleIgdbPageChange("next")}
-                    disabled={!igdbCanGoNext}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
-                      !igdbCanGoNext
-                        ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
-                        : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100"
-                    }`}
-                  >
-                    Selanjutnya
-                  </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <form onSubmit={handleIgdbPageJumpSubmit} className="flex items-center gap-2">
+                    <label htmlFor="igdb-page-input" className="font-semibold text-slate-600 dark:text-slate-200">
+                      Lompat ke
+                    </label>
+                    <input
+                      id="igdb-page-input"
+                      type="number"
+                      min={1}
+                      max={igdbTotalPages}
+                      value={igdbPageInput}
+                      onChange={(event) => setIgdbPageInput(event.target.value)}
+                      className="h-9 w-16 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-emerald-400 px-3 py-1.5 font-semibold uppercase tracking-wide text-emerald-600 transition hover:bg-emerald-50 dark:border-emerald-500/70 dark:text-emerald-200 dark:hover:bg-emerald-500/10"
+                    >
+                      Pergi
+                    </button>
+                  </form>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleIgdbPageChange("previous")}
+                      disabled={!igdbCanGoPrevious}
+                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
+                        !igdbCanGoPrevious
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
+                          : "border-slate-300 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                      }`}
+                    >
+                      Sebelumnya
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleIgdbPageChange("next")}
+                      disabled={!igdbCanGoNext}
+                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
+                        !igdbCanGoNext
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
+                          : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100"
+                      }`}
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
                 </div>
               </nav>
             ) : null}
