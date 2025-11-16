@@ -1,7 +1,4 @@
-export interface IgdbToken {
-  accessToken: string;
-  expiresAt: number;
-}
+import { getTwitchAccessToken, type TwitchAccessToken } from "@/lib/twitch";
 
 export interface IgdbCover {
   id: number;
@@ -19,6 +16,7 @@ export interface IgdbPlatformRef {
   id: number;
   name?: string;
   abbreviation?: string | null;
+  slug?: string | null;
 }
 
 export interface IgdbGenreRef {
@@ -125,8 +123,6 @@ export interface IgdbPlatformSummary {
   generation?: number | null;
 }
 
-let cachedToken: IgdbToken | null = null;
-
 const getEnvOrThrow = (key: string): string => {
   const value = process.env[key];
   if (!value) {
@@ -151,68 +147,46 @@ export function resolveIgdbImage(asset?: { image_id?: string | null }, size?: Pa
 
 const getBaseUrl = (): string => getEnvOrThrow("IGDB_BASE_URL");
 
-const igdbRequest = async (
+export class IgdbRequestError extends Error {
+  constructor(message: string, public status?: number, public body?: string) {
+    super(message);
+    this.name = "IgdbRequestError";
+  }
+}
+
+export async function igdbRequest<T>(
   endpoint: string,
   query: string,
-  token: IgdbToken,
-): Promise<Response> => {
+  tokenOverride?: TwitchAccessToken,
+): Promise<T> {
+  const token = tokenOverride ?? (await getTwitchAccessToken());
   const clientId = getEnvOrThrow("TWITCH_CLIENT_ID");
-  const baseUrl = getBaseUrl();
-  const url = new URL(endpoint, baseUrl);
+  const baseUrl = getBaseUrl().replace(/\/$/, "");
+  const normalizedEndpoint = endpoint.replace(/^\/+/, "");
+  const url = `${baseUrl}/${normalizedEndpoint}`;
 
-  return fetch(url.toString(), {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Client-ID": clientId,
       Authorization: `Bearer ${token.accessToken}`,
       "Content-Type": "text/plain",
+      Accept: "application/json",
     },
     body: query,
     cache: "no-store",
   });
-};
 
-export async function getIgdbToken(): Promise<IgdbToken> {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now) {
-    return cachedToken;
-  }
-
-  const clientId = getEnvOrThrow("TWITCH_CLIENT_ID");
-  const clientSecret = getEnvOrThrow("TWITCH_CLIENT_SECRET");
-
-  const tokenUrl = new URL("https://id.twitch.tv/oauth2/token");
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "client_credentials",
-  });
-
-  const response = await fetch(tokenUrl.toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body.toString(),
-    cache: "no-store",
-  });
-
+  const bodyText = await response.text();
   if (!response.ok) {
-    throw new Error(`Failed to retrieve Twitch token (${response.status})`);
+    throw new IgdbRequestError(
+      `IGDB request failed (${response.status})`,
+      response.status,
+      bodyText || response.statusText,
+    );
   }
 
-  const data = (await response.json()) as {
-    access_token?: string;
-    expires_in?: number;
-  };
-
-  if (!data.access_token || typeof data.expires_in !== "number") {
-    throw new Error("Invalid Twitch token response");
-  }
-
-  const expiresAt = now + Math.max(data.expires_in - 60, 60) * 1000;
-  cachedToken = { accessToken: data.access_token, expiresAt };
-  return cachedToken;
+  return JSON.parse(bodyText) as T;
 }
 
 const sanitizeSearchTerm = (term: string): string => term.replace(/"/g, '\\"');
@@ -222,18 +196,10 @@ export async function searchIgdbGameCoverByName(name: string): Promise<string | 
   if (!trimmed) return null;
 
   try {
-    const token = await getIgdbToken();
     const sanitizedName = sanitizeSearchTerm(trimmed);
     const query = `search "${sanitizedName}";\nfields id,name,cover.image_id;\nlimit 1;`;
 
-    const response = await igdbRequest("/games", query, token);
-
-    if (!response.ok) {
-      console.error("IGDB games lookup failed", response.status, await response.text());
-      return null;
-    }
-
-    const data = (await response.json()) as IgdbGame[];
+    const data = await igdbRequest<IgdbGame[]>("/games", query);
     const imageId = data?.[0]?.cover?.image_id;
     if (imageId) {
       return buildIgdbImageUrl(imageId, "cover_big");
@@ -265,24 +231,22 @@ const parseCommaSeparatedSlugs = (value?: string): string[] => {
 
 const keywordCache = new Map<string, number>();
 
-async function fetchKeywordIds(slugs: string[], token: IgdbToken): Promise<number[]> {
+async function fetchKeywordIds(slugs: string[], token: TwitchAccessToken): Promise<number[]> {
   const unique = Array.from(new Set(slugs));
   const missing = unique.filter((slug) => !keywordCache.has(slug));
 
   if (missing.length) {
     const quoted = missing.map((slug) => `"${sanitizeSearchTerm(slug)}"`).join(",");
     const query = `where slug = (${quoted});\nfields id,slug;\nlimit ${missing.length};`;
-    const response = await igdbRequest("/keywords", query, token);
-
-    if (response.ok) {
-      const data = (await response.json()) as Array<{ id: number; slug?: string }>;
+    try {
+      const data = await igdbRequest<Array<{ id: number; slug?: string }>>("/keywords", query, token);
       data.forEach((entry) => {
         if (entry.slug && Number.isFinite(entry.id)) {
           keywordCache.set(entry.slug, entry.id);
         }
       });
-    } else {
-      console.error("IGDB keyword lookup failed", response.status, await response.text());
+    } catch (error) {
+      console.error("IGDB keyword lookup failed", error);
     }
   }
 
@@ -334,7 +298,7 @@ const clampPageSize = (size?: number): number => {
 };
 
 export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSearchResponse> {
-  const token = await getIgdbToken();
+  const token = await getTwitchAccessToken();
   const pageSize = clampPageSize(params.page_size);
   const page = params.page && params.page > 0 ? Math.floor(params.page) : 1;
   const offset = (page - 1) * pageSize;
@@ -379,7 +343,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 
   const queryParts: string[] = [];
   queryParts.push(
-    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.abbreviation,genres.id,genres.name;",
+    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name;",
   );
 
   if (searchTerm) {
@@ -394,22 +358,13 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
   queryParts.push(`limit ${pageSize};`);
   queryParts.push(`offset ${offset};`);
 
-  const response = await igdbRequest("/games", queryParts.join("\n"), token);
-
-  if (!response.ok) {
-    throw new Error(`IGDB search failed (${response.status})`);
-  }
-
-  const results = (await response.json()) as IgdbGame[];
+  const results = await igdbRequest<IgdbGame[]>("/games", queryParts.join("\n"), token);
 
   let total = results.length;
   try {
     const whereSegment = whereClauses.length ? `where ${whereClauses.join(" & ")};` : "";
-    const countResponse = await igdbRequest("/games/count", whereSegment, token);
-    if (countResponse.ok) {
-      const payload = (await countResponse.json()) as Array<{ count: number }>;
-      total = payload?.[0]?.count ?? total;
-    }
+    const payload = await igdbRequest<Array<{ count: number }>>("/games/count", whereSegment, token);
+    total = payload?.[0]?.count ?? total;
   } catch (error) {
     console.error("IGDB count lookup failed", error);
   }
@@ -423,40 +378,30 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 }
 
 export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | null> {
-  const token = await getIgdbToken();
+  const token = await getTwitchAccessToken();
   const query = `fields id,name,slug,summary,storyline,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.abbreviation,genres.id,genres.name,themes.id,themes.name,keywords.id,keywords.name,game_modes.id,game_modes.name,player_perspectives.id,player_perspectives.name,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,websites.url,websites.category,videos.name,videos.video_id,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height,similar_games.id,similar_games.name,similar_games.slug,similar_games.cover.image_id,similar_games.total_rating,similar_games.total_rating_count,similar_games.platforms.id,similar_games.platforms.name,dlcs.id,dlcs.name,dlcs.slug,dlcs.cover.image_id,expansions.id,expansions.name,expansions.slug,expansions.cover.image_id,remakes.id,remakes.name,remakes.slug,remakes.cover.image_id,remasters.id,remasters.name,remasters.slug,remasters.cover.image_id,parent_game.id,parent_game.name,parent_game.slug,parent_game.cover.image_id;where id = ${id};limit 1;`;
 
-  const response = await igdbRequest("/games", query, token);
-  if (!response.ok) {
-    if (response.status === 404) {
+  try {
+    const data = await igdbRequest<IgdbGameDetails[]>("/games", query, token);
+    return data[0] ?? null;
+  } catch (error) {
+    if (error instanceof IgdbRequestError && error.status === 404) {
       return null;
     }
-    throw new Error(`IGDB detail lookup failed (${response.status})`);
+    throw error;
   }
-
-  const data = (await response.json()) as IgdbGameDetails[];
-  return data[0] ?? null;
 }
 
 export async function searchIgdbPlatforms(query: string): Promise<IgdbPlatformSummary[]> {
-  const token = await getIgdbToken();
   const sanitized = sanitizeSearchTerm(query.trim());
   const clauses = ["fields id,name,slug,abbreviation,generation;", "limit 50;"];
   if (sanitized) {
     clauses.unshift(`search "${sanitized}";`);
   }
 
-  const response = await igdbRequest("/platforms", clauses.join("\n"), token);
-  if (!response.ok) {
-    throw new Error(`IGDB platform lookup failed (${response.status})`);
-  }
-  const results = (await response.json()) as Array<{
-    id: number;
-    name: string;
-    slug?: string;
-    abbreviation?: string | null;
-    generation?: number | null;
-  }>;
+  const results = await igdbRequest<
+    Array<{ id: number; name: string; slug?: string; abbreviation?: string | null; generation?: number | null }>
+  >("/platforms", clauses.join("\n"));
 
   return results.map((platform) => ({
     id: platform.id,
