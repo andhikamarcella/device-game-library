@@ -94,12 +94,15 @@ type IgdbSearchPlatform = {
   id: number;
   name: string;
   slug: string;
+  abbreviation?: string | null;
 };
 
 type IgdbSearchResult = {
   id: number;
   name: string;
-  coverImage: string | null;
+  summary: string;
+  coverImageUrl: string | null;
+  screenshotUrls: string[];
   releaseYear: number | null;
   rating: number | null;
   ratingsCount: number;
@@ -121,8 +124,11 @@ type IgdbDetailMetadata = {
   id: number;
   name?: string;
   description?: string;
+  summary?: string;
   thumbnail: string | null;
   backgroundImage: string | null;
+  coverImageUrl?: string | null;
+  screenshotUrls?: string[];
   gallery: Array<{ id: number; url: string | null }>;
   genres?: string[];
   platforms?: string[];
@@ -136,6 +142,7 @@ type PlatformOption = {
   slug: string;
   yearStart: number | null;
   image: string | null;
+  abbreviation?: string | null;
 };
 
 const IGDB_MODAL_PAGE_SIZE = 6;
@@ -420,13 +427,20 @@ type GameDetailApiResponse = {
   id: number;
   name?: string;
   description?: string;
+  summary?: string;
   thumbnail: string | null;
   backgroundImage: string | null;
+  coverImageUrl?: string | null;
+  screenshotUrls?: string[];
   gallery: Array<{ id: number; url: string | null }>;
   genres?: string[];
   platforms?: string[];
   rating?: number | null;
   ratingsCount?: number | null;
+  released?: string | null;
+  website?: string | null;
+  developers?: string[];
+  publishers?: string[];
 };
 
 type RemoteMetadata = {
@@ -471,13 +485,15 @@ function GameDetail({ game }: { game: Game }) {
       })
       .then((data) => {
         if (cancelled) return;
-        const screenshots = (data.gallery ?? [])
-          .map((shot) => shot?.url?.trim())
-          .filter((url): url is string => Boolean(url));
+        const screenshots = data.screenshotUrls?.length
+          ? data.screenshotUrls
+          : (data.gallery ?? [])
+              .map((shot) => shot?.url?.trim())
+              .filter((url): url is string => Boolean(url));
 
         const metadata: RemoteMetadata = {
-          thumbnail: data.thumbnail ?? null,
-          heroImage: data.backgroundImage ?? null,
+          thumbnail: data.thumbnail ?? data.coverImageUrl ?? null,
+          heroImage: data.backgroundImage ?? data.thumbnail ?? data.coverImageUrl ?? null,
           screenshots,
         };
         setRemoteMetadata(metadata);
@@ -711,19 +727,40 @@ export default function GamesPage() {
     setGamePlatformLoading(true);
     setGamePlatformError(null);
 
-    fetch("/api/platforms", { signal: controller.signal })
+    fetch("/api/igdb/platforms", { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to load platform list.");
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load platform list.";
+          throw new Error(message);
         }
-        return (await response.json()) as PlatformOption[];
+        return payload;
       })
-      .then((data) => {
+      .then((payload) => {
         if (cancelled) {
           return;
         }
-        const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
+        type ApiPlatform = {
+          id: number;
+          name: string;
+          slug?: string | null;
+          generation?: number | null;
+          abbreviation?: string | null;
+        };
+        const data = Array.isArray((payload as { platforms?: ApiPlatform[] } | null)?.platforms)
+          ? ((payload as { platforms: ApiPlatform[] }).platforms ?? [])
+          : Array.isArray(payload)
+            ? (payload as ApiPlatform[])
+            : [];
+        const normalized = data.map((platform) => ({
+          id: platform.id,
+          name: platform.name,
+          slug: platform.slug ?? `igdb-${platform.id}`,
+          yearStart: typeof platform.generation === "number" ? platform.generation : null,
+          image: null,
+          abbreviation: platform.abbreviation ?? null,
+        }));
+        const sorted = [...normalized].sort((a, b) => a.name.localeCompare(b.name));
         setGamePlatforms(sorted);
         setGamePlatformsFetched(true);
       })
@@ -770,21 +807,29 @@ export default function GamesPage() {
 
     fetch(`/api/games/search?${params.toString()}`, { signal: controller.signal })
       .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Tidak dapat mencari game di IGDB.");
+          const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat mencari game di IGDB.";
+          throw new Error(message);
         }
-        return (await response.json()) as GameSearchResponse;
+        return payload;
       })
-      .then((data) => {
-        setIgdbResults(data.results);
-        setIgdbPagination({
-          total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? igdbPage,
-          pageSize: data.pagination?.pageSize ?? IGDB_MODAL_PAGE_SIZE,
-          hasNextPage: Boolean(data.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
-        });
+      .then((payload) => {
+        const data = payload as Partial<GameSearchResponse> | null;
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as IgdbSearchResult[]) : [];
+        setIgdbResults(normalizedResults);
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : igdbPage,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : IGDB_MODAL_PAGE_SIZE,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setIgdbPagination(nextPagination);
       })
       .catch((error) => {
         if (error.name === "AbortError") {
@@ -993,9 +1038,11 @@ export default function GamesPage() {
     setIgdbError(null);
     try {
       const detail = await fetchIgdbDetailMetadata(result.id);
-      const screenshotList = (detail.gallery ?? [])
-        .map((shot) => shot?.url?.trim())
-        .filter((url): url is string => Boolean(url));
+      const screenshotList = detail.screenshotUrls?.length
+        ? detail.screenshotUrls
+        : (detail.gallery ?? [])
+            .map((shot) => shot?.url?.trim())
+            .filter((url): url is string => Boolean(url));
 
       const tagSet = new Set<string>();
       detail.genres?.forEach((genre) => {
@@ -1027,8 +1074,8 @@ export default function GamesPage() {
 
       setFormState((prev) => {
         const nextTags = Array.from(tagSet).join(", ");
-        const nextCover = detail.thumbnail ?? result.coverImage ?? prev.coverImage ?? "";
-        const nextHero = detail.backgroundImage ?? detail.thumbnail ?? prev.heroImage ?? "";
+        const nextCover = detail.thumbnail ?? detail.coverImageUrl ?? result.coverImageUrl ?? prev.coverImage ?? "";
+        const nextHero = detail.backgroundImage ?? detail.thumbnail ?? detail.coverImageUrl ?? result.coverImageUrl ?? prev.heroImage ?? "";
         const nextScreenshots = screenshotList.length ? screenshotList.join("\n") : prev.screenshotUrls;
         const nextFolder = prev.folderPath || result.platforms[0]?.slug || "";
         const nextFormat = editingGame ? prev.format : "digital";
@@ -1062,9 +1109,11 @@ export default function GamesPage() {
   };
 
   const igdbCurrentPage = igdbPagination.page > 0 ? igdbPagination.page : igdbPage;
+  const safeIgdbResults = Array.isArray(igdbResults) ? igdbResults : [];
+  const igdbPageSizeValue = Math.max(igdbPagination.pageSize, 1);
   const igdbTotalPages = Math.max(
     1,
-    Math.ceil(Math.max(igdbPagination.total, igdbResults.length) / Math.max(igdbPagination.pageSize, 1)),
+    Math.ceil(Math.max(igdbPagination.total, safeIgdbResults.length) / igdbPageSizeValue),
   );
   const igdbCanGoPrevious = igdbPagination.hasPreviousPage || igdbCurrentPage > 1;
   const igdbCanGoNext = igdbPagination.hasNextPage || igdbCurrentPage < igdbTotalPages;
@@ -1466,22 +1515,23 @@ export default function GamesPage() {
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              {igdbResults.map((game) => {
+              {safeIgdbResults.map((game) => {
                 const releaseLabel = game.releaseYear ? `Rilis ${game.releaseYear}` : "Tahun rilis tidak diketahui";
                 const isApplying = igdbSelectionLoadingId === game.id;
                 const ratingLabel =
                   typeof game.rating === "number" && !Number.isNaN(game.rating)
                     ? game.rating.toFixed(1)
                     : "—";
+                const previewImage = game.coverImageUrl ?? game.screenshotUrls[0] ?? null;
                 return (
                   <article
                     key={game.id}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-sm transition-colors duration-200 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100"
                   >
-                    <div className="relative aspect-video w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-                      {game.coverImage ? (
+                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-200 dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]">
+                      {previewImage ? (
                         <img
-                          src={game.coverImage}
+                          src={previewImage}
                           alt={`${game.name} cover art`}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
@@ -1533,7 +1583,7 @@ export default function GamesPage() {
                 );
               })}
             </div>
-            {igdbHasSearched && !igdbLoading && igdbResults.length === 0 ? (
+            {igdbHasSearched && !igdbLoading && safeIgdbResults.length === 0 ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tidak ada hasil untuk pencarian ini. Coba judul lain atau pilih console yang berbeda.
               </p>

@@ -71,5 +71,6 @@ public/          # Static assets
 
 - Games and devices use `crypto.randomUUID()` for identifiers.
 - Status styling, cards, and layout all leverage Tailwind CSS with a dashboard-inspired dark theme.
+- A lightweight `/api/debug/igdb` route is available to validate Twitch authentication and inspect raw IGDB responses when troubleshooting deployment issues.
 
 Enjoy managing your Device & Game Library! 🎯

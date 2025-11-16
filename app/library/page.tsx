@@ -22,7 +22,8 @@ interface SearchResponse {
 
 interface GameMetadata {
   rating: number | null;
-  released: string | null;
+  releaseYear: number | null;
+  ratingsCount: number | null;
   coverImage: string | null;
 }
 
@@ -127,10 +128,22 @@ export default function DashboardPage() {
             if (!Number.isFinite(id) || !value || typeof value !== "object") {
               return acc;
             }
-            const maybeMetadata = value as Partial<GameMetadata>;
+            const maybeMetadata = value as Partial<GameMetadata> & { released?: string | null };
+            const storedRelease = maybeMetadata.releaseYear ?? maybeMetadata.released;
+            const releaseYear =
+              typeof storedRelease === "number"
+                ? storedRelease
+                : typeof storedRelease === "string"
+                  ? (() => {
+                      const parsedYear = Number.parseInt(storedRelease.slice(0, 4), 10);
+                      return Number.isFinite(parsedYear) ? parsedYear : null;
+                    })()
+                  : null;
             acc[id] = {
               rating: typeof maybeMetadata.rating === "number" ? maybeMetadata.rating : null,
-              released: typeof maybeMetadata.released === "string" ? maybeMetadata.released : null,
+              releaseYear,
+              ratingsCount:
+                typeof maybeMetadata.ratingsCount === "number" ? maybeMetadata.ratingsCount : null,
               coverImage: maybeMetadata.coverImage
                 ? normalizeImageUrl(maybeMetadata.coverImage)
                 : null,
@@ -191,28 +204,68 @@ export default function DashboardPage() {
       try {
         setSearchLoading(true);
         setSearchError(null);
-        const response = await fetch(`/api/igdb/search?q=${encodeURIComponent(debouncedQuery)}&page=${pagination.page}`,
-          { signal: controller.signal },
-        );
-        if (!response.ok) {
-          const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Unable to search games.");
+        const currentPage = pagination.page;
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(PAGE_SIZE),
+        });
+        params.set("q", debouncedQuery);
+        const response = await fetch(`/api/games/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | Partial<SearchResponse>
+          | { error?: string }
+          | null;
+        if (!response.ok || !payload || typeof payload !== "object") {
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+          throw new Error(message);
         }
-        const data = (await response.json()) as SearchResponse;
+        const data = payload as Partial<SearchResponse>;
         if (cancelled) return;
-        setSearchResults(data.results);
-        setPagination(data.pagination);
-          setMetadataById((prev) => {
-            const next = { ...prev };
-            for (const game of data.results) {
-              next[game.id] = {
-                rating: game.rating ?? null,
-                released: game.released ?? null,
-                coverImage: normalizeImageUrl(game.background_image),
-              };
+        const normalizedResults = Array.isArray(data.results) ? (data.results as SearchGameResult[]) : [];
+        const paginationPayload = data.pagination;
+        const nextPagination = paginationPayload
+          ? {
+              total:
+                typeof paginationPayload.total === "number"
+                  ? paginationPayload.total
+                  : normalizedResults.length,
+              page:
+                typeof paginationPayload.page === "number" && paginationPayload.page > 0
+                  ? paginationPayload.page
+                  : currentPage,
+              pageSize:
+                typeof paginationPayload.pageSize === "number" && paginationPayload.pageSize > 0
+                  ? paginationPayload.pageSize
+                  : PAGE_SIZE,
+              hasNextPage: Boolean(paginationPayload.hasNextPage),
+              hasPreviousPage: Boolean(paginationPayload.hasPreviousPage),
             }
-            return next;
-          });
+          : {
+              total: normalizedResults.length,
+              page: currentPage,
+              pageSize: PAGE_SIZE,
+              hasNextPage: normalizedResults.length === PAGE_SIZE,
+              hasPreviousPage: currentPage > 1,
+            };
+        setSearchResults(normalizedResults);
+        setPagination(nextPagination);
+        setMetadataById((prev) => {
+          const next = { ...prev };
+          for (const game of normalizedResults) {
+            const resolvedCover = normalizeImageUrl(
+              game.coverImageUrl ?? game.screenshotUrls[0] ?? next[game.id]?.coverImage ?? null,
+            );
+            next[game.id] = {
+              rating: game.rating ?? next[game.id]?.rating ?? null,
+              releaseYear: game.releaseYear ?? next[game.id]?.releaseYear ?? null,
+              ratingsCount: game.ratingsCount ?? next[game.id]?.ratingsCount ?? null,
+              coverImage: resolvedCover ?? next[game.id]?.coverImage ?? null,
+            };
+          }
+          return next;
+        });
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -220,6 +273,7 @@ export default function DashboardPage() {
         }
         setSearchError(error instanceof Error ? error.message : "Unable to search games.");
         setSearchResults([]);
+        setPagination(createDefaultPagination());
       } finally {
         if (!cancelled) {
           setSearchLoading(false);
@@ -254,6 +308,7 @@ export default function DashboardPage() {
 
     type DetailsHydrationResponse = {
       rating: number | null;
+      ratings_count?: number | null;
       released: string | null;
       background_image: string | null;
       background_image_additional: string | null;
@@ -275,14 +330,27 @@ export default function DashboardPage() {
               data.background_image_additional,
               ...(data.short_screenshots?.map((shot) => shot.image) ?? []),
             ]) ?? null;
-          setMetadataById((prev) => ({
-            ...prev,
-            [game.igdbId]: {
-              rating: data.rating ?? prev[game.igdbId]?.rating ?? null,
-              released: data.released ?? prev[game.igdbId]?.released ?? null,
-              coverImage: coverCandidate ?? prev[game.igdbId]?.coverImage ?? null,
-            },
-          }));
+          setMetadataById((prev) => {
+            const current = prev[game.igdbId];
+            const parsedYear =
+              data.released && data.released.length >= 4
+                ? Number.parseInt(data.released.slice(0, 4), 10)
+                : NaN;
+            const releaseYear = Number.isFinite(parsedYear) ? parsedYear : current?.releaseYear ?? null;
+            const ratingsCount =
+              typeof data.ratings_count === "number"
+                ? data.ratings_count
+                : current?.ratingsCount ?? null;
+            return {
+              ...prev,
+              [game.igdbId]: {
+                rating: data.rating ?? current?.rating ?? null,
+                releaseYear,
+                ratingsCount,
+                coverImage: coverCandidate ?? current?.coverImage ?? null,
+              },
+            };
+          });
           if (!game.coverImage && coverCandidate) {
             update(game.igdbId, { coverImage: coverCandidate });
           }
@@ -318,13 +386,17 @@ export default function DashboardPage() {
         setSimilarLoading(true);
         setSimilarError(null);
         const response = await fetch(`/api/igdb/similar/${similarSource.id}`, { signal: controller.signal });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error ?? "Unable to load similar games.");
+        const payload = (await response.json().catch(() => null)) as
+          | Partial<SimilarResponse>
+          | { error?: string }
+          | null;
+        if (!response.ok || !payload || typeof payload !== "object") {
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to load similar games.";
+          throw new Error(message);
         }
-        const data = (await response.json()) as SimilarResponse;
+        const data = payload as Partial<SimilarResponse>;
         if (cancelled) return;
-        setSimilarResults(data.results ?? []);
+        setSimilarResults(Array.isArray(data.results) ? data.results : []);
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -390,16 +462,15 @@ export default function DashboardPage() {
 
   const handleAddToLibrary = (game: SearchGameResult) => {
     const metadata = metadataById[game.id];
-    const coverImage = normalizeImageUrl(metadata?.coverImage ?? game.background_image ?? null);
-    const normalizedPlatforms =
-      game.parent_platforms?.map((entry) => entry.platform) ??
-      game.platforms?.map((entry) => entry.platform) ??
-      [];
+    const coverImage = normalizeImageUrl(
+      metadata?.coverImage ?? game.coverImageUrl ?? game.screenshotUrls[0] ?? null,
+    );
+    const platformNames = (game.platforms ?? []).map((platform) => platform.name);
     const created = upsert({
       igdbId: game.id,
       slug: game.slug ?? `${game.id}`,
       title: game.name,
-      platforms: normalizedPlatforms.map((platform) => platform.name),
+      platforms: platformNames,
       coverImage,
       playtimeHours: 0,
     });
@@ -407,8 +478,9 @@ export default function DashboardPage() {
       ...prev,
       [created.igdbId]: {
         rating: game.rating ?? null,
-        released: game.released ?? null,
-        coverImage,
+        releaseYear: game.releaseYear ?? prev[created.igdbId]?.releaseYear ?? null,
+        ratingsCount: game.ratingsCount ?? prev[created.igdbId]?.ratingsCount ?? null,
+        coverImage: coverImage ?? prev[created.igdbId]?.coverImage ?? null,
       },
     }));
   };
@@ -456,8 +528,8 @@ export default function DashboardPage() {
           case "title":
             return a.title.localeCompare(b.title);
           case "release_year": {
-            const yearA = metadataA?.released ? Number.parseInt(metadataA.released.slice(0, 4), 10) : 0;
-            const yearB = metadataB?.released ? Number.parseInt(metadataB.released.slice(0, 4), 10) : 0;
+            const yearA = metadataA?.releaseYear ?? 0;
+            const yearB = metadataB?.releaseYear ?? 0;
             if (yearA === yearB) {
               return a.title.localeCompare(b.title);
             }
@@ -542,12 +614,16 @@ export default function DashboardPage() {
               const userGame = libraryGames.find((game) => game.igdbId === result.id);
               const metadata = metadataById[result.id];
               const coverOverride = normalizeImageUrl(
-                metadata?.coverImage ?? result.background_image ?? null,
+                metadata?.coverImage ?? result.coverImageUrl ?? result.screenshotUrls[0] ?? null,
               );
+              const cardData: SearchGameResult = {
+                ...result,
+                coverImageUrl: coverOverride ?? result.coverImageUrl,
+              };
               return (
                 <GameCard
                   key={result.id}
-                  game={result}
+                  game={cardData}
                   coverOverride={coverOverride}
                   userGame={userGame}
                   onAdd={handleAddToLibrary}
@@ -621,20 +697,21 @@ export default function DashboardPage() {
               );
               const cardData: SearchGameResult = {
                 id: userGame.igdbId,
-                slug: userGame.slug,
+                slug: userGame.slug ?? `${userGame.igdbId}`,
                 name: userGame.title,
-                background_image: coverImage,
+                summary: userGame.notes ?? "",
+                coverImageUrl: coverImage,
+                screenshotUrls: [],
+                releaseYear: metadata?.releaseYear ?? null,
                 rating: metadata?.rating ?? null,
-                genres: [],
+                ratingsCount: metadata?.ratingsCount ?? 0,
                 platforms: userGame.platforms.map((platform, index) => ({
-                  platform: {
-                    id: index,
-                    name: platform,
-                    slug: platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
-                  },
+                  id: index,
+                  name: platform,
+                  slug: platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+                  abbreviation: null,
                 })),
-                playtime: userGame.playtimeHours,
-                released: metadata?.released ?? null,
+                genres: [],
               };
               return (
                 <GameCard

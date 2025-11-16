@@ -336,6 +336,7 @@ export function GameDetails({
           <CoverImage
             gameName={game.name}
             fallbackImage={igdbCoverImage}
+            initialImage={igdbCoverImage}
             className="absolute inset-0 h-full w-full"
           />
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
@@ -347,6 +348,7 @@ export function GameDetails({
                 <CoverImage
                   gameName={game.name}
                   fallbackImage={igdbCoverImage}
+                  initialImage={igdbCoverImage}
                   className="h-full w-full"
                 />
               </div>

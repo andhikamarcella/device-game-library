@@ -1,6 +1,7 @@
 import {
   buildIgdbImageUrl,
   getIgdbGameDetails,
+  getIgdbImageUrl,
   resolveIgdbImage,
   searchIgdbGames as searchIgdbGamesInternal,
   searchIgdbPlatforms as searchIgdbPlatformsInternal,
@@ -486,14 +487,23 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
   if (!assets?.length) {
     return [];
   }
-  return assets
-    .filter((asset) => asset && asset.image_id)
-    .map((asset) => ({
-      id: asset.id,
-      image: buildIgdbImageUrl(asset.image_id, "screenshot_big"),
+  const screenshots: GameScreenshot[] = [];
+  assets.forEach((asset, index) => {
+    if (!asset?.image_id) {
+      return;
+    }
+    const image = getIgdbImageUrl(asset.image_id, "screenshot");
+    if (!image) {
+      return;
+    }
+    screenshots.push({
+      id: typeof asset.id === "number" ? asset.id : index,
+      image,
       width: asset.width,
       height: asset.height,
-    }));
+    });
+  });
+  return screenshots;
 };
 
 const mapSimilar = (similar?: IgdbSimilarGame[]): GameSimilarEntry[] => {
@@ -519,7 +529,8 @@ const mapRelatedGames = (list?: IgdbSimilarGame[] | null): GameRelatedGame[] => 
       id: entry.id,
       slug: entry.slug ?? slugify(entry.name),
       name: entry.name,
-      background_image: resolveIgdbImage(entry.cover),
+      background_image:
+        resolveIgdbImage(entry.cover) ?? mapScreenshots(entry.screenshots)[0]?.image ?? null,
       released: null,
       rating: typeof entry.total_rating === "number" ? entry.total_rating : null,
       ratings_count: entry.total_rating_count ?? null,
@@ -600,14 +611,16 @@ const mapCompanies = (
 };
 
 const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
-  const cover = resolveIgdbImage(game.cover);
+  const screenshots = mapScreenshots(game.screenshots);
+  const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
+  const secondaryImage = screenshots[1]?.image ?? cover;
   return {
     id: game.id,
     slug: game.slug ?? slugify(game.name),
     name: game.name,
     background_image: cover,
-    background_image_additional: cover,
-    short_screenshots: [],
+    background_image_additional: secondaryImage,
+    short_screenshots: screenshots,
     clip: null,
     released: toIsoDate(game.first_release_date),
     rating: typeof game.total_rating === "number" ? game.total_rating : null,
