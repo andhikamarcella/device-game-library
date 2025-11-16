@@ -64,6 +64,7 @@ export type RawgGame = {
   released: string | null;
   rating: number | null;
   ratings_count?: number;
+  metacritic?: number | null;
   playtime?: number | null;
   platforms?: RawgPlatform[] | null;
   parent_platforms?: RawgParentPlatform[] | null;
@@ -202,15 +203,17 @@ export type RawgReview = {
   } | null;
 };
 
-/**
- * Search for games on RAWG by text query.
- */
-type SearchGamesOptions = {
-  page?: number;
-  pageSize?: number;
-  platformId?: number;
+export interface RawgSearchParams {
+  search?: string;
   ordering?: string;
-};
+  platforms?: string;
+  genres?: string;
+  tags?: string;
+  dates?: string;
+  metacritic?: string;
+  page?: number;
+  page_size?: number;
+}
 
 export type RawgSearchResponse = {
   results: RawgGame[];
@@ -219,33 +222,63 @@ export type RawgSearchResponse = {
   previous: string | null;
 };
 
-export async function searchGames(query: string, options: SearchGamesOptions = {}): Promise<RawgSearchResponse> {
-  const { page = 1, pageSize = 20, platformId, ordering = "-rating" } = options;
-  const trimmedQuery = query.trim();
+export async function searchGames(params: RawgSearchParams = {}): Promise<RawgSearchResponse> {
+  const baseUrl = process.env.RAWG_BASE_URL;
+  const apiKey = process.env.RAWG_API_KEY;
 
-  if (!trimmedQuery && !platformId) {
-    throw new Error("Provide a search term or choose a platform to browse games.");
+  if (!baseUrl || !apiKey) {
+    throw new Error("Missing RAWG env vars");
   }
 
-  const params: Record<string, string | number | undefined> = {
-    page,
-    page_size: pageSize,
-    ordering,
-    platforms: platformId,
-  };
+  const url = new URL("/games", baseUrl);
+  const searchParams = url.searchParams;
 
-  if (trimmedQuery) {
-    params.search = trimmedQuery;
+  searchParams.set("key", apiKey);
+  searchParams.set("page_size", String(params.page_size ?? 24));
+
+  if (params.search && params.search.trim().length > 0) {
+    searchParams.set("search", params.search.trim());
+    searchParams.set("search_precise", "true");
   }
 
-  const data = await fetchFromRawg<RawgSearchResponse>("/games", params);
+  if (params.ordering) {
+    searchParams.set("ordering", params.ordering);
+  }
 
-  return {
-    results: data.results ?? [],
-    count: data.count ?? 0,
-    next: data.next ?? null,
-    previous: data.previous ?? null,
-  };
+  if (params.platforms) {
+    searchParams.set("platforms", params.platforms);
+  }
+
+  if (params.genres) {
+    searchParams.set("genres", params.genres);
+  }
+
+  if (params.tags) {
+    searchParams.set("tags", params.tags);
+  }
+
+  if (params.dates) {
+    searchParams.set("dates", params.dates);
+  }
+
+  if (params.metacritic) {
+    searchParams.set("metacritic", params.metacritic);
+  }
+
+  if (typeof params.page === "number" && params.page > 0) {
+    searchParams.set("page", String(params.page));
+  }
+
+  const res = await fetch(url.toString(), {
+    next: { revalidate: 60 },
+  });
+
+  if (!res.ok) {
+    throw new Error(`RAWG search failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data as RawgSearchResponse;
 }
 
 /**

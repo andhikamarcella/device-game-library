@@ -27,6 +27,8 @@ import { SystemRequirements } from "@/components/game/SystemRequirements";
 import {
   type RawgAchievement,
   type RawgGameDetails,
+  type RawgParentPlatform,
+  type RawgPlatform,
   type RawgMovie,
   type RawgRelatedGame,
   type RawgScreenshot,
@@ -36,6 +38,7 @@ import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeRawgImageUrl } from "@/lib/images";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
+import { PlatformIcon } from "@/lib/platformIcons";
 
 export type GameReview = {
   id: number;
@@ -114,6 +117,30 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
+};
+
+type PlatformEntry = RawgPlatform | RawgParentPlatform | null | undefined;
+
+type NormalizedPlatform = RawgPlatform["platform"];
+
+const normalizePlatformList = (entries: PlatformEntry[] = []): NormalizedPlatform[] => {
+  const normalized = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      if ("platform" in entry && entry.platform) {
+        return entry.platform;
+      }
+      return null;
+    })
+    .filter((platform): platform is NormalizedPlatform => {
+      if (!platform || typeof platform.id !== "number") return false;
+      const hasLabel =
+        (typeof platform.name === "string" && platform.name.trim().length > 0) ||
+        (typeof platform.slug === "string" && platform.slug.trim().length > 0);
+      return hasLabel;
+    });
+
+  return normalized;
 };
 
 const formatReleaseDate = (value: string | null) => {
@@ -198,8 +225,9 @@ export function GameDetails({
     return `${base}?returnTo=${encodeURIComponent(backTarget)}`;
   };
   const parentPlatforms = game.parent_platforms ?? [];
-  const fallbackPlatforms = game.platforms ?? [];
-  const platformEntries = (parentPlatforms.length ? parentPlatforms : fallbackPlatforms) ?? [];
+  const directPlatforms = game.platforms ?? [];
+  const availablePlatformEntries = (directPlatforms.length ? directPlatforms : parentPlatforms) ?? [];
+  const availablePlatforms = normalizePlatformList(availablePlatformEntries);
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -328,12 +356,26 @@ export function GameDetails({
                     </p>
                   ) : null}
                 </div>
-                {platformEntries.length ? (
+                {availablePlatforms.length ? (
                   <section className="space-y-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Available on
                     </h3>
-                    <PlatformChips platforms={platformEntries} className="mt-1" />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {availablePlatforms.map((platform) => {
+                        const label = platform.name ?? platform.slug ?? "Unknown platform";
+                        const key = platform.slug ?? `${platform.id}`;
+                        return (
+                          <span
+                            key={key}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100 dark:shadow-none"
+                          >
+                            <PlatformIcon platform={label} className="h-4 w-4" />
+                            <span>{label}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   </section>
                 ) : null}
                 <FeatureBadges game={game} />
