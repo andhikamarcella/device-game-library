@@ -39,8 +39,9 @@ async function getTwitchAccessToken(): Promise<string> {
   });
 
   if (!tokenRes.ok) {
-    console.error("Twitch token error", tokenRes.status, await tokenRes.text());
-    throw new Error("Failed to acquire Twitch token");
+    const bodyText = await tokenRes.text();
+    console.error("Twitch token error", tokenRes.status, bodyText);
+    throw new Error("Failed to obtain Twitch access token");
   }
 
   const tokenData = (await tokenRes.json()) as TwitchTokenResponse;
@@ -56,20 +57,7 @@ async function getTwitchAccessToken(): Promise<string> {
   return cachedToken;
 }
 
-function escapeIgdbSearchTerm(term: string): string {
-  return term.replace(/"/g, '\\"');
-}
-
-export async function GET(req: NextRequest) {
-  const query = req.nextUrl.searchParams.get("q")?.trim();
-
-  if (!query) {
-    return NextResponse.json(
-      { error: "Query parameter `q` is required" },
-      { status: 400 },
-    );
-  }
-
+export async function GET(_req: NextRequest) {
   try {
     const [accessToken, clientId] = await Promise.all([
       getTwitchAccessToken(),
@@ -82,22 +70,26 @@ export async function GET(req: NextRequest) {
     }
 
     const baseUrl = (process.env.IGDB_BASE_URL ?? "https://api.igdb.com/v4").replace(/\/$/, "");
-    const igdbQuery = `search "${escapeIgdbSearchTerm(query)}";\nfields id,name,slug,first_release_date,summary,cover.image_id,platforms.name;\nlimit 20;`;
+    const query = [
+      "fields id,name,slug,abbreviation;",
+      "sort name asc;",
+      "limit 100;",
+    ].join("\n");
 
-    const res = await fetch(`${baseUrl}/games`, {
+    const res = await fetch(`${baseUrl}/platforms`, {
       method: "POST",
       headers: {
         "Client-ID": clientId,
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "text/plain",
       },
-      body: igdbQuery,
+      body: query,
     });
 
     if (!res.ok) {
-      console.error("IGDB search error", res.status, await res.text());
+      console.error("IGDB platform error", res.status, await res.text());
       return NextResponse.json(
-        { error: "IGDB search failed", status: res.status },
+        { error: "IGDB platform lookup failed", status: res.status },
         { status: 500 },
       );
     }
@@ -105,8 +97,8 @@ export async function GET(req: NextRequest) {
     const data = (await res.json()) as unknown;
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
-    console.error("IGDB search handler error", error);
-    const message = error instanceof Error ? error.message : "Failed to perform IGDB search";
+    console.error("IGDB platforms handler error", error);
+    const message = error instanceof Error ? error.message : "Unable to load platforms";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
