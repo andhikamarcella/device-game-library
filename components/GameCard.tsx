@@ -149,7 +149,7 @@ export function GameCard({
               </Link>
             </div>
           </div>
-          {game.genres.length ? (
+          {Array.isArray(game.genres) && game.genres.length ? (
             <p className="text-sm text-slate-600 dark:text-slate-300">{game.genres.map((genre) => genre.name).join(", ")}</p>
           ) : null}
           {normalizedPlatforms.length ? (

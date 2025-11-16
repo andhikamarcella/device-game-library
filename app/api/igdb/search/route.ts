@@ -1,62 +1,62 @@
-import { NextResponse } from "next/server";
-import { pickBestImage } from "@/lib/images";
-import { searchGames } from "@/lib/gameData";
+import { NextRequest, NextResponse } from "next/server";
+import { getTwitchAccessToken } from "@/lib/twitchAuth";
 
-const PAGE_SIZE = 5;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q")?.trim() ?? "";
-  const pageParam = searchParams.get("page");
-  const page = pageParam ? Number.parseInt(pageParam, 10) : 1;
-  const normalizedPage = Number.isFinite(page) && page > 0 ? page : 1;
+const IGDB_BASE_URL = process.env.IGDB_BASE_URL ?? "https://api.igdb.com/v4";
 
-  if (!query) {
-    return NextResponse.json({ error: "Query parameter q is required." }, { status: 400 });
-  }
-
+export async function GET(req: NextRequest) {
   try {
-    const data = await searchGames({
-      search: query,
-      page: normalizedPage,
-      page_size: PAGE_SIZE,
-    });
+    const q = req.nextUrl.searchParams.get("q")?.trim();
+    if (!q) {
+      return NextResponse.json({ error: "Query parameter `q` is required" }, { status: 400 });
+    }
 
-    const results = data.results.map((game) => {
-      const coverImage =
-        pickBestImage([
-          game.background_image,
-          game.background_image_additional,
-          ...(game.short_screenshots?.map((shot) => shot.image) ?? []),
-        ]) ?? null;
+    const clientId = process.env.TWITCH_CLIENT_ID;
+    if (!clientId) {
+      return NextResponse.json({ error: "Missing TWITCH_CLIENT_ID" }, { status: 500 });
+    }
 
-      return {
-        id: game.id,
-        slug: game.slug ?? game.id.toString(),
-        name: game.name,
-        background_image: coverImage,
-        rating: game.rating,
-        genres: game.genres ?? [],
-        platforms: game.platforms ?? [],
-        parent_platforms: game.parent_platforms ?? [],
-        playtime: game.playtime ?? 0,
-        released: game.released,
-      };
-    });
+    const accessToken = await getTwitchAccessToken();
+    const escaped = q.replace(/"/g, '\\"');
 
-    return NextResponse.json({
-      results,
-      pagination: {
-        total: data.count,
-        page: normalizedPage,
-        pageSize: PAGE_SIZE,
-        hasNextPage: data.next !== null,
-        hasPreviousPage: data.previous !== null || normalizedPage > 1,
+    const query = [
+      `search "${escaped}";`,
+      "fields id,name,slug,first_release_date,summary,cover.image_id,platforms.name;",
+      "limit 20;",
+    ].join("\n");
+
+    const response = await fetch(`${IGDB_BASE_URL}/games`, {
+      method: "POST",
+      headers: {
+        "Client-ID": clientId,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "text/plain",
+        Accept: "application/json",
       },
+      body: query,
     });
-  } catch (error) {
-    console.error("IGDB search error", error);
-    const message = error instanceof Error ? error.message : "Unable to search IGDB.";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error("IGDB search failed", response.status, text);
+      return NextResponse.json(
+        {
+          error: "IGDB search failed",
+          status: response.status,
+          details: text,
+        },
+        { status: 500 },
+      );
+    }
+
+    const data = JSON.parse(text);
+    return NextResponse.json(data, { status: 200 });
+  } catch (err) {
+    console.error("IGDB search fatal error", err);
+    return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });
   }
 }
