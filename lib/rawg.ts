@@ -1,4 +1,4 @@
-const RAWG_API_BASE_URL = "https://api.rawg.io/api";
+import { fetchFromRawg } from "@/lib/server/rawgClient";
 
 export type RawgPlatform = {
   platform: {
@@ -18,12 +18,68 @@ export type RawgPlatformSummary = {
 
 export type RawgGame = {
   id: number;
+  slug?: string | null;
   name: string;
   background_image: string | null;
   released: string | null;
   rating: number;
   ratings_count: number;
-  platforms: RawgPlatform[];
+  platforms?: RawgPlatform[];
+};
+
+export type RawgAddedByStatus = Partial<
+  Record<
+    | "yet"
+    | "owned"
+    | "beaten"
+    | "toplay"
+    | "dropped"
+    | "playing"
+    | "completed"
+    | "wishlist"
+    | "custom"
+    | "collecting"
+    | "main"
+    | "replay"
+    | "paused",
+    number
+  >
+>;
+
+export type RawgRatingBreakdown = {
+  id: number;
+  title: string;
+  count: number;
+  percent: number;
+};
+
+export type RawgTag = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgSeriesEntry = {
+  id: number;
+  name: string;
+  slug?: string | null;
+};
+
+export type RawgParentGame = RawgSeriesEntry | null;
+
+export type RawgParentPlatform = {
+  platform: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+};
+
+export type RawgClip = {
+  clip?: string | null;
+  clips?: Record<string, string | undefined> | null;
+  preview?: string | null;
+  video?: string | null;
 };
 
 export type RawgGameDetails = RawgGame & {
@@ -35,6 +91,22 @@ export type RawgGameDetails = RawgGame & {
   publishers: { id: number; name: string }[];
   background_image_additional?: string | null;
   short_screenshots?: RawgScreenshot[];
+  playtime?: number | null;
+  added_by_status?: RawgAddedByStatus | null;
+  ratings?: RawgRatingBreakdown[] | null;
+  tags?: RawgTag[] | null;
+  parent_game?: RawgParentGame;
+  parent_platforms?: RawgParentPlatform[] | null;
+  series?: RawgSeriesEntry[] | { results?: RawgSeriesEntry[] | null } | null;
+  clip?: RawgClip | null;
+  movies?: RawgMovie[] | null;
+};
+
+export type RawgMovie = {
+  id: number;
+  name: string;
+  preview: string | null;
+  data: Record<string, string | undefined> & { 480?: string; max?: string };
 };
 
 export type RawgScreenshot = {
@@ -53,45 +125,6 @@ export type RawgReview = {
     username?: string | null;
   } | null;
 };
-
-function getApiKey(): string {
-  const apiKey = process.env.RAWG_API_KEY;
-  if (!apiKey) {
-    throw new Error("RAWG_API_KEY environment variable is not configured.");
-  }
-  return apiKey;
-}
-
-async function fetchFromRawg<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const apiKey = getApiKey();
-  const url = new URL(`${RAWG_API_BASE_URL}${path}`);
-
-  url.searchParams.set("key", apiKey);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-    },
-    next: { revalidate: 60 },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const message =
-      (errorBody && (errorBody.detail || errorBody.error || errorBody.message)) ||
-      `RAWG request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  return (await response.json()) as T;
-}
 
 /**
  * Search for games on RAWG by text query.
@@ -178,6 +211,86 @@ export async function getGameReviews(id: number, page = 1, pageSize = 6): Promis
   });
 
   return data.results ?? [];
+}
+
+export async function getGameTrailers(id: number): Promise<RawgMovie[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for trailers.");
+  }
+
+  const data = await fetchFromRawg<{ results: RawgMovie[] }>(`/games/${id}/movies`);
+
+  return data.results ?? [];
+}
+
+export type RawgSimilarGame = RawgGame & {
+  slug: string;
+  parent_platforms?: RawgParentPlatform[] | null;
+};
+
+type RawgSimilarStrategyDetails = {
+  genres?: Array<{ slug?: string | null }> | null;
+  parent_platforms?: RawgParentPlatform[] | null;
+};
+
+async function fetchSuggestedGames(id: number, limit: number): Promise<RawgSimilarGame[]> {
+  const data = await fetchFromRawg<{ results: RawgSimilarGame[] }>(`/games/${id}/suggested`, {
+    page_size: limit,
+  });
+  return data.results ?? [];
+}
+
+async function fetchStrategySimilarGames(id: number, limit: number): Promise<RawgSimilarGame[]> {
+  const details = await fetchFromRawg<RawgSimilarStrategyDetails>(`/games/${id}`);
+  const firstGenreSlug = details.genres?.find((genre) => genre?.slug)?.slug ?? null;
+  const firstParentPlatformId = details.parent_platforms?.find((entry) => entry?.platform?.id)?.platform.id ?? null;
+
+  if (!firstGenreSlug && !firstParentPlatformId) {
+    return [];
+  }
+
+  const params: Record<string, string | number> = {
+    page_size: Math.max(limit, 1),
+    ordering: "-rating",
+  };
+
+  if (firstGenreSlug) {
+    params.genres = firstGenreSlug;
+  }
+
+  if (firstParentPlatformId) {
+    params.parent_platforms = firstParentPlatformId;
+  }
+
+  const data = await fetchFromRawg<{ results: RawgSimilarGame[] }>("/games", params);
+  return data.results ?? [];
+}
+
+export async function getSimilarGames(id: number, limit = 6): Promise<RawgSimilarGame[]> {
+  if (!Number.isFinite(id)) {
+    throw new Error("A valid RAWG game id must be provided for similar games.");
+  }
+
+  const normalizedLimit = Math.max(1, limit);
+  const filterGames = (games: RawgSimilarGame[] = []) =>
+    games.filter((game) => game && Number.isFinite(game.id) && game.id !== id);
+
+  try {
+    const suggested = filterGames(await fetchSuggestedGames(id, normalizedLimit));
+    if (suggested.length) {
+      return suggested.slice(0, normalizedLimit);
+    }
+  } catch (error) {
+    console.warn("RAWG suggested endpoint failed, falling back to genre/platform search", error);
+  }
+
+  try {
+    const fallback = filterGames(await fetchStrategySimilarGames(id, normalizedLimit * 2));
+    return fallback.slice(0, normalizedLimit);
+  } catch (error) {
+    console.error("RAWG fallback strategy failed", error);
+    throw error instanceof Error ? error : new Error("Unable to load similar games.");
+  }
 }
 
 /**
