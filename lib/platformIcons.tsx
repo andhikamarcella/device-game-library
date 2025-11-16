@@ -1,155 +1,115 @@
-/**
- * NOTE: Run `npm install simple-icons @iconify/react` (or `yarn add simple-icons @iconify/react`) before using these platform icons.
- */
-import type { FC, SVGProps } from "react";
-import { Icon as IconifyIcon } from "@iconify/react";
-import type { IconifyIconProps } from "@iconify/react";
+import React, { FC, SVGProps } from "react";
+import { Icon as IconifyIcon, IconifyIconProps } from "@iconify/react";
 import {
-  type SimpleIcon,
-  siAndroid,
-  siApple,
-  siIos,
-  siLinux,
+  SimpleIcon,
   siNintendo,
+  siNintendoswitch,
   siPlaystation,
-  siWindows,
+  siPlaystation3,
+  siPlaystation4,
+  siPlaystation5,
+  siSteam,
+  siApple,
+  siLinux,
+  siAndroid,
 } from "simple-icons";
 
-export type PlatformSlug =
-  | "pc"
-  | "playstation"
-  | "xbox"
-  | "nintendo"
-  | "switch"
-  | "ios"
-  | "android"
-  | "macos"
-  | "linux"
-  | "web"
-  | "other";
+export type IconComponent = FC<SVGProps<SVGSVGElement>>;
 
-export type PlatformIconComponent = FC<SVGProps<SVGSVGElement> & { className?: string; title?: string }>;
-
-type IconifyReactComponent = FC<IconifyIconProps>;
-
-function makeSimpleIcon(icon: SimpleIcon): PlatformIconComponent {
-  const SimpleIconComponent: PlatformIconComponent = ({ className, ...props }) => (
-    <svg
-      viewBox="0 0 24 24"
-      role="img"
-      aria-hidden="true"
-      fill="currentColor"
-      className={className}
-      {...props}
-    >
-      <path d={icon.path} />
+function makeSimpleIcon(icon: SimpleIcon): IconComponent {
+  const { path } = icon;
+  const viewBoxValue = icon.viewBox ?? "0 0 24 24";
+  const SimpleWrapped: IconComponent = (props) => (
+    <svg aria-hidden="true" role="img" viewBox={viewBoxValue} {...props}>
+      <path d={path} />
     </svg>
   );
-  return SimpleIconComponent;
+  return SimpleWrapped;
 }
 
-function makeIconifyIcon(name: string): PlatformIconComponent {
-  const IconComponent: IconifyReactComponent = IconifyIcon as IconifyReactComponent;
-  const Wrapped: PlatformIconComponent = ({
-    className,
-    color,
-    height,
-    width,
-    role,
-    focusable,
-    style,
-    title,
-    "aria-hidden": ariaHidden,
-    "aria-label": ariaLabel,
-    "aria-labelledby": ariaLabelledby,
-  }) => (
-    <IconComponent
-      icon={name}
-      className={className}
-      color={color}
-      height={height}
-      width={width}
-      role={role}
-      focusable={focusable}
-      style={style}
-      title={title}
-      aria-hidden={ariaHidden}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledby}
-    />
+function makeIconifyIcon(name: string): IconComponent {
+  const IconifyWrapped: IconComponent = ({ className, ...rest }) => (
+    <IconifyIcon icon={name} className={className} {...(rest as Omit<IconifyIconProps, "icon">)} />
   );
-  return Wrapped;
+  return IconifyWrapped;
 }
 
+const SteamIcon = makeSimpleIcon(siSteam);
 const PlaystationIcon = makeSimpleIcon(siPlaystation);
+const PS3Icon = makeSimpleIcon(siPlaystation3);
+const PS4Icon = makeSimpleIcon(siPlaystation4);
+const PS5Icon = makeSimpleIcon(siPlaystation5);
+const NintendoSwitchIcon = makeSimpleIcon(siNintendoswitch);
 const NintendoIcon = makeSimpleIcon(siNintendo);
-const WindowsIcon = makeSimpleIcon(siWindows);
 const AppleIcon = makeSimpleIcon(siApple);
 const LinuxIcon = makeSimpleIcon(siLinux);
 const AndroidIcon = makeSimpleIcon(siAndroid);
-const IosIcon = makeSimpleIcon(siIos);
 
 const XboxIcon = makeIconifyIcon("mdi:xbox");
-const SwitchIcon = makeIconifyIcon("mdi:nintendo-switch");
-const WebIcon = makeIconifyIcon("mdi:web");
-const DefaultIcon: PlatformIconComponent = (props) => (
-  <svg viewBox="0 0 24 24" role="img" aria-hidden="true" fill="currentColor" {...props}>
-    <circle cx="12" cy="12" r="10" />
-  </svg>
-);
+const WindowsIcon = makeIconifyIcon("mdi:microsoft-windows");
+const GenericGamepadIcon = makeIconifyIcon("mdi:controller-classic-outline");
 
-const PLATFORM_NORMALIZE: Record<string, PlatformSlug> = {
-  pc: "pc",
-  windows: "pc",
-  "pc-windows": "pc",
-  "microsoft-windows": "pc",
-  steam: "pc",
-  "steam-deck": "pc",
-  mac: "macos",
-  macos: "macos",
-  ios: "ios",
-  ipad: "ios",
-  android: "android",
-  linux: "linux",
-  playstation: "playstation",
-  "playstation3": "playstation",
-  "playstation4": "playstation",
-  "playstation5": "playstation",
-  psp: "playstation",
-  psvita: "playstation",
-  xbox: "xbox",
-  "xbox-one": "xbox",
-  "xbox360": "xbox",
-  "xbox-series-x": "xbox",
-  "xbox-series-s": "xbox",
-  "xbox-series-xs": "xbox",
-  "xbox-series-x-s": "xbox",
-  nintendo: "nintendo",
-  "nintendo-switch": "switch",
-  switch: "switch",
-  "wii": "nintendo",
-  "wii-u": "nintendo",
-  "gamecube": "nintendo",
-  "super-nintendo": "nintendo",
-  web: "web",
-  browser: "web",
-};
-
-const PLATFORM_ICON_COMPONENTS: Record<PlatformSlug, PlatformIconComponent> = {
+const PLATFORM_ICON_MAP: Record<string, IconComponent> = {
+  // PC / Windows
   pc: WindowsIcon,
-  playstation: PlaystationIcon,
+  "pc (windows)": WindowsIcon,
+  windows: WindowsIcon,
+  "windows pc": WindowsIcon,
+
+  // Xbox
   xbox: XboxIcon,
+  "xbox one": XboxIcon,
+  "xbox series x": XboxIcon,
+  "xbox series x/s": XboxIcon,
+  "xbox series s": XboxIcon,
+  "xbox 360": XboxIcon,
+
+  // PlayStation
+  playstation: PlaystationIcon,
+  "playstation 3": PS3Icon,
+  "playstation 4": PS4Icon,
+  "playstation 5": PS5Icon,
+  ps3: PS3Icon,
+  ps4: PS4Icon,
+  ps5: PS5Icon,
+
+  // Nintendo
+  "nintendo switch": NintendoSwitchIcon,
+  "nintendo 3ds": NintendoIcon,
+  "nintendo ds": NintendoIcon,
   nintendo: NintendoIcon,
-  switch: SwitchIcon,
-  ios: IosIcon,
-  android: AndroidIcon,
+
+  // Others
+  ios: AppleIcon,
   macos: AppleIcon,
+  "apple macintosh": AppleIcon,
+  mac: AppleIcon,
   linux: LinuxIcon,
-  web: WebIcon,
-  other: DefaultIcon,
+  android: AndroidIcon,
+  steam: SteamIcon,
 };
 
-export function getPlatformIcon(rawSlug: string): PlatformIconComponent {
-  const normalizedSlug = PLATFORM_NORMALIZE[rawSlug.toLowerCase()] ?? "other";
-  return PLATFORM_ICON_COMPONENTS[normalizedSlug] ?? PLATFORM_ICON_COMPONENTS.other;
+export function getPlatformIcon(platformNameOrSlug: string): IconComponent {
+  const key = platformNameOrSlug.toLowerCase();
+  const direct = PLATFORM_ICON_MAP[key];
+  if (direct) return direct;
+
+  if (key.includes("xbox")) return XboxIcon;
+  if (key.includes("playstation") || key === "ps4" || key === "ps5" || key === "ps3") return PlaystationIcon;
+  if (key.includes("switch") || key.includes("nintendo")) return NintendoIcon;
+  if (key.includes("pc") || key.includes("windows")) return WindowsIcon;
+  if (key.includes("mac")) return AppleIcon;
+  if (key.includes("linux")) return LinuxIcon;
+  if (key.includes("android")) return AndroidIcon;
+  if (key.includes("ios") || key.includes("apple")) return AppleIcon;
+
+  return GenericGamepadIcon;
 }
+
+export const PlatformIcon: React.FC<{
+  platform: string;
+  className?: string;
+}> = ({ platform, className }) => {
+  const Icon = getPlatformIcon(platform);
+  return <Icon className={className} width={18} height={18} aria-hidden="true" />;
+};
