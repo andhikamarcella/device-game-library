@@ -1,102 +1,142 @@
-import { fetchFromYoutube } from "@/lib/server/youtubeClient";
+import { fetchFromYoutube, YoutubeApiError } from "@/lib/server/youtubeClient";
 
 export type YoutubeVideo = {
-  videoId: string;
+  id: string;
   title: string;
+  thumbnailUrl: string;
   channelTitle: string;
-  thumbnails: Record<string, { url: string }>;
+  publishedAt: string;
 };
 
-export type PlatformVideoGroup = {
-  slug: string;
-  name: string;
-  videos: YoutubeVideo[];
-};
+export type YoutubeSearchResult =
+  | { ok: true; videos: YoutubeVideo[] }
+  | { ok: false; reason: "quota-exceeded" | "no-results" | "error"; message?: string };
 
 type YoutubeSearchResponse = {
-  items: Array<{
+  items?: Array<{
     id?: { videoId?: string | null } | null;
     snippet?: {
       title?: string | null;
       channelTitle?: string | null;
-      thumbnails?: Record<string, { url: string }>;
+      publishedAt?: string | null;
+      thumbnails?: Record<string, { url: string }> | null;
     } | null;
   }>;
 };
 
-export async function getGameplayVideos(
-  query: string,
-  options: { platform?: string | null; maxResults?: number } = {},
-): Promise<YoutubeVideo[]> {
-  const trimmed = query.trim();
-  if (!trimmed) {
-    return [];
-  }
+type CachedYoutubeEntry = {
+  result: YoutubeSearchResult;
+  expiresAt: number;
+};
 
-  const { platform, maxResults = 3 } = options;
-  const clampedResults = Math.min(Math.max(Math.trunc(maxResults) || 1, 1), 5);
-  const searchTerm = platform ? `${trimmed} ${platform} gameplay` : `${trimmed} gameplay`;
+const youtubeCache = new Map<string, CachedYoutubeEntry>();
+const SUCCESS_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
+const QUOTA_TTL = 1000 * 60 * 60 * 12; // 12 hours
+const ERROR_TTL = 1000 * 60 * 15; // 15 minutes
 
-  const data = await fetchFromYoutube<YoutubeSearchResponse>("/search", {
-    part: "snippet",
-    type: "video",
-    maxResults: clampedResults,
-    q: searchTerm,
-  });
-
-  return (data.items ?? [])
-    .map((item) => {
-      const videoId = item.id?.videoId ?? null;
-      const title = item.snippet?.title ?? null;
-      if (!videoId || !title) {
-        return null;
-      }
-      return {
-        videoId,
-        title,
-        channelTitle: item.snippet?.channelTitle ?? "",
-        thumbnails: item.snippet?.thumbnails ?? {},
-      } satisfies YoutubeVideo;
-    })
-    .filter((item): item is YoutubeVideo => Boolean(item));
+function getCacheKey(query: string, maxResults: number): string {
+  return `${query.toLowerCase()}::${maxResults}`;
 }
 
-export async function getGameplayVideosByPlatform(
-  query: string,
-  platforms: Array<{ slug: string; name: string }>,
-  options: { maxPlatforms?: number; maxResultsPerPlatform?: number } = {},
-): Promise<PlatformVideoGroup[]> {
-  const trimmed = query.trim();
-  if (!trimmed || !platforms.length) {
-    return [];
+function readCache(key: string): YoutubeSearchResult | null {
+  const cached = youtubeCache.get(key);
+  if (!cached) {
+    return null;
+  }
+  if (cached.expiresAt < Date.now()) {
+    youtubeCache.delete(key);
+    return null;
+  }
+  return cached.result;
+}
+
+function writeCache(key: string, result: YoutubeSearchResult, ttl: number): void {
+  youtubeCache.set(key, { result, expiresAt: Date.now() + ttl });
+}
+
+function mapYoutubeItems(items: YoutubeSearchResponse["items"] | undefined, maxResults: number): YoutubeVideo[] {
+  return (items ?? [])
+    .map((item) => {
+      const videoId = item.id?.videoId ?? null;
+      const snippet = item.snippet;
+      if (!videoId || !snippet?.title) {
+        return null;
+      }
+      const thumbnailUrl =
+        snippet.thumbnails?.maxres?.url ||
+        snippet.thumbnails?.high?.url ||
+        snippet.thumbnails?.medium?.url ||
+        snippet.thumbnails?.default?.url ||
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+      return {
+        id: videoId,
+        title: snippet.title,
+        thumbnailUrl,
+        channelTitle: snippet.channelTitle ?? "YouTube",
+        publishedAt: snippet.publishedAt ?? "",
+      } satisfies YoutubeVideo;
+    })
+    .filter((video): video is YoutubeVideo => Boolean(video))
+    .slice(0, maxResults);
+}
+
+function handleError(error: unknown): { result: YoutubeSearchResult; ttl: number } {
+  console.error("YouTube search error", error);
+  const defaultResult: YoutubeSearchResult = { ok: false, reason: "error", message: "Failed to fetch YouTube data" };
+  if (error instanceof YoutubeApiError) {
+    if (error.status === 403 || /quota/i.test(error.message) || /daily/i.test(error.message)) {
+      return {
+        result: { ok: false, reason: "quota-exceeded", message: "YouTube quota exceeded" },
+        ttl: QUOTA_TTL,
+      };
+    }
+    return { result: { ...defaultResult, message: error.message }, ttl: ERROR_TTL };
+  }
+  return { result: defaultResult, ttl: ERROR_TTL };
+}
+
+export async function searchYoutubeTrailerForGame(
+  gameName: string,
+  platformHint?: string,
+  maxResults = 1,
+): Promise<YoutubeSearchResult> {
+  const trimmedName = gameName.trim();
+  if (!trimmedName) {
+    return { ok: false, reason: "error", message: "A game name is required" };
   }
 
-  const maxPlatforms = Math.min(Math.max(options.maxPlatforms ?? 6, 1), 10);
-  const maxResults = options.maxResultsPerPlatform ?? 2;
-  const uniquePlatforms: PlatformVideoGroup["slug"][] = [];
-  const filteredPlatforms = platforms
-    .map((platform) => ({
-      slug: platform.slug || platform.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-      name: platform.name.trim(),
-    }))
-    .filter((platform) => {
-      if (!platform.name) {
-        return false;
-      }
-      if (uniquePlatforms.includes(platform.slug)) {
-        return false;
-      }
-      uniquePlatforms.push(platform.slug);
-      return true;
-    })
-    .slice(0, maxPlatforms);
+  const normalizedResults = Math.min(Math.max(Math.trunc(maxResults) || 1, 1), 3);
+  const query = platformHint ? `${trimmedName} trailer ${platformHint}` : `${trimmedName} game trailer`;
+  const cacheKey = getCacheKey(query, normalizedResults);
+  const cached = readCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
-  const results = await Promise.all(
-    filteredPlatforms.map(async (platform) => {
-      const videos = await getGameplayVideos(trimmed, { platform: platform.name, maxResults });
-      return { ...platform, videos } satisfies PlatformVideoGroup;
-    }),
-  );
+  try {
+    const data = await fetchFromYoutube<YoutubeSearchResponse>("/search", {
+      part: "snippet",
+      type: "video",
+      maxResults: normalizedResults,
+      q: query,
+      safeSearch: "moderate",
+      videoCategoryId: "20",
+    });
 
-  return results.filter((group) => group.videos.length > 0);
+    const videos = mapYoutubeItems(data.items, normalizedResults);
+    if (!videos.length) {
+      const result: YoutubeSearchResult = { ok: false, reason: "no-results" };
+      writeCache(cacheKey, result, SUCCESS_TTL);
+      return result;
+    }
+
+    const result: YoutubeSearchResult = { ok: true, videos };
+    writeCache(cacheKey, result, SUCCESS_TTL);
+    return result;
+  } catch (error) {
+    const { result, ttl } = handleError(error);
+    writeCache(cacheKey, result, ttl);
+    return result;
+  }
 }

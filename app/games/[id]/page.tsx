@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Globe, Star, MessageCircle, Clapperboard, BarChart3, Users, Tag, Layers } from "lucide-react";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { getPlatformIcon } from "@/components/platform-icons";
+import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import {
   getGameDetails,
   getGameReviews,
@@ -13,7 +14,6 @@ import {
   type RawgMovie,
   type RawgSimilarGame,
 } from "@/lib/rawg";
-import { getGameplayVideos, getGameplayVideosByPlatform, type PlatformVideoGroup, type YoutubeVideo } from "@/lib/youtube";
 
 export const revalidate = 300;
 
@@ -61,19 +61,15 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     () => [] as Awaited<ReturnType<typeof getGameReviews>>,
   );
   const trailersPromise = getGameTrailers(id).catch(() => [] as RawgMovie[]);
-  const youtubePromise = getGameplayVideos(game.name).catch(() => [] as YoutubeVideo[]);
   const similarPromise = getSimilarGames(id).catch(() => [] as RawgSimilarGame[]);
-  const platformGameplayPromise = getGameplayVideosByPlatform(game.name, platformDetails).catch(
-    () => [] as PlatformVideoGroup[],
-  );
-  const [screenshots, reviews, trailers, youtubeVideos, similarGames, platformGameplay] = await Promise.all([
+  const [screenshots, reviews, trailers, similarGames] = await Promise.all([
     screenshotsPromise,
     reviewsPromise,
     trailersPromise,
-    youtubePromise,
     similarPromise,
-    platformGameplayPromise,
   ]);
+
+  const trailerReadyGame: RawgGameDetails = { ...game, movies: trailers };
 
   const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
   game.short_screenshots?.forEach((shot) => {
@@ -431,6 +427,8 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
 
           {gallery.length ? <ScreenshotGallery screenshots={gallery} /> : null}
 
+          <GameTrailerSection game={trailerReadyGame} />
+
           {similarGames.length ? (
             <section className="space-y-3">
               <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
@@ -521,77 +519,6 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
                     </figure>
                   );
                 })}
-              </div>
-            </section>
-          ) : null}
-
-          {youtubeVideos.length ? (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                <Clapperboard className="h-4 w-4" aria-hidden="true" />
-                <h2 className="text-sm font-semibold uppercase tracking-widest">Gameplay videos</h2>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                {youtubeVideos.slice(0, 3).map((video) => (
-                  <article
-                    key={video.videoId}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
-                  >
-                    <iframe
-                      title={video.title}
-                      src={`https://www.youtube.com/embed/${video.videoId}`}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="h-64 w-full"
-                    />
-                    <div className="px-4 py-3 text-sm">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
-                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        {video.channelTitle || "YouTube"}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {platformGameplay.length ? (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                <Clapperboard className="h-4 w-4" aria-hidden="true" />
-                <h2 className="text-sm font-semibold uppercase tracking-widest">Gameplay by console</h2>
-              </div>
-              <div className="space-y-4">
-                {platformGameplay.map((group) => (
-                  <div key={group.slug} className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                      {group.name}
-                    </p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {group.videos.slice(0, 2).map((video) => (
-                        <article
-                          key={`${group.slug}-${video.videoId}`}
-                          className="overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
-                        >
-                          <iframe
-                            title={`${video.title} - ${group.name}`}
-                            src={`https://www.youtube.com/embed/${video.videoId}`}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="h-56 w-full"
-                          />
-                          <div className="px-4 py-3 text-sm">
-                            <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
-                            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                              {video.channelTitle || "YouTube"}
-                            </p>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-                ))}
               </div>
             </section>
           ) : null}

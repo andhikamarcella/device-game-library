@@ -1,13 +1,29 @@
-const YOUTUBE_BASE_URL = "https://www.googleapis.com/youtube/v3";
+const DEFAULT_YOUTUBE_BASE_URL = "https://www.googleapis.com/youtube/v3";
+
+function getYoutubeBaseUrl(): string {
+  const envValue = process.env.YOUTUBE_SEARCH_BASE_URL?.trim();
+  const base = envValue && envValue.length > 0 ? envValue : DEFAULT_YOUTUBE_BASE_URL;
+  return base.replace(/\/+$/, "");
+}
 
 function buildYoutubeUrl(path: string): URL {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return new URL(path);
   }
 
-  const base = YOUTUBE_BASE_URL.replace(/\/+$/, "");
+  const base = getYoutubeBaseUrl();
   const normalizedPath = path.replace(/^\/+/, "");
   return new URL(`${base}/${normalizedPath}`);
+}
+
+export class YoutubeApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "YoutubeApiError";
+    this.status = status;
+  }
 }
 
 function getYoutubeApiKey(): string {
@@ -44,7 +60,7 @@ export async function fetchFromYoutube<T>(
     const message =
       (body && (body.error?.message || body.error?.errors?.[0]?.message)) ||
       `YouTube request failed with status ${response.status}`;
-    throw new Error(message);
+    throw new YoutubeApiError(message, response.status);
   }
 
   return (await response.json()) as T;

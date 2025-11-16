@@ -75,6 +75,13 @@ export type RawgParentPlatform = {
   };
 };
 
+export type RawgClip = {
+  clip?: string | null;
+  clips?: Record<string, string | undefined> | null;
+  preview?: string | null;
+  video?: string | null;
+};
+
 export type RawgGameDetails = RawgGame & {
   description?: string | null;
   description_raw?: string | null;
@@ -91,6 +98,8 @@ export type RawgGameDetails = RawgGame & {
   parent_game?: RawgParentGame;
   parent_platforms?: RawgParentPlatform[] | null;
   series?: RawgSeriesEntry[] | { results?: RawgSeriesEntry[] | null } | null;
+  clip?: RawgClip | null;
+  movies?: RawgMovie[] | null;
 };
 
 export type RawgMovie = {

@@ -9,9 +9,10 @@ import { GameStatusControls } from "@/components/GameStatusControls";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { SimilarGamesRow } from "@/components/SimilarGamesRow";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { YoutubeVideoGrid } from "@/components/YoutubeVideoGrid";
+import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
 import { normalizeRawgImageUrl } from "@/lib/images";
+import type { RawgGameDetails } from "@/lib/rawg";
 
 interface GameDetailsResponse {
   id: number;
@@ -54,21 +55,6 @@ interface SimilarResponse {
   }>;
 }
 
-interface YoutubeResponse {
-  results: Array<{
-    videoId: string;
-    title: string;
-    channelTitle: string;
-    thumbnails: Record<string, { url: string }>;
-  }>;
-}
-
-interface PlatformVideoGroup {
-  slug: string;
-  name: string;
-  videos: YoutubeResponse["results"];
-}
-
 export default function GameDetailsPage() {
   const params = useParams<{ id: string }>();
   const gameId = Number.parseInt(params.id, 10);
@@ -86,13 +72,45 @@ export default function GameDetailsPage() {
   const [screenshots, setScreenshots] = useState<ScreenshotResponse["results"]>([]);
   const [trailers, setTrailers] = useState<MoviesResponse["results"]>([]);
   const [similar, setSimilar] = useState<SimilarResponse["results"]>([]);
-  const [youtube, setYoutube] = useState<YoutubeResponse["results"]>([]);
-  const [platformVideos, setPlatformVideos] = useState<PlatformVideoGroup[]>([]);
-  const [platformVideoError, setPlatformVideoError] = useState<string | null>(null);
-  const [platformVideoLoading, setPlatformVideoLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  const trailerReadyGame = useMemo<RawgGameDetails | null>(() => {
+    if (!details) {
+      return null;
+    }
+    const parentPlatforms = (details.parent_platforms ?? []).map((platform) => ({
+      platform: { id: platform.id, name: platform.name, slug: platform.slug },
+    }));
+    return {
+      id: details.id,
+      slug: details.slug,
+      name: details.name,
+      background_image: details.background_image,
+      background_image_additional: details.background_image_additional,
+      released: details.released,
+      rating: details.rating ?? 0,
+      ratings_count: details.ratings_count ?? 0,
+      platforms: parentPlatforms,
+      description: details.description_raw,
+      description_raw: details.description_raw,
+      website: null,
+      genres: details.genres ?? [],
+      developers: details.developers ?? [],
+      publishers: details.publishers ?? [],
+      short_screenshots: screenshots,
+      playtime: details.playtime,
+      added_by_status: null,
+      ratings: null,
+      tags: details.tags ?? [],
+      parent_game: null,
+      parent_platforms: parentPlatforms,
+      series: null,
+      clip: null,
+      movies: trailers,
+    } satisfies RawgGameDetails;
+  }, [details, screenshots, trailers]);
 
   useEffect(() => {
     if (!Number.isFinite(gameId)) {
@@ -149,19 +167,6 @@ export default function GameDetailsPage() {
           }
         }
 
-        if (detailsData.name) {
-          try {
-            const youtubeRes = await fetch(`/api/youtube/gameplay?q=${encodeURIComponent(detailsData.name)}`);
-            if (youtubeRes.ok) {
-              const youtubeData = (await youtubeRes.json()) as YoutubeResponse;
-              if (!cancelled) {
-                setYoutube(youtubeData.results ?? []);
-              }
-            }
-          } catch (youtubeError) {
-            console.warn("YouTube fetch error", youtubeError);
-          }
-        }
       } catch (fetchError) {
         if (cancelled) return;
         setError(fetchError instanceof Error ? fetchError.message : "Unable to load game details.");
@@ -180,86 +185,9 @@ export default function GameDetailsPage() {
   }, [gameId]);
 
   useEffect(() => {
-    if (!details?.name) {
-      setPlatformVideos([]);
-      setPlatformVideoError(null);
-      setPlatformVideoLoading(false);
-      return;
-    }
-
-    const platforms = (details.parent_platforms ?? []).map((platform) => ({
-      slug: platform.slug ?? String(platform.id),
-      name: platform.name,
-    }));
-
-    if (!platforms.length) {
-      setPlatformVideos([]);
-      setPlatformVideoError(null);
-      setPlatformVideoLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const limitedPlatforms = platforms.filter((platform) => platform.name).slice(0, 6);
-    if (!limitedPlatforms.length) {
-      setPlatformVideos([]);
-      setPlatformVideoError(null);
-      setPlatformVideoLoading(false);
-      return;
-    }
-
-    setPlatformVideoLoading(true);
-    setPlatformVideoError(null);
-
-    Promise.all(
-      limitedPlatforms.map(async (platform) => {
-        try {
-          const response = await fetch(
-            `/api/youtube/gameplay?q=${encodeURIComponent(details.name)}&platform=${encodeURIComponent(platform.name)}&limit=2`,
-          );
-          const payload = (await response.json().catch(() => null)) as YoutubeResponse | { error?: string } | null;
-          if (!response.ok || !payload) {
-            throw new Error((payload as { error?: string } | null)?.error ?? "Unable to load platform videos.");
-          }
-          const results = (payload as YoutubeResponse).results ?? [];
-          if (!results.length) {
-            return null;
-          }
-          return { slug: platform.slug, name: platform.name, videos: results.slice(0, 2) } satisfies PlatformVideoGroup;
-        } catch (platformError) {
-          console.warn("Platform gameplay fetch error", platformError);
-          return null;
-        }
-      }),
-    )
-      .then((groups) => {
-        if (cancelled) {
-          return;
-        }
-        const filtered = groups.filter((group): group is PlatformVideoGroup => Boolean(group));
-        setPlatformVideos(filtered);
-        if (!filtered.length) {
-          setPlatformVideoError("Gameplay per console tidak tersedia.");
-        } else {
-          setPlatformVideoError(null);
-        }
-      })
-      .catch((platformError) => {
-        if (!cancelled) {
-          setPlatformVideos([]);
-          setPlatformVideoError(platformError instanceof Error ? platformError.message : "Unable to load platform videos.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setPlatformVideoLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [details]);
+    // reset scroll position when a new game is loaded
+    setDescriptionExpanded(false);
+  }, [details?.id]);
 
   useEffect(() => {
     if (!details || !userGame) {
@@ -462,6 +390,8 @@ export default function GameDetailsPage() {
 
       {screenshots.length ? <ScreenshotGallery screenshots={screenshots} /> : null}
 
+      {trailerReadyGame ? <GameTrailerSection game={trailerReadyGame} /> : null}
+
       {trailers.length ? (
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">RAWG trailers</h2>
@@ -471,56 +401,6 @@ export default function GameDetailsPage() {
               if (!src) return null;
               return <VideoPlayer key={trailer.id} src={src} poster={trailer.preview} title={trailer.name} />;
             })}
-          </div>
-        </section>
-      ) : null}
-
-      <YoutubeVideoGrid videos={youtube.slice(0, 3)} />
-
-      {platformVideoLoading ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Memuat gameplay berdasarkan console...</p>
-      ) : null}
-
-      {platformVideoError && !platformVideoLoading ? (
-        <p className="text-sm text-rose-600 dark:text-rose-300">{platformVideoError}</p>
-      ) : null}
-
-      {platformVideos.length ? (
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Gameplay by console</h2>
-            <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">YouTube kategori</span>
-          </div>
-          <div className="space-y-6">
-            {platformVideos.map((group) => (
-              <div key={group.slug} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {group.name}
-                </p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {group.videos.map((video) => (
-                    <article
-                      key={`${group.slug}-${video.videoId}`}
-                      className="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm dark:border-slate-800 dark:bg-slate-900/80"
-                    >
-                      <iframe
-                        title={`${video.title} - ${group.name}`}
-                        src={`https://www.youtube.com/embed/${video.videoId}`}
-                        className="h-56 w-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                      <div className="px-4 py-3 text-sm">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">{video.title}</p>
-                        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          {video.channelTitle || "YouTube"}
-                        </p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </section>
       ) : null}
