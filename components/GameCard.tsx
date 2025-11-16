@@ -4,11 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, LibraryBig, Sparkles } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
+import PlatformChips from "@/components/PlatformChips";
 import { type UserGame } from "@/hooks/LibraryProvider";
 import { getBestCover } from "@/lib/getCoverArt";
 import { extractGameFeatures } from "@/lib/gameFeatures";
 import { normalizeRawgImageUrl } from "@/lib/images";
-import { getPlatformIcon } from "@/lib/platformIcons";
 import type { RawgGame } from "@/lib/rawg";
 
 export interface SearchGameResult
@@ -58,9 +58,7 @@ export function GameCard({
     ? `/games/${game.id}?returnTo=${encodeURIComponent(rawgReturnTo)}`
     : `/games/${game.id}`;
   const platformEntries =
-    game.parent_platforms?.map((entry) => entry.platform) ??
-    game.platforms?.map((entry) => entry.platform) ??
-    [];
+    (game.parent_platforms?.length ? game.parent_platforms : game.platforms) ?? [];
   const featureFlags = extractGameFeatures({ tags: game.tags ?? null });
   const featureBadges: Array<{ label: string }> = [];
 
@@ -138,22 +136,7 @@ export function GameCard({
           {game.genres.length ? (
             <p className="text-sm text-slate-600 dark:text-slate-300">{game.genres.map((genre) => genre.name).join(", ")}</p>
           ) : null}
-              {platformEntries.length ? (
-            <div className="flex flex-wrap gap-2">
-              {platformEntries.slice(0, 4).map((platform) => {
-                const Icon = getPlatformIcon(platform.slug);
-                return (
-                  <div
-                    key={platform.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/70 px-2 py-0.5 text-xs font-medium text-slate-700 dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-100"
-                  >
-                    {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                    <span>{platform.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
+          <PlatformChips platforms={platformEntries} className="mt-1" limit={4} size="sm" />
           {featureBadges.length ? (
             <div className="flex flex-wrap gap-2">
               {featureBadges.map((badge, index) => (

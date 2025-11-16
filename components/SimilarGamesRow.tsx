@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { getPlatformIcon } from "@/lib/platformIcons";
+import PlatformChips from "@/components/PlatformChips";
 import { normalizeRawgImageUrl } from "@/lib/images";
 
 export interface SimilarGame {
@@ -72,22 +72,7 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
                   {releaseYear && ratingLabel ? <span>•</span> : null}
                   {ratingLabel ? <span>{ratingLabel} avg</span> : null}
                 </div>
-                {platforms.length ? (
-                  <div className="mt-auto flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200">
-                    {platforms.map((platform) => {
-                      const Icon = getPlatformIcon(platform.slug);
-                      return (
-                        <div
-                          key={platform.id}
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/80 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100"
-                        >
-                          {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                          <span>{platform.name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
+                <PlatformChips platforms={platforms} size="sm" className="mt-auto" />
               </div>
             </Link>
           );

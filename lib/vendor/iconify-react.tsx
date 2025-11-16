@@ -3,6 +3,7 @@ import type { FC, SVGProps } from "react";
 
 export interface IconifyIconProps extends Omit<SVGProps<SVGSVGElement>, "ref" | "mode"> {
   icon: string;
+  title?: string;
 }
 
 const ICON_DATA: Record<string, { path: string; viewBox?: string; circles?: { cx: number; cy: number; r: number; fill?: string }[] }> = {

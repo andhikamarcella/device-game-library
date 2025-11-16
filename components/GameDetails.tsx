@@ -18,6 +18,7 @@ import {
   Video,
 } from "lucide-react";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
+import PlatformChips from "@/components/PlatformChips";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
 import { AchievementsList } from "@/components/game/AchievementsList";
@@ -33,7 +34,6 @@ import {
 } from "@/lib/rawg";
 import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeRawgImageUrl } from "@/lib/images";
-import { getPlatformIcon } from "@/lib/platformIcons";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
 
@@ -197,21 +197,9 @@ export function GameDetails({
     if (!backTarget) return base;
     return `${base}?returnTo=${encodeURIComponent(backTarget)}`;
   };
-  const parentPlatforms = game.parent_platforms?.map((entry) => entry.platform) ?? [];
-  const fallbackPlatforms = game.platforms?.map((entry) => entry.platform) ?? [];
-  const platformDetails = (parentPlatforms.length ? parentPlatforms : fallbackPlatforms).map((platform) => ({
-    id: platform.id,
-    name: platform.name,
-    slug: platform.slug,
-  }));
-  const seenPlatformSlugs = new Set<string>();
-  const uniquePlatforms = platformDetails.filter((platform) => {
-    const slug = (platform.slug ?? platform.name?.toLowerCase()) ?? null;
-    if (!slug) return false;
-    if (seenPlatformSlugs.has(slug)) return false;
-    seenPlatformSlugs.add(slug);
-    return true;
-  });
+  const parentPlatforms = game.parent_platforms ?? [];
+  const fallbackPlatforms = game.platforms ?? [];
+  const platformEntries = (parentPlatforms.length ? parentPlatforms : fallbackPlatforms) ?? [];
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -340,25 +328,12 @@ export function GameDetails({
                     </p>
                   ) : null}
                 </div>
-                {uniquePlatforms.length ? (
+                {platformEntries.length ? (
                   <section className="space-y-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Available on
                     </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {uniquePlatforms.map((platform) => {
-                        const Icon = getPlatformIcon(platform.slug);
-                        return (
-                          <div
-                            key={platform.id}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200/70 bg-white/80 px-2.5 py-1.5 text-xs text-slate-800 dark:border-slate-700/50 dark:bg-slate-800/60 dark:text-slate-100"
-                          >
-                            {Icon ? <Icon className="h-4 w-4" /> : null}
-                            <span>{platform.name}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <PlatformChips platforms={platformEntries} className="mt-1" />
                   </section>
                 ) : null}
                 <FeatureBadges game={game} />
@@ -627,7 +602,6 @@ export function GameDetails({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {additionEntries.map((addition) => {
               const additionImage = normalizeRawgImageUrl(addition.background_image ?? null);
-              const additionPlatforms = addition.parent_platforms?.slice(0, 3) ?? [];
               return (
                 <Link
                   key={addition.id}
@@ -651,22 +625,7 @@ export function GameDetails({
                       {addition.name}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{formatReleaseDate(addition.released ?? null)}</p>
-                    {additionPlatforms.length ? (
-                      <div className="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200">
-                        {additionPlatforms.map((platform) => {
-                          const Icon = getPlatformIcon(platform.platform.slug);
-                          return (
-                            <div
-                              key={platform.platform.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/80 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100"
-                            >
-                              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                              <span>{platform.platform.name}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                    <PlatformChips platforms={addition.parent_platforms ?? []} limit={3} size="sm" />
                   </div>
                 </Link>
               );
@@ -705,12 +664,6 @@ export function GameDetails({
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {similarGames.slice(0, 6).map((similar) => {
-              const similarPlatforms =
-                similar.platforms?.slice(0, 3).map((platform) => ({
-                  id: platform.platform.id,
-                  name: platform.platform.name,
-                  slug: platform.platform.slug,
-                })) ?? [];
               const similarImage = normalizeRawgImageUrl(similar.background_image ?? null);
 
               return (
@@ -744,22 +697,13 @@ export function GameDetails({
                     <h3 className="text-sm font-semibold text-slate-900 transition group-hover:text-emerald-600 dark:text-slate-100 dark:group-hover:text-emerald-300">
                       {similar.name}
                     </h3>
-                    {similarPlatforms.length ? (
-                      <div className="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-200">
-                        {similarPlatforms.map((platform) => {
-                          const Icon = getPlatformIcon(platform.slug);
-                          return (
-                            <div
-                              key={platform.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/80 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100"
-                            >
-                              {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-                              <span>{platform.name}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                    <PlatformChips
+                      platforms={
+                        (similar.parent_platforms?.length ? similar.parent_platforms : similar.platforms) ?? []
+                      }
+                      limit={3}
+                      size="sm"
+                    />
                   </div>
                 </Link>
               );
