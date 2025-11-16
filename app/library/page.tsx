@@ -7,7 +7,7 @@ import { DashboardStats } from "@/components/DashboardStats";
 import { FiltersBar, type SortOption } from "@/components/FiltersBar";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
-import { normalizeRawgImageUrl } from "@/lib/images";
+import { normalizeRawgImageUrl, pickBestRawgImage } from "@/lib/images";
 
 interface SearchResponse {
   results: SearchGameResult[];
@@ -202,17 +202,17 @@ export default function DashboardPage() {
         if (cancelled) return;
         setSearchResults(data.results);
         setPagination(data.pagination);
-        setMetadataById((prev) => {
-          const next = { ...prev };
-          for (const game of data.results) {
-            next[game.id] = {
-              rating: game.rating ?? null,
-              released: game.released ?? null,
-              coverImage: normalizeRawgImageUrl(game.background_image),
-            };
-          }
-          return next;
-        });
+          setMetadataById((prev) => {
+            const next = { ...prev };
+            for (const game of data.results) {
+              next[game.id] = {
+                rating: game.rating ?? null,
+                released: game.released ?? null,
+                coverImage: normalizeRawgImageUrl(game.background_image),
+              };
+            }
+            return next;
+          });
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -257,6 +257,7 @@ export default function DashboardPage() {
       released: string | null;
       background_image: string | null;
       background_image_additional: string | null;
+      short_screenshots?: Array<{ image: string | null }>;
     };
 
     const hydrateMetadata = async () => {
@@ -268,9 +269,12 @@ export default function DashboardPage() {
           }
           const data = (await response.json()) as DetailsHydrationResponse;
           if (cancelled) return;
-          const coverCandidate = normalizeRawgImageUrl(
-            data.background_image ?? data.background_image_additional ?? null,
-          );
+          const coverCandidate =
+            pickBestRawgImage([
+              data.background_image,
+              data.background_image_additional,
+              ...(data.short_screenshots?.map((shot) => shot.image) ?? []),
+            ]) ?? null;
           setMetadataById((prev) => ({
             ...prev,
             [game.rawgId]: {
@@ -385,12 +389,14 @@ export default function DashboardPage() {
   };
 
   const handleAddToLibrary = (game: SearchGameResult) => {
+    const metadata = metadataById[game.id];
+    const coverImage = normalizeRawgImageUrl(metadata?.coverImage ?? game.background_image ?? null);
     const created = upsert({
       rawgId: game.id,
       slug: game.slug,
       title: game.name,
       platforms: game.platforms.map((platform) => platform.name),
-      coverImage: normalizeRawgImageUrl(game.background_image),
+      coverImage,
       playtimeHours: 0,
     });
     setMetadataById((prev) => ({
@@ -398,7 +404,7 @@ export default function DashboardPage() {
       [created.rawgId]: {
         rating: game.rating ?? null,
         released: game.released ?? null,
-        coverImage: normalizeRawgImageUrl(game.background_image),
+        coverImage,
       },
     }));
   };
@@ -530,10 +536,15 @@ export default function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {searchResults.map((result) => {
               const userGame = libraryGames.find((game) => game.rawgId === result.id);
+              const metadata = metadataById[result.id];
+              const coverOverride = normalizeRawgImageUrl(
+                metadata?.coverImage ?? result.background_image ?? null,
+              );
               return (
                 <GameCard
                   key={result.id}
                   game={result}
+                  coverOverride={coverOverride}
                   userGame={userGame}
                   onAdd={handleAddToLibrary}
                   onUpdate={handleUpdateLibrary}
@@ -623,6 +634,7 @@ export default function DashboardPage() {
                 <GameCard
                   key={userGame.rawgId}
                   game={cardData}
+                  coverOverride={coverImage}
                   userGame={userGame}
                   onUpdate={handleUpdateLibrary}
                   onRemove={handleRemoveLibrary}

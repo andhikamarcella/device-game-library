@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { normalizeRawgImageUrl } from "@/lib/images";
+import { pickBestRawgImage } from "@/lib/images";
 import { fetchFromRawg } from "@/lib/server/rawgClient";
 
 type RawgGenre = {
@@ -21,11 +21,13 @@ type RawgSearchGame = {
   slug: string;
   name: string;
   background_image: string | null;
+  background_image_additional: string | null;
   rating: number | null;
   released: string | null;
   playtime: number | null;
   genres: RawgGenre[];
   platforms: RawgPlatform[];
+  short_screenshots?: Array<{ id: number; image: string | null }>;
 };
 
 type RawgSearchResponse = {
@@ -55,22 +57,31 @@ export async function GET(request: Request) {
       page_size: PAGE_SIZE,
     });
 
-    const results = data.results.map((game) => ({
-      id: game.id,
-      slug: game.slug,
-      name: game.name,
-      background_image: normalizeRawgImageUrl(game.background_image),
-      rating: game.rating,
-      genres: game.genres?.map((genre) => ({ id: genre.id, name: genre.name, slug: genre.slug })) ?? [],
-      platforms:
-        game.platforms?.map((entry) => ({
-          id: entry.platform.id,
-          name: entry.platform.name,
-          slug: entry.platform.slug,
-        })) ?? [],
-      playtime: game.playtime ?? 0,
-      released: game.released,
-    }));
+    const results = data.results.map((game) => {
+      const coverImage =
+        pickBestRawgImage([
+          game.background_image,
+          game.background_image_additional,
+          ...(game.short_screenshots?.map((shot) => shot.image) ?? []),
+        ]) ?? null;
+
+      return {
+        id: game.id,
+        slug: game.slug,
+        name: game.name,
+        background_image: coverImage,
+        rating: game.rating,
+        genres: game.genres?.map((genre) => ({ id: genre.id, name: genre.name, slug: genre.slug })) ?? [],
+        platforms:
+          game.platforms?.map((entry) => ({
+            id: entry.platform.id,
+            name: entry.platform.name,
+            slug: entry.platform.slug,
+          })) ?? [],
+        playtime: game.playtime ?? 0,
+        released: game.released,
+      };
+    });
 
     return NextResponse.json({
       results,

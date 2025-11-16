@@ -18,3 +18,13 @@ export function normalizeRawgImageUrl(url: string | null | undefined): string | 
 
   return trimmed;
 }
+
+export function pickBestRawgImage(candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const normalized = normalizeRawgImageUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}

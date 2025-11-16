@@ -21,6 +21,7 @@ export interface SearchGameResult {
 
 interface GameCardProps {
   game: SearchGameResult;
+  coverOverride?: string | null;
   userGame?: UserGame;
   onAdd?: (game: SearchGameResult) => void;
   onUpdate?: (rawgId: number, patch: Partial<UserGame>) => void;
@@ -29,9 +30,18 @@ interface GameCardProps {
   rawgReturnTo?: string;
 }
 
-export function GameCard({ game, userGame, onAdd, onUpdate, onRemove, onShowSimilar, rawgReturnTo }: GameCardProps) {
+export function GameCard({
+  game,
+  coverOverride,
+  userGame,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onShowSimilar,
+  rawgReturnTo,
+}: GameCardProps) {
   const releaseYear = game.released ? new Date(game.released).getFullYear() : null;
-  const coverImage = normalizeRawgImageUrl(game.background_image);
+  const coverImage = normalizeRawgImageUrl(coverOverride ?? game.background_image);
   const rawgDetailHref = rawgReturnTo
     ? `/games/${game.id}?returnTo=${encodeURIComponent(rawgReturnTo)}`
     : `/games/${game.id}`;
