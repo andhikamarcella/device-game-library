@@ -149,7 +149,7 @@ function DashboardPageContent() {
     setPlatformLoading(true);
     setPlatformError(null);
 
-    fetch("/api/platforms")
+    fetch("/api/igdb/platforms")
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json().catch(() => null);

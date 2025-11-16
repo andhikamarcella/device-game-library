@@ -1,62 +1,87 @@
-import { NextResponse } from "next/server";
-import { pickBestImage } from "@/lib/images";
-import { searchGames } from "@/lib/gameData";
+import { NextRequest, NextResponse } from "next/server";
 
-const PAGE_SIZE = 5;
+interface TwitchTokenResponse {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+}
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q")?.trim() ?? "";
-  const pageParam = searchParams.get("page");
-  const page = pageParam ? Number.parseInt(pageParam, 10) : 1;
-  const normalizedPage = Number.isFinite(page) && page > 0 ? page : 1;
+const twitchClientId = process.env.TWITCH_CLIENT_ID;
+const twitchClientSecret = process.env.TWITCH_CLIENT_SECRET;
+
+if (!twitchClientId || !twitchClientSecret) {
+  throw new Error("Missing Twitch env variables");
+}
+
+let cachedToken: string | null = null;
+let cachedExpiresAt: number | null = null;
+
+async function getTwitchAccessToken(): Promise<string> {
+  if (cachedToken && cachedExpiresAt && cachedExpiresAt > Date.now() + 60_000) {
+    return cachedToken;
+  }
+
+  const params = new URLSearchParams({
+    client_id: twitchClientId,
+    client_secret: twitchClientSecret,
+    grant_type: "client_credentials",
+  });
+
+  const tokenRes = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params,
+  });
+
+  if (!tokenRes.ok) {
+    console.error("Twitch token error:", tokenRes.status, await tokenRes.text());
+    throw new Error("Failed to acquire Twitch token");
+  }
+
+  const tokenData = (await tokenRes.json()) as TwitchTokenResponse;
+  cachedToken = tokenData.access_token;
+  cachedExpiresAt = Date.now() + (tokenData.expires_in - 60) * 1000;
+
+  return cachedToken;
+}
+
+function escapeQuery(value: string): string {
+  return value.replace(/"/g, '\\"');
+}
+
+export async function GET(req: NextRequest) {
+  const query = req.nextUrl.searchParams.get("q")?.trim();
 
   if (!query) {
-    return NextResponse.json({ error: "Query parameter q is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Query parameter `q` is required" },
+      { status: 400 },
+    );
   }
 
-  try {
-    const data = await searchGames({
-      search: query,
-      page: normalizedPage,
-      page_size: PAGE_SIZE,
-    });
+  const accessToken = await getTwitchAccessToken();
+  const igdbQuery = `search "${escapeQuery(query)}";\nfields id,name,slug,summary,cover.image_id,platforms.name;\nlimit 20;`;
 
-    const results = data.results.map((game) => {
-      const coverImage =
-        pickBestImage([
-          game.background_image,
-          game.background_image_additional,
-          ...(game.short_screenshots?.map((shot) => shot.image) ?? []),
-        ]) ?? null;
+  const res = await fetch("https://api.igdb.com/v4/games", {
+    method: "POST",
+    headers: {
+      "Client-ID": twitchClientId,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "text/plain",
+    },
+    body: igdbQuery,
+  });
 
-      return {
-        id: game.id,
-        slug: game.slug ?? game.id.toString(),
-        name: game.name,
-        background_image: coverImage,
-        rating: game.rating,
-        genres: game.genres ?? [],
-        platforms: game.platforms ?? [],
-        parent_platforms: game.parent_platforms ?? [],
-        playtime: game.playtime ?? 0,
-        released: game.released,
-      };
-    });
-
-    return NextResponse.json({
-      results,
-      pagination: {
-        total: data.count,
-        page: normalizedPage,
-        pageSize: PAGE_SIZE,
-        hasNextPage: data.next !== null,
-        hasPreviousPage: data.previous !== null || normalizedPage > 1,
-      },
-    });
-  } catch (error) {
-    console.error("IGDB search error", error);
-    const message = error instanceof Error ? error.message : "Unable to search IGDB.";
-    return NextResponse.json({ error: message }, { status: 500 });
+  if (!res.ok) {
+    console.error("IGDB search error:", res.status, await res.text());
+    return NextResponse.json(
+      { error: "IGDB search failed", status: res.status },
+      { status: 500 },
+    );
   }
+
+  const data = await res.json();
+  return NextResponse.json(data, { status: 200 });
 }

@@ -711,7 +711,7 @@ export default function GamesPage() {
     setGamePlatformLoading(true);
     setGamePlatformError(null);
 
-    fetch("/api/platforms", { signal: controller.signal })
+    fetch("/api/igdb/platforms", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json().catch(() => null);
