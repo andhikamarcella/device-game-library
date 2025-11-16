@@ -17,6 +17,9 @@ const ICON_DATA: Record<string, { path: string; viewBox?: string; circles?: { cx
   "mdi:microsoft-xbox": {
     path: "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm4.6 13.6-4.6-5.2-4.6 5.2a7.9 7.9 0 0 1-1.8-5l3.7-2.7L6.6 4.9A8 8 0 0 1 12 4a8 8 0 0 1 5.4 1l-3.5 3 3.7 2.7a7.9 7.9 0 0 1-1.8 4.9Z",
   },
+  "mdi:microsoft-windows": {
+    path: "M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z",
+  },
   "mdi:xbox": {
     path: "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm4.3 13.9-4.3-4.7-4.3 4.7A8 8 0 0 1 4 10.8l4-3.2L4.6 5.2A8 8 0 0 1 12 4a8 8 0 0 1 7.4 1.2L16 7.6l4 3.2a8 8 0 0 1-3.7 5.1Z",
   },
