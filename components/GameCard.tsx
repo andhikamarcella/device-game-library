@@ -1,34 +1,35 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, Sparkles } from "lucide-react";
-import { CoverImage } from "@/components/CoverImage";
+import { ExternalLink, Sparkles, Star } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
 import { type UserGame } from "@/hooks/LibraryProvider";
-import { getBestCover } from "@/lib/getCoverArt";
 import { extractGameFeatures } from "@/lib/gameFeatures";
+import type { GameSummary } from "@/lib/gameData";
 import { normalizeImageUrl } from "@/lib/images";
-import type { GameSummary, GameParentPlatform, GamePlatform } from "@/lib/gameData";
 import { PlatformIcon } from "@/lib/platformIcons";
 
-export interface SearchGameResult
-  extends Pick<
-    GameSummary,
-    | "id"
-    | "slug"
-    | "name"
-    | "background_image"
-    | "background_image_additional"
-    | "short_screenshots"
-    | "clip"
-    | "released"
-    | "tags"
-    | "platforms"
-    | "parent_platforms"
-  > {
+export interface SearchPlatform {
+  id: number;
+  name: string;
+  slug: string;
+  abbreviation?: string | null;
+}
+
+export interface SearchGameResult {
+  id: number;
+  slug: string | null;
+  name: string;
+  summary: string;
+  coverImageUrl: string | null;
+  screenshotUrls: string[];
+  releaseYear: number | null;
   rating: number | null;
-  genres: Array<{ id: number; name: string }>;
-  playtime: number;
+  ratingsCount: number;
+  platforms: SearchPlatform[];
+  genres: string[];
+  popularity: number | null;
 }
 
 interface GameCardProps {
@@ -42,28 +43,13 @@ interface GameCardProps {
   detailReturnTo?: string;
 }
 
-type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
-
-type NormalizedPlatform = GamePlatform["platform"];
-
-const normalizePlatformList = (entries: PlatformEntry[] = []): NormalizedPlatform[] => {
-  const normalized = entries
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return null;
-      if ("platform" in entry && entry.platform) {
-        return entry.platform;
-      }
-      return null;
-    })
-    .filter((platform): platform is NormalizedPlatform => {
-      if (!platform || typeof platform.id !== "number") return false;
-      const hasLabel =
-        (typeof platform.name === "string" && platform.name.trim().length > 0) ||
-        (typeof platform.slug === "string" && platform.slug.trim().length > 0);
-      return hasLabel;
-    });
-
-  return normalized;
+const buildFeatureSource = (genres: string[]): Pick<GameSummary, "tags"> => {
+  const pseudoTags = genres.map((genre, index) => ({
+    id: index,
+    name: genre,
+    slug: genre.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+  }));
+  return { tags: pseudoTags };
 };
 
 export function GameCard({
@@ -76,15 +62,19 @@ export function GameCard({
   onShowSimilar,
   detailReturnTo,
 }: GameCardProps) {
-  const releaseYear = game.released ? new Date(game.released).getFullYear() : null;
-  const coverImage = normalizeImageUrl(coverOverride ?? getBestCover(game));
+  const normalizedCover = normalizeImageUrl(
+    coverOverride ?? game.coverImageUrl ?? game.screenshotUrls[0] ?? null,
+  );
+  const releaseYear = game.releaseYear ?? null;
+  const ratingLabel = typeof game.rating === "number" && game.rating > 0 ? game.rating.toFixed(1) : "—";
   const detailHref = detailReturnTo
     ? `/games/${game.id}?returnTo=${encodeURIComponent(detailReturnTo)}`
     : `/games/${game.id}`;
-  const platformEntries =
-    (game.parent_platforms?.length ? game.parent_platforms : game.platforms) ?? [];
-  const normalizedPlatforms = normalizePlatformList(platformEntries);
-  const featureFlags = extractGameFeatures({ tags: game.tags ?? null });
+  const platformChips = Array.isArray(game.platforms) ? game.platforms.slice(0, 4) : [];
+  const screenshotPreviews = Array.isArray(game.screenshotUrls)
+    ? game.screenshotUrls.slice(0, 4)
+    : [];
+  const featureFlags = extractGameFeatures(buildFeatureSource(game.genres ?? []));
   const featureBadges: Array<{ label: string }> = [];
 
   if (featureFlags.controllerSupport) {
@@ -105,26 +95,48 @@ export function GameCard({
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur transition hover:border-emerald-400/80 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80">
-      <div className="relative h-48 w-full overflow-hidden">
-        <CoverImage
-          gameName={game.name}
-          fallbackImage={coverImage}
-          className="absolute inset-0 h-full w-full"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
-        <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2 text-xs font-medium text-white">
-          {releaseYear ? <span className="rounded-full bg-white/20 px-3 py-1">{releaseYear}</span> : null}
-          {game.rating ? <span className="rounded-full bg-emerald-500/90 px-3 py-1">IGDB {game.rating.toFixed(1)}</span> : null}
-          {game.playtime ? (
-            <span className="rounded-full bg-slate-900/70 px-3 py-1">Avg {game.playtime}h</span>
-          ) : null}
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-md shadow-slate-900/10 transition-colors duration-300 hover:border-emerald-400/70 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70">
+      <Link
+        href={detailHref}
+        className="relative block w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
+      >
+        <div className="relative aspect-[3/4] w-full overflow-hidden sm:aspect-[2/3] lg:aspect-[5/8]">
+          {normalizedCover ? (
+            <Image
+              src={normalizedCover}
+              alt={`${game.name} cover art`}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-xs font-semibold uppercase tracking-wide text-slate-300">
+              No cover available
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent" />
+          <div className="absolute left-4 bottom-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-white">
+            {releaseYear ? <span className="rounded-full bg-white/20 px-3 py-1">{releaseYear}</span> : null}
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-3 py-1">
+              <Star className="h-3 w-3 fill-current" /> {ratingLabel}
+            </span>
+            {game.ratingsCount > 0 ? (
+              <span className="rounded-full bg-slate-900/60 px-3 py-1 text-[11px]">
+                {game.ratingsCount.toLocaleString()} ratings
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Link>
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{game.name}</h3>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-slate-900 dark:text-slate-100 sm:text-lg">{game.name}</p>
+              {game.summary ? (
+                <p className="line-clamp-3 text-sm text-slate-600 dark:text-slate-300">{game.summary}</p>
+              ) : null}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               {onShowSimilar ? (
                 <button
@@ -143,30 +155,40 @@ export function GameCard({
               </Link>
               <Link
                 href={detailHref}
-                className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-400/70 hover:text-emerald-600 dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-emerald-400/60 dark:hover:text-emerald-300"
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200/60 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-emerald-400/70 hover:text-emerald-600 dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-emerald-400/60 dark:hover:text-emerald-300"
               >
                 IGDB detail <ExternalLink className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>
-          {game.genres.length ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">{game.genres.map((genre) => genre.name).join(", ")}</p>
-          ) : null}
-          {normalizedPlatforms.length ? (
-            <div className="mt-1 flex flex-wrap gap-1 text-xs text-slate-600 dark:text-slate-300">
-              {normalizedPlatforms.slice(0, 4).map((platform) => {
-                const label = platform.name ?? platform.slug ?? "Unknown platform";
-                const key = platform.slug ?? `${platform.id}`;
-                return (
-                  <span
-                    key={key}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-slate-700 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100 dark:shadow-none"
-                  >
-                    <PlatformIcon platform={label} className="h-3.5 w-3.5" />
-                    <span>{label}</span>
-                  </span>
-                );
-              })}
+          {platformChips.length ? (
+            <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+              {platformChips.map((platform) => (
+                <span
+                  key={platform.id}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-slate-700 shadow-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-100"
+                >
+                  <PlatformIcon platform={platform.name} className="h-3.5 w-3.5" />
+                  <span>{platform.abbreviation ?? platform.name}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Platform details unavailable</p>
+          )}
+          {screenshotPreviews.length ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {screenshotPreviews.map((url, index) => (
+                <Image
+                  key={`${game.id}-preview-${index}`}
+                  src={url}
+                  alt={`${game.name} screenshot ${index + 1}`}
+                  width={160}
+                  height={90}
+                  className="h-24 w-40 flex-shrink-0 rounded-xl object-cover"
+                  sizes="160px"
+                />
+              ))}
             </div>
           ) : null}
           {featureBadges.length ? (
@@ -194,6 +216,6 @@ export function GameCard({
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }

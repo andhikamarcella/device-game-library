@@ -43,7 +43,7 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
               href={`/library/${game.id}`}
               className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-400/70 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70"
             >
-              <div className="relative h-40 w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+              <div className="relative w-full overflow-hidden bg-slate-200 dark:bg-slate-800 aspect-[3/4]">
                 {cover ? (
                   <Image
                     src={cover}

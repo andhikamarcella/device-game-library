@@ -1,27 +1,59 @@
-import { NextResponse } from "next/server";
-import { searchPlatforms } from "@/lib/gameData";
+import { NextRequest, NextResponse } from "next/server";
+import { getTwitchAccessToken } from "@/lib/twitchAuth";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q")?.trim() ?? "";
+const IGDB_BASE_URL = process.env.IGDB_BASE_URL || "https://api.igdb.com/v4";
 
+export async function GET(_req: NextRequest) {
   try {
-    const platforms = await searchPlatforms(query);
-    const collator = new Intl.Collator(undefined, { sensitivity: "base" });
-    const results = platforms.map((platform) => ({
-      id: platform.id,
-      name: platform.name,
-      slug: platform.slug,
-      yearStart: platform.year_start,
-      image: platform.image_background,
-    }));
+    const clientId = process.env.TWITCH_CLIENT_ID;
+    if (!clientId) {
+      console.error("Missing TWITCH_CLIENT_ID env var");
+      return NextResponse.json(
+        { error: "Missing TWITCH_CLIENT_ID env var" },
+        { status: 500 },
+      );
+    }
 
-    results.sort((a, b) => collator.compare(a.name, b.name));
+    const accessToken = await getTwitchAccessToken();
 
-    return NextResponse.json(results);
+    const query = [
+      "fields id,name,abbreviation,generation,platform_logo.image_id;",
+      "sort name asc;",
+      "limit 200;",
+    ].join("\n");
+
+    const res = await fetch(`${IGDB_BASE_URL}/platforms`, {
+      method: "POST",
+      headers: {
+        "Client-ID": clientId,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "text/plain",
+        Accept: "application/json",
+      },
+      body: query,
+    });
+
+    const text = await res.text();
+
+    if (!res.ok) {
+      console.error("IGDB platform error", res.status, text);
+      return NextResponse.json(
+        {
+          error: "IGDB platform lookup failed",
+          status: res.status,
+          details: text,
+        },
+        { status: 500 },
+      );
+    }
+
+    const data = JSON.parse(text);
+    return NextResponse.json(data, { status: 200 });
   } catch (error) {
-    console.error("IGDB platform error", error);
-    const message = error instanceof Error ? error.message : "Unable to fetch platforms.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Platform route fatal error", error);
+    return NextResponse.json(
+      { error: "Unexpected server error while loading platforms" },
+      { status: 500 },
+    );
   }
 }
