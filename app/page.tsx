@@ -700,10 +700,10 @@ function DashboardPageContent() {
               } as const;
 
               return (
-                <article
-                  key={game.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
-                >
+                <div key={game.id} className="space-y-3">
+                  <article
+                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
+                  >
                   <Link
                     href={detailHref}
                     className="relative block aspect-video w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
@@ -758,7 +758,7 @@ function DashboardPageContent() {
                         href={detailHref}
                         className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 transition hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-emerald-300 dark:hover:text-emerald-200 dark:focus-visible:ring-offset-slate-900"
                       >
-                        Lihat detail
+                        Lihat detail & trailer
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                       <button
@@ -786,10 +786,12 @@ function DashboardPageContent() {
                       </button>
                     </div>
                   </div>
-                </article>
+                  </article>
+                </div>
               );
             })}
           </div>
+          
           {(pagination.total > pagination.pageSize || pagination.hasNextPage || pagination.hasPreviousPage) && (
             <nav
               aria-label="RAWG search pagination"
