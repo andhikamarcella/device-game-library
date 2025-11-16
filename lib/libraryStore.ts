@@ -1,10 +1,10 @@
-import { normalizeRawgImageUrl } from "@/lib/images";
+import { normalizeImageUrl } from "@/lib/images";
 
 export type Ownership = "none" | "wishlist" | "owned_digital" | "owned_physical" | "emulator_only";
 export type PlayStatus = "not_started" | "playing" | "beaten" | "completed" | "dropped";
 
 export interface UserGame {
-  rawgId: number;
+  igdbId: number;
   slug: string;
   title: string;
   platforms: string[];
@@ -71,7 +71,7 @@ function readStore(): UserGame[] {
       .filter((item): item is UserGame => item && typeof item === "object")
       .map((game) => ({
         ...game,
-        coverImage: normalizeRawgImageUrl(game.coverImage),
+        coverImage: normalizeImageUrl(game.coverImage),
       }));
   } catch (error) {
     console.warn("Failed to parse user games from storage", error);
@@ -91,39 +91,39 @@ export function getAllUserGames(): UserGame[] {
   return readStore();
 }
 
-export function getUserGame(rawgId: number): UserGame | undefined {
-  return readStore().find((game) => game.rawgId === rawgId);
+export function getUserGame(igdbId: number): UserGame | undefined {
+  return readStore().find((game) => game.igdbId === igdbId);
 }
 
 export function upsertUserGame(
-  partial: Partial<Omit<UserGame, "rawgId" | "createdAt" | "updatedAt">> & {
-    rawgId: number;
+  partial: Partial<Omit<UserGame, "igdbId" | "createdAt" | "updatedAt">> & {
+    igdbId: number;
     slug: string;
     title: string;
   },
 ): UserGame {
   const games = readStore();
-  const existing = games.find((game) => game.rawgId === partial.rawgId);
+  const existing = games.find((game) => game.igdbId === partial.igdbId);
   const now = new Date().toISOString();
 
   if (existing) {
     const updated: UserGame = {
       ...existing,
       ...partial,
-      coverImage: normalizeRawgImageUrl(partial.coverImage ?? existing.coverImage),
+      coverImage: normalizeImageUrl(partial.coverImage ?? existing.coverImage),
       updatedAt: now,
     };
-    const nextGames = games.map((game) => (game.rawgId === existing.rawgId ? updated : game));
+    const nextGames = games.map((game) => (game.igdbId === existing.igdbId ? updated : game));
     writeStore(nextGames);
     return updated;
   }
 
   const created: UserGame = {
-    rawgId: partial.rawgId,
+    igdbId: partial.igdbId,
     slug: partial.slug,
     title: partial.title,
     platforms: partial.platforms ?? [],
-    coverImage: normalizeRawgImageUrl(partial.coverImage) ?? null,
+    coverImage: normalizeImageUrl(partial.coverImage) ?? null,
     ownership: partial.ownership ?? "wishlist",
     status: partial.status ?? "not_started",
     personalRating: partial.personalRating ?? null,
@@ -138,9 +138,9 @@ export function upsertUserGame(
   return created;
 }
 
-export function updateUserGame(rawgId: number, patch: Partial<UserGame>): UserGame | undefined {
+export function updateUserGame(igdbId: number, patch: Partial<UserGame>): UserGame | undefined {
   const games = readStore();
-  const existing = games.find((game) => game.rawgId === rawgId);
+  const existing = games.find((game) => game.igdbId === igdbId);
   if (!existing) {
     return undefined;
   }
@@ -148,16 +148,16 @@ export function updateUserGame(rawgId: number, patch: Partial<UserGame>): UserGa
   const updated: UserGame = {
     ...existing,
     ...patch,
-    coverImage: normalizeRawgImageUrl(patch.coverImage ?? existing.coverImage),
+    coverImage: normalizeImageUrl(patch.coverImage ?? existing.coverImage),
     updatedAt: patch.updatedAt ?? now,
   };
-  const nextGames = games.map((game) => (game.rawgId === rawgId ? updated : game));
+  const nextGames = games.map((game) => (game.igdbId === igdbId ? updated : game));
   writeStore(nextGames);
   return updated;
 }
 
-export function removeUserGame(rawgId: number): void {
+export function removeUserGame(igdbId: number): void {
   const games = readStore();
-  const nextGames = games.filter((game) => game.rawgId !== rawgId);
+  const nextGames = games.filter((game) => game.igdbId !== igdbId);
   writeStore(nextGames);
 }

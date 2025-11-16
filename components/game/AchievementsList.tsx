@@ -3,10 +3,10 @@
 import Image from "next/image";
 import { useState } from "react";
 import { Trophy, Youtube } from "lucide-react";
-import type { RawgAchievement } from "@/lib/rawg";
+import type { GameAchievement } from "@/lib/gameData";
 
 interface AchievementsListProps {
-  achievements: RawgAchievement[];
+  achievements: GameAchievement[];
   initialVisible?: number;
   gameTitle: string;
 }

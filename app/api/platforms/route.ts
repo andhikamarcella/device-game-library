@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { searchPlatforms } from "@/lib/rawg";
+import { searchPlatforms } from "@/lib/gameData";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(results);
   } catch (error) {
-    console.error("RAWG platform error", error);
+    console.error("IGDB platform error", error);
     const message = error instanceof Error ? error.message : "Unable to fetch platforms.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

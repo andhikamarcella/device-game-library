@@ -9,7 +9,7 @@ A personal web application built with Next.js 14 that lets you track consoles, d
 - 🎮 Games library table with advanced filters, quick status cycling, favorites, and detail drawers.
 - ☁️ Backup & restore utilities with JSON export/import plus reset controls.
 - 🌗 Dark/light theme toggle (default dark) persisted between sessions.
-- 🔍 RAWG-powered discovery search with detailed game profiles for quick metadata lookups.
+- 🔍 IGDB-powered discovery search with detailed game profiles for quick metadata lookups.
 - 💾 Local-first storage layer using custom React context stores for games, devices, and settings.
 
 ## Tech stack
@@ -41,7 +41,15 @@ npm start
 
 ## Deployment
 
-This project is ready for one-click deployment on [Vercel](https://vercel.com/). Create an environment variable named `RAWG_API_KEY` in your project (and `.env.local` for local development) to enable RAWG lookups.
+This project is ready for one-click deployment on [Vercel](https://vercel.com/). Configure the following environment variables for IGDB access:
+
+| Variable | Description |
+| --- | --- |
+| `IGDB_BASE_URL` | Usually `https://api.igdb.com/v4`. |
+| `TWITCH_CLIENT_ID` | Your Twitch application client ID (used for IGDB auth). |
+| `TWITCH_CLIENT_SECRET` | The matching Twitch client secret. |
+
+Add them to your Vercel project and `.env.local` for local development.
 
 ## Data storage & backups
 
@@ -55,7 +63,7 @@ This project is ready for one-click deployment on [Vercel](https://vercel.com/).
 app/             # Next.js App Router pages & layout
 components/      # Reusable UI components (cards, modals, badges, etc.)
 hooks/           # React context stores for devices, games, settings
-lib/             # Shared utilities, types, storage helpers, RAWG API client
+lib/             # Shared utilities, types, storage helpers, IGDB API client
 public/          # Static assets
 ```
 

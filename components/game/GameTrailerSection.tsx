@@ -2,30 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Play } from "lucide-react";
-import { extractTrailerFromRawg, type GameTrailerSource } from "@/lib/gameMedia";
-import type { RawgGameDetails } from "@/lib/rawg";
+import { extractTrailerFromIgdb, type GameTrailerSource } from "@/lib/gameMedia";
+import type { GameDetailsPayload } from "@/lib/gameData";
 import type { YoutubeSearchResult } from "@/lib/youtube";
 
 const IFRAME_PERMISSIONS =
   "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
 
 type GameTrailerSectionProps = {
-  game: RawgGameDetails;
+  game: GameDetailsPayload;
   className?: string;
 };
 
 type TrailerStatus = "idle" | "loading" | "loaded" | "empty" | "quota" | "error";
 
 type TrailerDisplay = {
-  source: "rawg" | "youtube";
+  source: "igdb" | "youtube";
   youtubeId: string;
   title: string;
   attribution: string;
 };
 
 function buildAttribution(source: GameTrailerSource["type"], channelTitle?: string): string {
-  if (source === "rawg-clip" || source === "rawg-movie") {
-    return "Provided by RAWG";
+  if (source === "igdb-clip" || source === "igdb-movie") {
+    return "Provided by IGDB";
   }
   if (channelTitle) {
     return `YouTube • ${channelTitle}`;
@@ -33,7 +33,7 @@ function buildAttribution(source: GameTrailerSource["type"], channelTitle?: stri
   return "YouTube";
 }
 
-function derivePlatformHint(game: RawgGameDetails): string | undefined {
+function derivePlatformHint(game: GameDetailsPayload): string | undefined {
   const parent = game.parent_platforms?.find((entry) => entry?.platform?.name);
   if (parent?.platform?.name) {
     return parent.platform.name;
@@ -43,37 +43,37 @@ function derivePlatformHint(game: RawgGameDetails): string | undefined {
 }
 
 export function GameTrailerSection({ game, className }: GameTrailerSectionProps) {
-  const rawgSource = useMemo(() => extractTrailerFromRawg(game), [game]);
-  const [status, setStatus] = useState<TrailerStatus>(rawgSource.type === "none" ? "idle" : "loaded");
+  const igdbSource = useMemo(() => extractTrailerFromIgdb(game), [game]);
+  const [status, setStatus] = useState<TrailerStatus>(igdbSource.type === "none" ? "idle" : "loaded");
   const [display, setDisplay] = useState<TrailerDisplay | null>(() => {
-    if (rawgSource.type === "none") {
+    if (igdbSource.type === "none") {
       return null;
     }
     return {
-      source: "rawg",
-      youtubeId: rawgSource.youtubeId,
-      title: rawgSource.title || `${game.name} trailer`,
-      attribution: buildAttribution(rawgSource.type),
+      source: "igdb",
+      youtubeId: igdbSource.youtubeId,
+      title: igdbSource.title || `${game.name} trailer`,
+      attribution: buildAttribution(igdbSource.type),
     } satisfies TrailerDisplay;
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (rawgSource.type === "none") {
+    if (igdbSource.type === "none") {
       setDisplay(null);
       setStatus("idle");
       setErrorMessage(null);
       return;
     }
     setDisplay({
-      source: "rawg",
-      youtubeId: rawgSource.youtubeId,
-      title: rawgSource.title || `${game.name} trailer`,
-      attribution: buildAttribution(rawgSource.type),
+      source: "igdb",
+      youtubeId: igdbSource.youtubeId,
+      title: igdbSource.title || `${game.name} trailer`,
+      attribution: buildAttribution(igdbSource.type),
     });
     setStatus("loaded");
     setErrorMessage(null);
-  }, [game.name, rawgSource]);
+  }, [game.name, igdbSource]);
 
   const handleYoutubeSearch = async () => {
     if (!game.name || status === "loading") {
@@ -127,7 +127,7 @@ export function GameTrailerSection({ game, className }: GameTrailerSectionProps)
     }
   };
 
-  const canSearchYoutube = rawgSource.type === "none";
+  const canSearchYoutube = igdbSource.type === "none";
   const headingId = `game-trailer-${game.id}`;
 
   if (!game.name) {
@@ -160,7 +160,7 @@ export function GameTrailerSection({ game, className }: GameTrailerSectionProps)
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-6 text-center text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-          <p className="font-medium">No official trailer was provided by RAWG.</p>
+          <p className="font-medium">No official trailer was provided by IGDB.</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Search YouTube on-demand to keep API usage low.</p>
           <div className="mt-4">
             <button

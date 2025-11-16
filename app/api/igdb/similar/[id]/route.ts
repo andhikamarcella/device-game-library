@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { normalizeRawgImageUrl } from "@/lib/images";
-import { getSimilarGamesForGame } from "@/lib/rawg";
+import { normalizeImageUrl } from "@/lib/images";
+import { getSimilarGamesForGame, type GameParentPlatform } from "@/lib/gameData";
 
 type Params = { params: { id: string } };
 
 export async function GET(_request: Request, { params }: Params) {
   const id = Number.parseInt(params.id, 10);
   if (!Number.isFinite(id)) {
-    return NextResponse.json({ error: "A valid RAWG id is required." }, { status: 400 });
+    return NextResponse.json({ error: "A valid IGDB id is required." }, { status: 400 });
   }
 
   try {
@@ -16,11 +16,11 @@ export async function GET(_request: Request, { params }: Params) {
       id: game.id,
       slug: game.slug,
       name: game.name,
-      background_image: normalizeRawgImageUrl(game.background_image),
+      background_image: normalizeImageUrl(game.background_image),
       rating: game.rating ?? null,
       released: game.released ?? null,
       parent_platforms:
-        game.parent_platforms?.map((entry) => ({
+        game.parent_platforms?.map((entry: GameParentPlatform) => ({
           id: entry.platform.id,
           name: entry.platform.name,
           slug: entry.platform.slug,
@@ -29,7 +29,7 @@ export async function GET(_request: Request, { params }: Params) {
 
     return NextResponse.json({ results });
   } catch (error) {
-    console.error("RAWG similar error", error);
+    console.error("IGDB similar error", error);
     const message = error instanceof Error ? error.message : "Unable to load similar games.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

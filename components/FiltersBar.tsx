@@ -2,7 +2,7 @@
 
 import { type Ownership, type PlayStatus } from "@/hooks/LibraryProvider";
 
-export type SortOption = "title" | "release_year" | "rawg_rating" | "personal_rating" | "added_date" | "last_played";
+export type SortOption = "title" | "release_year" | "igdb_rating" | "personal_rating" | "added_date" | "last_played";
 
 interface FiltersBarProps {
   ownership: Ownership | "all";
@@ -110,7 +110,7 @@ export function FiltersBar({
           >
             <option value="title">Title</option>
             <option value="release_year">Release year</option>
-            <option value="rawg_rating">RAWG rating</option>
+            <option value="igdb_rating">IGDB rating</option>
             <option value="personal_rating">Personal rating</option>
             <option value="added_date">Added date</option>
             <option value="last_played">Last played</option>

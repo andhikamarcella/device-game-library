@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import PlatformChips from "@/components/PlatformChips";
-import { normalizeRawgImageUrl } from "@/lib/images";
+import { normalizeImageUrl } from "@/lib/images";
 
 export interface SimilarGame {
   id: number;
@@ -28,11 +28,11 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Similar games</h2>
-        <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">RAWG suggestions</span>
+        <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">IGDB suggestions</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {games.map((game) => {
-          const cover = normalizeRawgImageUrl(game.background_image);
+          const cover = normalizeImageUrl(game.background_image);
           const releaseYear = game.released ? new Date(game.released).getFullYear() : null;
           const ratingLabel = typeof game.rating === "number" && game.rating > 0 ? game.rating.toFixed(1) : null;
           const platforms = (game.parent_platforms ?? []).slice(0, 3);
@@ -59,7 +59,7 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
                 )}
                 {ratingLabel ? (
                   <div className="absolute top-3 right-3 inline-flex items-center rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white shadow">
-                    RAWG {ratingLabel}
+                    IGDB {ratingLabel}
                   </div>
                 ) : null}
               </div>

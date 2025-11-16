@@ -11,9 +11,9 @@ import { SimilarGamesRow } from "@/components/SimilarGamesRow";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
-import { normalizeRawgImageUrl } from "@/lib/images";
+import { normalizeImageUrl } from "@/lib/images";
 import { truncateText } from "@/lib/text";
-import type { RawgGameDetails } from "@/lib/rawg";
+import type { GameDetailsPayload } from "@/lib/gameData";
 
 interface ScreenshotEntry {
   id: number;
@@ -75,7 +75,7 @@ export default function GameDetailsPage() {
     const query = searchParams?.toString();
     return query ? `${base}?${query}` : base;
   }, [pathname, searchParams, params.id]);
-  const userGame = useMemo(() => games.find((item) => item.rawgId === gameId), [games, gameId]);
+  const userGame = useMemo(() => games.find((item) => item.igdbId === gameId), [games, gameId]);
 
   const [details, setDetails] = useState<GameDetailsResponse | null>(null);
   const [screenshots, setScreenshots] = useState<ScreenshotResponse["results"]>([]);
@@ -85,7 +85,7 @@ export default function GameDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
-  const trailerReadyGame = useMemo<RawgGameDetails | null>(() => {
+  const trailerReadyGame = useMemo<GameDetailsPayload | null>(() => {
     if (!details) {
       return null;
     }
@@ -118,7 +118,7 @@ export default function GameDetailsPage() {
       series: null,
       clip: null,
       movies: trailers,
-    } satisfies RawgGameDetails;
+    } satisfies GameDetailsPayload;
   }, [details, screenshots, trailers]);
 
   useEffect(() => {
@@ -135,10 +135,10 @@ export default function GameDetailsPage() {
         setLoading(true);
         setError(null);
         const [detailsRes, screenshotsRes, moviesRes, similarRes] = await Promise.all([
-          fetch(`/api/rawg/details/${gameId}`),
-          fetch(`/api/rawg/screenshots/${gameId}`),
-          fetch(`/api/rawg/movies/${gameId}`),
-          fetch(`/api/rawg/similar/${gameId}`),
+          fetch(`/api/igdb/details/${gameId}`),
+          fetch(`/api/igdb/screenshots/${gameId}`),
+          fetch(`/api/igdb/movies/${gameId}`),
+          fetch(`/api/igdb/similar/${gameId}`),
         ]);
 
         if (!detailsRes.ok) {
@@ -208,7 +208,7 @@ export default function GameDetailsPage() {
     }
     const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
     const coverCandidate =
-      normalizeRawgImageUrl(details.background_image ?? details.background_image_additional ?? null);
+      normalizeImageUrl(details.background_image ?? details.background_image_additional ?? null);
     const patch: Partial<UserGame> = {};
     if (!userGame.coverImage && coverCandidate) {
       patch.coverImage = coverCandidate;
@@ -255,8 +255,8 @@ export default function GameDetailsPage() {
   }
 
   const releaseYear = details.released ? new Date(details.released).getFullYear() : null;
-  const heroImage = normalizeRawgImageUrl(details.background_image_additional ?? details.background_image ?? null);
-  const coverImage = normalizeRawgImageUrl(details.background_image ?? details.background_image_additional ?? null);
+  const heroImage = normalizeImageUrl(details.background_image_additional ?? details.background_image ?? null);
+  const coverImage = normalizeImageUrl(details.background_image ?? details.background_image_additional ?? null);
   const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
   const genres = details.genres?.map((genre) => genre.name) ?? [];
   const tags = details.tags?.slice(0, 8).map((tag) => tag.name) ?? [];
@@ -266,7 +266,7 @@ export default function GameDetailsPage() {
 
   const handleAddToLibrary = () => {
     upsert({
-      rawgId: details.id,
+      igdbId: details.id,
       slug: details.slug,
       title: details.name,
       coverImage,
@@ -275,7 +275,7 @@ export default function GameDetailsPage() {
     });
   };
 
-  const rawgDetailHref = `/games/${details.id}?returnTo=${encodeURIComponent(currentRoute)}`;
+  const igdbDetailHref = `/games/${details.id}?returnTo=${encodeURIComponent(currentRoute)}`;
 
   return (
     <div className="space-y-10">
@@ -320,7 +320,7 @@ export default function GameDetailsPage() {
             <div className="flex flex-wrap gap-4 text-sm">
               {typeof details.rating === "number" ? (
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1">
-                  <Star className="h-4 w-4 text-amber-300" /> RAWG {details.rating.toFixed(1)}
+                  <Star className="h-4 w-4 text-amber-300" /> IGDB {details.rating.toFixed(1)}
                   {details.ratings_count ? <span className="text-xs text-slate-200/80">({details.ratings_count.toLocaleString()} reviews)</span> : null}
                 </div>
               ) : null}
@@ -360,10 +360,10 @@ export default function GameDetailsPage() {
                 </button>
               )}
               <Link
-                href={rawgDetailHref}
+                href={igdbDetailHref}
                 className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold text-white/90 transition hover:border-white/40 hover:text-white"
               >
-                RAWG detail page <ExternalLink className="h-4 w-4" />
+                IGDB detail page <ExternalLink className="h-4 w-4" />
               </Link>
             </div>
           </div>
@@ -407,7 +407,7 @@ export default function GameDetailsPage() {
 
       {trailers.length ? (
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">RAWG trailers</h2>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">IGDB trailers</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {trailers.slice(0, 2).map((trailer) => {
               const src = trailer.data.max ?? trailer.data[480];

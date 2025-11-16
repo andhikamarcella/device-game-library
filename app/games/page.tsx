@@ -52,7 +52,7 @@ type GameFormState = {
   notes: string;
   favorite: boolean;
   wishlist: boolean;
-  rawgId: string;
+  igdbId: string;
   coverImage: string;
   heroImage: string;
   screenshotUrls: string;
@@ -77,7 +77,7 @@ const emptyFormState: GameFormState = {
   notes: "",
   favorite: false,
   wishlist: false,
-  rawgId: "",
+  igdbId: "",
   coverImage: "",
   heroImage: "",
   screenshotUrls: "",
@@ -90,24 +90,24 @@ function parseMediaList(input: string): string[] {
     .filter(Boolean);
 }
 
-type RawgSearchPlatform = {
+type IgdbSearchPlatform = {
   id: number;
   name: string;
   slug: string;
 };
 
-type RawgSearchResult = {
+type IgdbSearchResult = {
   id: number;
   name: string;
   coverImage: string | null;
   releaseYear: number | null;
   rating: number | null;
   ratingsCount: number;
-  platforms: RawgSearchPlatform[];
+  platforms: IgdbSearchPlatform[];
 };
 
-type RawgSearchResponse = {
-  results: RawgSearchResult[];
+type GameSearchResponse = {
+  results: IgdbSearchResult[];
   pagination: {
     total: number;
     page: number;
@@ -117,7 +117,7 @@ type RawgSearchResponse = {
   };
 };
 
-type RawgDetailMetadata = {
+type IgdbDetailMetadata = {
   id: number;
   name?: string;
   description?: string;
@@ -138,7 +138,7 @@ type PlatformOption = {
   image: string | null;
 };
 
-const RAWG_MODAL_PAGE_SIZE = 6;
+const IGDB_MODAL_PAGE_SIZE = 6;
 
 function GameForm({
   value,
@@ -374,10 +374,10 @@ function GameForm({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
-          <label className={labelClass}>RAWG game ID</label>
+          <label className={labelClass}>IGDB game ID</label>
           <input
-            value={value.rawgId}
-            onChange={(event) => onChange({ ...value, rawgId: event.target.value })}
+            value={value.igdbId}
+            onChange={(event) => onChange({ ...value, igdbId: event.target.value })}
             placeholder="3498"
             className={fieldClass}
           />
@@ -447,7 +447,7 @@ function GameDetail({ game }: { game: Game }) {
   }, [game.id]);
 
   useEffect(() => {
-    if (!game.rawgId) return;
+    if (!game.igdbId) return;
     const needsCover = !game.coverImage;
     const needsHero = !game.heroImage;
     const needsScreenshots = !game.screenshotUrls || game.screenshotUrls.length === 0;
@@ -460,11 +460,11 @@ function GameDetail({ game }: { game: Game }) {
     setLoadingMetadata(true);
     setMetadataError(null);
 
-    fetch(`/api/games/${game.rawgId}`)
+    fetch(`/api/games/${game.igdbId}`)
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json().catch(() => null);
-          const message = data?.error ?? "Gagal memuat metadata RAWG.";
+          const message = data?.error ?? "Gagal memuat metadata IGDB.";
           throw new Error(message);
         }
         return (await response.json()) as GameDetailApiResponse;
@@ -483,8 +483,8 @@ function GameDetail({ game }: { game: Game }) {
         setRemoteMetadata(metadata);
 
         const updates: Partial<Game> = {};
-        if (!game.rawgId) {
-          updates.rawgId = data.id;
+        if (!game.igdbId) {
+          updates.igdbId = data.id;
         }
         if (metadata.thumbnail && !game.coverImage) {
           updates.coverImage = metadata.thumbnail;
@@ -514,7 +514,7 @@ function GameDetail({ game }: { game: Game }) {
     return () => {
       cancelled = true;
     };
-  }, [game.id, game.rawgId, game.coverImage, game.heroImage, game.screenshotUrls, updateGame]);
+  }, [game.id, game.igdbId, game.coverImage, game.heroImage, game.screenshotUrls, updateGame]);
 
   const thumbnailImage = remoteMetadata?.thumbnail ?? game.coverImage ?? null;
   const heroImage = remoteMetadata?.heroImage ?? game.heroImage ?? null;
@@ -586,9 +586,9 @@ function GameDetail({ game }: { game: Game }) {
           <p>
             <span className="text-slate-500 dark:text-slate-500">Created:</span> {formatDateTime(game.createdAt)}
           </p>
-          {game.rawgId ? (
+          {game.igdbId ? (
             <p>
-              <span className="text-slate-500 dark:text-slate-500">RAWG ID:</span> {game.rawgId}
+              <span className="text-slate-500 dark:text-slate-500">IGDB ID:</span> {game.igdbId}
             </p>
           ) : null}
         </div>
@@ -596,7 +596,7 @@ function GameDetail({ game }: { game: Game }) {
       {loadingMetadata ? (
         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          Memuat metadata tambahan dari RAWG...
+          Memuat metadata tambahan dari IGDB...
         </div>
       ) : null}
       {metadataError ? (
@@ -665,28 +665,28 @@ export default function GamesPage() {
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [formState, setFormState] = useState<GameFormState>(emptyFormState);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [rawgQuery, setRawgQuery] = useState("");
-  const [rawgPlatform, setRawgPlatform] = useState("all");
-  const [rawgCommittedQuery, setRawgCommittedQuery] = useState("");
-  const [rawgCommittedPlatform, setRawgCommittedPlatform] = useState("all");
-  const [rawgPage, setRawgPage] = useState(1);
-  const [rawgResults, setRawgResults] = useState<RawgSearchResult[]>([]);
-  const [rawgPagination, setRawgPagination] = useState({
+  const [igdbQuery, setIgdbQuery] = useState("");
+  const [igdbPlatform, setGamePlatform] = useState("all");
+  const [igdbCommittedQuery, setIgdbCommittedQuery] = useState("");
+  const [igdbCommittedPlatform, setIgdbCommittedPlatform] = useState("all");
+  const [igdbPage, setIgdbPage] = useState(1);
+  const [igdbResults, setIgdbResults] = useState<IgdbSearchResult[]>([]);
+  const [igdbPagination, setIgdbPagination] = useState({
     total: 0,
     page: 1,
-    pageSize: RAWG_MODAL_PAGE_SIZE,
+    pageSize: IGDB_MODAL_PAGE_SIZE,
     hasNextPage: false,
     hasPreviousPage: false,
   });
-  const [rawgHasSearched, setRawgHasSearched] = useState(false);
-  const [rawgLoading, setRawgLoading] = useState(false);
-  const [rawgError, setRawgError] = useState<string | null>(null);
-  const [rawgSelectionLoadingId, setRawgSelectionLoadingId] = useState<number | null>(null);
-  const [rawgPlatforms, setRawgPlatforms] = useState<PlatformOption[]>([]);
-  const [rawgPlatformLoading, setRawgPlatformLoading] = useState(false);
-  const [rawgPlatformError, setRawgPlatformError] = useState<string | null>(null);
-  const [rawgPlatformSearch, setRawgPlatformSearch] = useState("");
-  const [rawgPlatformsFetched, setRawgPlatformsFetched] = useState(false);
+  const [igdbHasSearched, setIgdbHasSearched] = useState(false);
+  const [igdbLoading, setIgdbLoading] = useState(false);
+  const [igdbError, setIgdbError] = useState<string | null>(null);
+  const [igdbSelectionLoadingId, setIgdbSelectionLoadingId] = useState<number | null>(null);
+  const [igdbPlatforms, setGamePlatforms] = useState<PlatformOption[]>([]);
+  const [igdbPlatformLoading, setGamePlatformLoading] = useState(false);
+  const [igdbPlatformError, setGamePlatformError] = useState<string | null>(null);
+  const [igdbPlatformSearch, setGamePlatformSearch] = useState("");
+  const [igdbPlatformsFetched, setGamePlatformsFetched] = useState(false);
 
   useEffect(() => {
     if (draftGame) {
@@ -701,15 +701,15 @@ export default function GamesPage() {
   }, [draftGame, clearDraftGame]);
 
   useEffect(() => {
-    if (!isModalOpen || rawgPlatformsFetched) {
+    if (!isModalOpen || igdbPlatformsFetched) {
       return;
     }
 
     const controller = new AbortController();
     let cancelled = false;
 
-    setRawgPlatformLoading(true);
-    setRawgPlatformError(null);
+    setGamePlatformLoading(true);
+    setGamePlatformError(null);
 
     fetch("/api/platforms", { signal: controller.signal })
       .then(async (response) => {
@@ -724,64 +724,64 @@ export default function GamesPage() {
           return;
         }
         const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
-        setRawgPlatforms(sorted);
-        setRawgPlatformsFetched(true);
+        setGamePlatforms(sorted);
+        setGamePlatformsFetched(true);
       })
       .catch((error) => {
         if (cancelled || (error instanceof DOMException && error.name === "AbortError")) {
           return;
         }
         console.error(error);
-        setRawgPlatformError(error instanceof Error ? error.message : "Unable to load platform list.");
-        setRawgPlatformsFetched(true);
+        setGamePlatformError(error instanceof Error ? error.message : "Unable to load platform list.");
+        setGamePlatformsFetched(true);
       })
       .finally(() => {
         if (!cancelled) {
-          setRawgPlatformLoading(false);
+          setGamePlatformLoading(false);
         }
       });
 
     return () => {
       cancelled = true;
       controller.abort();
-      setRawgPlatformLoading(false);
+      setGamePlatformLoading(false);
     };
-  }, [isModalOpen, rawgPlatformsFetched]);
+  }, [isModalOpen, igdbPlatformsFetched]);
 
   useEffect(() => {
-    if (!isModalOpen || !rawgHasSearched) {
+    if (!isModalOpen || !igdbHasSearched) {
       return;
     }
 
     const params = new URLSearchParams({
-      page: String(rawgPage),
-      pageSize: String(RAWG_MODAL_PAGE_SIZE),
+      page: String(igdbPage),
+      pageSize: String(IGDB_MODAL_PAGE_SIZE),
     });
-    if (rawgCommittedQuery) {
-      params.set("q", rawgCommittedQuery);
+    if (igdbCommittedQuery) {
+      params.set("q", igdbCommittedQuery);
     }
-    if (rawgCommittedPlatform !== "all") {
-      params.set("platform", rawgCommittedPlatform);
+    if (igdbCommittedPlatform !== "all") {
+      params.set("platform", igdbCommittedPlatform);
     }
 
     const controller = new AbortController();
-    setRawgLoading(true);
-    setRawgError(null);
+    setIgdbLoading(true);
+    setIgdbError(null);
 
     fetch(`/api/games/search?${params.toString()}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
           const data = await response.json().catch(() => null);
-          throw new Error(data?.error ?? "Tidak dapat mencari game di RAWG.");
+          throw new Error(data?.error ?? "Tidak dapat mencari game di IGDB.");
         }
-        return (await response.json()) as RawgSearchResponse;
+        return (await response.json()) as GameSearchResponse;
       })
       .then((data) => {
-        setRawgResults(data.results);
-        setRawgPagination({
+        setIgdbResults(data.results);
+        setIgdbPagination({
           total: data.pagination?.total ?? 0,
-          page: data.pagination?.page ?? rawgPage,
-          pageSize: data.pagination?.pageSize ?? RAWG_MODAL_PAGE_SIZE,
+          page: data.pagination?.page ?? igdbPage,
+          pageSize: data.pagination?.pageSize ?? IGDB_MODAL_PAGE_SIZE,
           hasNextPage: Boolean(data.pagination?.hasNextPage),
           hasPreviousPage: Boolean(data.pagination?.hasPreviousPage),
         });
@@ -791,22 +791,22 @@ export default function GamesPage() {
           return;
         }
         console.error(error);
-        setRawgError(error instanceof Error ? error.message : "Unexpected RAWG error.");
-        setRawgResults([]);
-        setRawgPagination({
+        setIgdbError(error instanceof Error ? error.message : "Unexpected IGDB error.");
+        setIgdbResults([]);
+        setIgdbPagination({
           total: 0,
           page: 1,
-          pageSize: RAWG_MODAL_PAGE_SIZE,
+          pageSize: IGDB_MODAL_PAGE_SIZE,
           hasNextPage: false,
           hasPreviousPage: false,
         });
       })
       .finally(() => {
-        setRawgLoading(false);
+        setIgdbLoading(false);
       });
 
     return () => controller.abort();
-  }, [isModalOpen, rawgHasSearched, rawgCommittedQuery, rawgCommittedPlatform, rawgPage]);
+  }, [isModalOpen, igdbHasSearched, igdbCommittedQuery, igdbCommittedPlatform, igdbPage]);
 
   const filteredGames = useMemo(() => {
     let result = [...games];
@@ -840,57 +840,57 @@ export default function GamesPage() {
 
   const currentGame = selectedGameId ? games.find((game) => game.id === selectedGameId) ?? null : null;
 
-  const filteredRawgPlatforms = useMemo(() => {
-    if (!rawgPlatformSearch.trim()) {
-      return rawgPlatforms;
+  const filteredGamePlatforms = useMemo(() => {
+    if (!igdbPlatformSearch.trim()) {
+      return igdbPlatforms;
     }
-    const term = rawgPlatformSearch.trim().toLowerCase();
-    return rawgPlatforms.filter((platform) => platform.name.toLowerCase().includes(term));
-  }, [rawgPlatformSearch, rawgPlatforms]);
+    const term = igdbPlatformSearch.trim().toLowerCase();
+    return igdbPlatforms.filter((platform) => platform.name.toLowerCase().includes(term));
+  }, [igdbPlatformSearch, igdbPlatforms]);
 
-  const resetRawgSearch = () => {
-    setRawgQuery("");
-    setRawgPlatform("all");
-    setRawgPlatformSearch("");
-    setRawgCommittedQuery("");
-    setRawgCommittedPlatform("all");
-    setRawgPage(1);
-    setRawgResults([]);
-    setRawgPagination({
+  const resetIgdbSearch = () => {
+    setIgdbQuery("");
+    setGamePlatform("all");
+    setGamePlatformSearch("");
+    setIgdbCommittedQuery("");
+    setIgdbCommittedPlatform("all");
+    setIgdbPage(1);
+    setIgdbResults([]);
+    setIgdbPagination({
       total: 0,
       page: 1,
-      pageSize: RAWG_MODAL_PAGE_SIZE,
+      pageSize: IGDB_MODAL_PAGE_SIZE,
       hasNextPage: false,
       hasPreviousPage: false,
     });
-    setRawgHasSearched(false);
-    setRawgLoading(false);
-    setRawgError(null);
-    setRawgSelectionLoadingId(null);
+    setIgdbHasSearched(false);
+    setIgdbLoading(false);
+    setIgdbError(null);
+    setIgdbSelectionLoadingId(null);
   };
 
   const retryPlatformLoad = () => {
-    if (rawgPlatformLoading) {
+    if (igdbPlatformLoading) {
       return;
     }
-    setRawgPlatformError(null);
-    setRawgPlatformsFetched(false);
+    setGamePlatformError(null);
+    setGamePlatformsFetched(false);
   };
 
   const openAddModal = () => {
     setEditingGame(null);
     setFormState(emptyFormState);
-    resetRawgSearch();
+    resetIgdbSearch();
     setIsModalOpen(true);
   };
 
   const openEditModal = (game: Game) => {
     setEditingGame(game);
     setFormState(convertGameToForm(game));
-    resetRawgSearch();
-    if (game.rawgId) {
-      setRawgQuery(game.title);
-      setRawgCommittedQuery("");
+    resetIgdbSearch();
+    if (game.igdbId) {
+      setIgdbQuery(game.title);
+      setIgdbCommittedQuery("");
     }
     setIsModalOpen(true);
   };
@@ -901,8 +901,8 @@ export default function GamesPage() {
     const tags = parseTags(formState.tags);
     const rating = formState.rating ? Number(formState.rating) : undefined;
     const hours = formState.hoursPlayed ? Number(formState.hoursPlayed) : undefined;
-    const rawgIdNumber = Number(formState.rawgId);
-    const rawgId = formState.rawgId && Number.isFinite(rawgIdNumber) ? rawgIdNumber : undefined;
+    const igdbIdNumber = Number(formState.igdbId);
+    const igdbId = formState.igdbId && Number.isFinite(igdbIdNumber) ? igdbIdNumber : undefined;
     const coverImage = formState.coverImage.trim() ? formState.coverImage.trim() : undefined;
     const heroImage = formState.heroImage.trim() ? formState.heroImage.trim() : undefined;
     const screenshotUrls = parseMediaList(formState.screenshotUrls);
@@ -910,7 +910,7 @@ export default function GamesPage() {
       title: formState.title,
       platformId: formState.platformId || formState.platformName || "custom",
       platformName: device ? device.name : formState.platformName || "Unknown",
-      rawgId,
+      igdbId,
       region: formState.region || undefined,
       status: formState.status,
       format: formState.format,
@@ -947,30 +947,30 @@ export default function GamesPage() {
     }
   };
 
-  const handleRawgSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleIgdbSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!rawgQuery.trim() && rawgPlatform === "all") {
-      setRawgError("Masukkan judul game atau pilih console untuk mencari di RAWG.");
-      setRawgHasSearched(false);
-      setRawgResults([]);
-      setRawgPagination({
+    if (!igdbQuery.trim() && igdbPlatform === "all") {
+      setIgdbError("Masukkan judul game atau pilih console untuk mencari di IGDB.");
+      setIgdbHasSearched(false);
+      setIgdbResults([]);
+      setIgdbPagination({
         total: 0,
         page: 1,
-        pageSize: RAWG_MODAL_PAGE_SIZE,
+        pageSize: IGDB_MODAL_PAGE_SIZE,
         hasNextPage: false,
         hasPreviousPage: false,
       });
       return;
     }
 
-    setRawgPage(1);
-    setRawgCommittedQuery(rawgQuery.trim());
-    setRawgCommittedPlatform(rawgPlatform);
-    setRawgHasSearched(true);
+    setIgdbPage(1);
+    setIgdbCommittedQuery(igdbQuery.trim());
+    setIgdbCommittedPlatform(igdbPlatform);
+    setIgdbHasSearched(true);
   };
 
-  const handleRawgPageChange = (direction: "previous" | "next") => {
-    setRawgPage((prev) => {
+  const handleIgdbPageChange = (direction: "previous" | "next") => {
+    setIgdbPage((prev) => {
       if (direction === "previous") {
         return Math.max(1, prev - 1);
       }
@@ -978,21 +978,21 @@ export default function GamesPage() {
     });
   };
 
-  const fetchRawgDetailMetadata = async (id: number): Promise<RawgDetailMetadata> => {
+  const fetchIgdbDetailMetadata = async (id: number): Promise<IgdbDetailMetadata> => {
     const response = await fetch(`/api/games/${id}`);
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload) {
-      const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat metadata RAWG.";
+      const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat metadata IGDB.";
       throw new Error(message);
     }
-    return payload as RawgDetailMetadata;
+    return payload as IgdbDetailMetadata;
   };
 
-  const handleApplyRawgResult = async (result: RawgSearchResult) => {
-    setRawgSelectionLoadingId(result.id);
-    setRawgError(null);
+  const handleApplyIgdbResult = async (result: IgdbSearchResult) => {
+    setIgdbSelectionLoadingId(result.id);
+    setIgdbError(null);
     try {
-      const detail = await fetchRawgDetailMetadata(result.id);
+      const detail = await fetchIgdbDetailMetadata(result.id);
       const screenshotList = (detail.gallery ?? [])
         .map((shot) => shot?.url?.trim())
         .filter((url): url is string => Boolean(url));
@@ -1032,7 +1032,7 @@ export default function GamesPage() {
         const nextScreenshots = screenshotList.length ? screenshotList.join("\n") : prev.screenshotUrls;
         const nextFolder = prev.folderPath || result.platforms[0]?.slug || "";
         const nextFormat = editingGame ? prev.format : "digital";
-        const nextSource = prev.source || "RAWG";
+        const nextSource = prev.source || "IGDB";
         const nextNotesValue = nextNotes || prev.notes;
         return {
           ...prev,
@@ -1046,7 +1046,7 @@ export default function GamesPage() {
           folderPath: nextFolder,
           tags: nextTags,
           rating: ratingString || prev.rating,
-          rawgId: String(detail.id ?? result.id),
+          igdbId: String(detail.id ?? result.id),
           coverImage: nextCover,
           heroImage: nextHero,
           screenshotUrls: nextScreenshots,
@@ -1055,19 +1055,19 @@ export default function GamesPage() {
       });
     } catch (error) {
       console.error(error);
-      setRawgError(error instanceof Error ? error.message : "Tidak dapat menerapkan metadata RAWG.");
+      setIgdbError(error instanceof Error ? error.message : "Tidak dapat menerapkan metadata IGDB.");
     } finally {
-      setRawgSelectionLoadingId(null);
+      setIgdbSelectionLoadingId(null);
     }
   };
 
-  const rawgCurrentPage = rawgPagination.page > 0 ? rawgPagination.page : rawgPage;
-  const rawgTotalPages = Math.max(
+  const igdbCurrentPage = igdbPagination.page > 0 ? igdbPagination.page : igdbPage;
+  const igdbTotalPages = Math.max(
     1,
-    Math.ceil(Math.max(rawgPagination.total, rawgResults.length) / Math.max(rawgPagination.pageSize, 1)),
+    Math.ceil(Math.max(igdbPagination.total, igdbResults.length) / Math.max(igdbPagination.pageSize, 1)),
   );
-  const rawgCanGoPrevious = rawgPagination.hasPreviousPage || rawgCurrentPage > 1;
-  const rawgCanGoNext = rawgPagination.hasNextPage || rawgCurrentPage < rawgTotalPages;
+  const igdbCanGoPrevious = igdbPagination.hasPreviousPage || igdbCurrentPage > 1;
+  const igdbCanGoNext = igdbPagination.hasNextPage || igdbCurrentPage < igdbTotalPages;
 
   return (
     <div className="space-y-6">
@@ -1345,7 +1345,7 @@ export default function GamesPage() {
         onClose={() => {
           setIsModalOpen(false);
           clearDraftGame();
-          resetRawgSearch();
+          resetIgdbSearch();
         }}
         size="lg"
         footer={
@@ -1355,7 +1355,7 @@ export default function GamesPage() {
               onClick={() => {
                 setIsModalOpen(false);
                 clearDraftGame();
-                resetRawgSearch();
+                resetIgdbSearch();
               }}
               className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:text-white dark:focus-visible:ring-offset-slate-900"
             >
@@ -1374,26 +1374,26 @@ export default function GamesPage() {
         <div className="space-y-6">
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Cari metadata RAWG</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Cari metadata IGDB</h3>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                Temukan game di RAWG untuk mengisi otomatis judul, platform, cover art, dan screenshot sebelum menyimpan.
+                Temukan game di IGDB untuk mengisi otomatis judul, platform, cover art, dan screenshot sebelum menyimpan.
               </p>
             </div>
             <form
-              onSubmit={handleRawgSearchSubmit}
+              onSubmit={handleIgdbSearchSubmit}
               className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto]"
             >
               <div className="relative min-w-0">
-                <label htmlFor="library-rawg-query" className="sr-only">
-                  Cari game di RAWG
+                <label htmlFor="library-igdb-query" className="sr-only">
+                  Cari game di IGDB
                 </label>
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
-                  id="library-rawg-query"
-                  value={rawgQuery}
+                  id="library-igdb-query"
+                  value={igdbQuery}
                   onChange={(event) => {
-                    setRawgQuery(event.target.value);
-                    if (rawgError) setRawgError(null);
+                    setIgdbQuery(event.target.value);
+                    if (igdbError) setIgdbError(null);
                   }}
                   placeholder="Cari judul game (contoh: Shenmue)"
                   className="w-full rounded-xl border border-slate-200 bg-white/95 py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
@@ -1401,39 +1401,39 @@ export default function GamesPage() {
               </div>
               <div className="space-y-2">
                 <label
-                  htmlFor="library-rawg-platform"
+                  htmlFor="library-igdb-platform"
                   className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300"
                 >
                   Console / platform
                 </label>
                 <select
-                  id="library-rawg-platform"
-                  value={rawgPlatform}
-                  onChange={(event) => setRawgPlatform(event.target.value)}
+                  id="library-igdb-platform"
+                  value={igdbPlatform}
+                  onChange={(event) => setGamePlatform(event.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                  aria-busy={rawgPlatformLoading}
+                  aria-busy={igdbPlatformLoading}
                 >
                   <option value="all">Semua platform</option>
-                  {filteredRawgPlatforms.length ? (
-                    filteredRawgPlatforms.slice(0, 60).map((platform) => (
+                  {filteredGamePlatforms.length ? (
+                    filteredGamePlatforms.slice(0, 60).map((platform) => (
                       <option key={platform.id} value={String(platform.id)}>
                         {platform.name}
                       </option>
                     ))
                   ) : (
                     <option value="empty" disabled>
-                      {rawgPlatformLoading ? "Memuat daftar platform..." : "Platform tidak ditemukan"}
+                      {igdbPlatformLoading ? "Memuat daftar platform..." : "Platform tidak ditemukan"}
                     </option>
                   )}
                 </select>
-                {rawgPlatformLoading ? (
+                {igdbPlatformLoading ? (
                   <p className="text-xs text-slate-500 dark:text-slate-400">Memuat daftar platform terbaru...</p>
                 ) : null}
                 <input
-                  id="library-rawg-platform-filter"
+                  id="library-igdb-platform-filter"
                   type="search"
-                  value={rawgPlatformSearch}
-                  onChange={(event) => setRawgPlatformSearch(event.target.value)}
+                  value={igdbPlatformSearch}
+                  onChange={(event) => setGamePlatformSearch(event.target.value)}
                   placeholder="Filter nama console"
                   className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                 />
@@ -1445,9 +1445,9 @@ export default function GamesPage() {
                 <Search className="mr-2 h-4 w-4" aria-hidden="true" /> Cari
               </button>
             </form>
-            {rawgPlatformError ? (
+            {igdbPlatformError ? (
               <div className="flex flex-wrap items-center gap-2 text-xs text-rose-600 dark:text-rose-300">
-                <span>{rawgPlatformError}</span>
+                <span>{igdbPlatformError}</span>
                 <button
                   type="button"
                   onClick={retryPlatformLoad}
@@ -1457,18 +1457,18 @@ export default function GamesPage() {
                 </button>
               </div>
             ) : null}
-            {rawgError ? (
-              <p className="text-xs text-rose-600 dark:text-rose-300">{rawgError}</p>
+            {igdbError ? (
+              <p className="text-xs text-rose-600 dark:text-rose-300">{igdbError}</p>
             ) : null}
-            {rawgLoading ? (
+            {igdbLoading ? (
               <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Mengambil hasil dari RAWG...
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Mengambil hasil dari IGDB...
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
-              {rawgResults.map((game) => {
+              {igdbResults.map((game) => {
                 const releaseLabel = game.releaseYear ? `Rilis ${game.releaseYear}` : "Tahun rilis tidak diketahui";
-                const isApplying = rawgSelectionLoadingId === game.id;
+                const isApplying = igdbSelectionLoadingId === game.id;
                 const ratingLabel =
                   typeof game.rating === "number" && !Number.isNaN(game.rating)
                     ? game.rating.toFixed(1)
@@ -1516,7 +1516,7 @@ export default function GamesPage() {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => handleApplyRawgResult(game)}
+                        onClick={() => handleApplyIgdbResult(game)}
                         disabled={isApplying}
                         aria-busy={isApplying}
                         className={`inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition ${
@@ -1533,26 +1533,26 @@ export default function GamesPage() {
                 );
               })}
             </div>
-            {rawgHasSearched && !rawgLoading && rawgResults.length === 0 ? (
+            {igdbHasSearched && !igdbLoading && igdbResults.length === 0 ? (
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tidak ada hasil untuk pencarian ini. Coba judul lain atau pilih console yang berbeda.
               </p>
             ) : null}
-            {rawgHasSearched && (rawgPagination.total > rawgPagination.pageSize || rawgCanGoNext || rawgCanGoPrevious) ? (
+            {igdbHasSearched && (igdbPagination.total > igdbPagination.pageSize || igdbCanGoNext || igdbCanGoPrevious) ? (
               <nav
-                aria-label="Paginasi pencarian RAWG"
+                aria-label="Paginasi pencarian IGDB"
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/70 p-3 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300"
               >
                 <span>
-                  Halaman {rawgCurrentPage} dari {rawgTotalPages}
+                  Halaman {igdbCurrentPage} dari {igdbTotalPages}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleRawgPageChange("previous")}
-                    disabled={!rawgCanGoPrevious}
+                    onClick={() => handleIgdbPageChange("previous")}
+                    disabled={!igdbCanGoPrevious}
                     className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
-                      !rawgCanGoPrevious
+                      !igdbCanGoPrevious
                         ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
                         : "border-slate-300 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                     }`}
@@ -1561,10 +1561,10 @@ export default function GamesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleRawgPageChange("next")}
-                    disabled={!rawgCanGoNext}
+                    onClick={() => handleIgdbPageChange("next")}
+                    disabled={!igdbCanGoNext}
                     className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 font-semibold transition ${
-                      !rawgCanGoNext
+                      !igdbCanGoNext
                         ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-500"
                         : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100"
                     }`}
@@ -1612,7 +1612,7 @@ function convertGameToForm(game: Game): GameFormState {
     notes: game.notes ?? "",
     favorite: Boolean(game.favorite),
     wishlist: Boolean(game.wishlist),
-    rawgId: game.rawgId ? String(game.rawgId) : "",
+    igdbId: game.igdbId ? String(game.igdbId) : "",
     coverImage: game.coverImage ?? "",
     heroImage: game.heroImage ?? "",
     screenshotUrls: (game.screenshotUrls ?? []).join("\n"),
@@ -1639,7 +1639,7 @@ function convertDraftToForm(draft: NonNullable<GameDraft>): Partial<GameFormStat
     notes: draft.notes ?? "",
     favorite: Boolean(draft.favorite),
     wishlist: Boolean(draft.wishlist),
-    rawgId: draft.rawgId !== undefined && draft.rawgId !== null ? String(draft.rawgId) : "",
+    igdbId: draft.igdbId !== undefined && draft.igdbId !== null ? String(draft.igdbId) : "",
     coverImage: draft.coverImage ?? "",
     heroImage: draft.heroImage ?? "",
     screenshotUrls: draft.screenshotUrls ? draft.screenshotUrls.join("\n") : "",

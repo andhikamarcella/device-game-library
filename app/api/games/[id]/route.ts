@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGameDetails, getGameScreenshots, getGameReviews } from "@/lib/rawg";
+import { getGameDetails, getGameScreenshots, getGameReviews } from "@/lib/gameData";
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const id = Number.parseInt(params.id, 10);
@@ -50,7 +50,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           text,
           rating: Number.isFinite(parsedRating) ? parsedRating : null,
           createdAt: review.created ?? null,
-          author: review.user?.username ?? "RAWG user",
+          author: review.user?.username ?? "IGDB user",
         };
       })
       .filter((review): review is NonNullable<typeof review> => Boolean(review));
@@ -75,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("RAWG detail error", error);
+    console.error("IGDB detail error", error);
     const message = error instanceof Error ? error.message : "Unable to load game details.";
     const status = message.includes("404") ? 404 : 500;
     return NextResponse.json({ error: status === 404 ? "Game not found." : message }, { status });

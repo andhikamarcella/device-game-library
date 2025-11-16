@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#10b981",
-  "description": "Track your personal game collection with RAWG & YouTube integrations.",
+  "description": "Track your personal game collection with IGDB & YouTube integrations.",
   "icons": [
     {
       "src": "/logo.svg",

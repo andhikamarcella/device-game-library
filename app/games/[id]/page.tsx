@@ -9,13 +9,13 @@ import {
   getSimilarGamesForGame,
   getGameAchievements,
   getGameSeriesEntries,
-  type RawgAchievement,
-  type RawgGameDetails,
-  type RawgMovie,
-  type RawgRelatedGame,
-  type RawgScreenshot,
-  type RawgSimilarGame,
-} from "@/lib/rawg";
+  type GameAchievement,
+  type GameDetailsPayload,
+  type GameTrailer,
+  type GameRelatedGame,
+  type GameScreenshot,
+  type GameSimilarEntry,
+} from "@/lib/gameData";
 
 export const revalidate = 300;
 
@@ -39,7 +39,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     notFound();
   }
 
-  let game: RawgGameDetails;
+  let game: GameDetailsPayload;
 
   try {
     game = await getGameDetails(id);
@@ -56,11 +56,11 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const reviewsPromise = getGameReviews(id, 1, 6).catch(
     () => [] as Awaited<ReturnType<typeof getGameReviews>>,
   );
-  const trailersPromise = getGameTrailers(id).catch(() => [] as RawgMovie[]);
-  const similarPromise = getSimilarGamesForGame(id).catch(() => [] as RawgSimilarGame[]);
-  const achievementsPromise = getGameAchievements(id, 20).catch(() => [] as RawgAchievement[]);
-  const additionsPromise = getGameAdditions(id, 12).catch(() => [] as RawgRelatedGame[]);
-  const seriesPromise = getGameSeriesEntries(id, 12).catch(() => [] as RawgRelatedGame[]);
+  const trailersPromise = getGameTrailers(id).catch(() => [] as GameTrailer[]);
+  const similarPromise = getSimilarGamesForGame(id).catch(() => [] as GameSimilarEntry[]);
+  const achievementsPromise = getGameAchievements(id, 20).catch(() => [] as GameAchievement[]);
+  const additionsPromise = getGameAdditions(id, 12).catch(() => [] as GameRelatedGame[]);
+  const seriesPromise = getGameSeriesEntries(id, 12).catch(() => [] as GameRelatedGame[]);
   const [screenshots, reviews, trailers, similarGames, achievements, additions, seriesEntries] = await Promise.all([
     screenshotsPromise,
     reviewsPromise,
@@ -83,7 +83,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
     }
   });
 
-  const gallery: RawgScreenshot[] = Array.from(screenshotMap.values());
+  const gallery: GameScreenshot[] = Array.from(screenshotMap.values());
 
   const cleanedReviews: GameReview[] = reviews
     .map((review) => {
@@ -101,7 +101,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
         text,
         rating: Number.isFinite(parsedRating) ? parsedRating : null,
         createdAt: review.created ?? null,
-        author: review.user?.username ?? "RAWG user",
+        author: review.user?.username ?? "IGDB user",
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))

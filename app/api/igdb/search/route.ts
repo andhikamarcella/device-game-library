@@ -1,42 +1,6 @@
 import { NextResponse } from "next/server";
-import { pickBestRawgImage } from "@/lib/images";
-import { fetchFromRawg } from "@/lib/server/rawgClient";
-
-type RawgGenre = {
-  id: number;
-  name: string;
-  slug: string;
-};
-
-type RawgPlatform = {
-  platform: {
-    id: number;
-    name: string;
-    slug: string;
-  };
-};
-
-type RawgSearchGame = {
-  id: number;
-  slug: string;
-  name: string;
-  background_image: string | null;
-  background_image_additional: string | null;
-  rating: number | null;
-  released: string | null;
-  playtime: number | null;
-  genres: RawgGenre[];
-  platforms: RawgPlatform[];
-  parent_platforms?: RawgPlatform[];
-  short_screenshots?: Array<{ id: number; image: string | null }>;
-};
-
-type RawgSearchResponse = {
-  results: RawgSearchGame[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-};
+import { pickBestImage } from "@/lib/images";
+import { searchGames } from "@/lib/gameData";
 
 const PAGE_SIZE = 5;
 
@@ -52,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const data = await fetchFromRawg<RawgSearchResponse>("/games", {
+    const data = await searchGames({
       search: query,
       page: normalizedPage,
       page_size: PAGE_SIZE,
@@ -60,7 +24,7 @@ export async function GET(request: Request) {
 
     const results = data.results.map((game) => {
       const coverImage =
-        pickBestRawgImage([
+        pickBestImage([
           game.background_image,
           game.background_image_additional,
           ...(game.short_screenshots?.map((shot) => shot.image) ?? []),
@@ -68,11 +32,11 @@ export async function GET(request: Request) {
 
       return {
         id: game.id,
-        slug: game.slug,
+        slug: game.slug ?? game.id.toString(),
         name: game.name,
         background_image: coverImage,
         rating: game.rating,
-        genres: game.genres?.map((genre) => ({ id: genre.id, name: genre.name, slug: genre.slug })) ?? [],
+        genres: game.genres ?? [],
         platforms: game.platforms ?? [],
         parent_platforms: game.parent_platforms ?? [],
         playtime: game.playtime ?? 0,
@@ -86,13 +50,13 @@ export async function GET(request: Request) {
         total: data.count,
         page: normalizedPage,
         pageSize: PAGE_SIZE,
-        hasNextPage: Boolean(data.next),
-        hasPreviousPage: Boolean(data.previous) || normalizedPage > 1,
+        hasNextPage: data.next !== null,
+        hasPreviousPage: data.previous !== null || normalizedPage > 1,
       },
     });
   } catch (error) {
-    console.error("RAWG search error", error);
-    const message = error instanceof Error ? error.message : "Unable to search RAWG.";
+    console.error("IGDB search error", error);
+    const message = error instanceof Error ? error.message : "Unable to search IGDB.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

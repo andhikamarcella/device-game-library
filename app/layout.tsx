@@ -77,7 +77,7 @@ export const metadata: Metadata = {
     template: "%s | Device & Game Library Tracker",
   },
   description:
-    "Kelola koleksi perangkat dan game kamu dengan metadata RAWG, wishlist, dan cadangan lokal yang aman.",
+    "Kelola koleksi perangkat dan game kamu dengan metadata IGDB, wishlist, dan cadangan lokal yang aman.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.svg",
@@ -87,7 +87,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Device & Game Library Tracker",
     description:
-      "Pantau backlog, wishlist, dan metadata game dari RAWG langsung dari browser kamu.",
+      "Pantau backlog, wishlist, dan metadata game dari IGDB langsung dari browser kamu.",
     url: "https://device-game-library.vercel.app/",
     siteName: "Device & Game Library Tracker",
     type: "website",
@@ -104,7 +104,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Device & Game Library Tracker",
     description:
-      "Cari metadata game RAWG, simpan wishlist, dan catat kemajuan bermainmu di satu tempat.",
+      "Cari metadata game IGDB, simpan wishlist, dan catat kemajuan bermainmu di satu tempat.",
     images: ["/og-image.svg"],
   },
 };
