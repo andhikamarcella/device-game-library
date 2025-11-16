@@ -1,79 +1,132 @@
-import { NextResponse } from "next/server";
-import { buildIgdbImageUrl, type IgdbSearchParams, searchIgdbGames } from "@/lib/igdb";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q")?.trim() ?? "";
-  const pageParam = searchParams.get("page");
-  const page = pageParam ? Number.parseInt(pageParam, 10) || 1 : 1;
-  const platformParam = searchParams.get("platform");
-  const platformId = platformParam ? Number.parseInt(platformParam, 10) : undefined;
-  const pageSizeParam = searchParams.get("pageSize");
-  const ordering = searchParams.get("ordering") ?? undefined;
-  const pageSizeCandidate = pageSizeParam ? Number.parseInt(pageSizeParam, 10) : undefined;
-  const pageSize = pageSizeCandidate && pageSizeCandidate > 0 ? Math.min(pageSizeCandidate, 40) : 5;
-  const normalizedPlatformId =
-    typeof platformId === "number" && Number.isFinite(platformId) ? platformId : undefined;
+export const dynamic = "force-dynamic";
 
-  if (!query && !platformId) {
+type TwitchTokenResponse = {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+};
+
+let cachedToken: string | null = null;
+let cachedTokenExpiresAt = 0;
+
+async function getTwitchAccessToken(): Promise<string> {
+  const clientId = process.env.TWITCH_CLIENT_ID;
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error("Missing Twitch credentials", { hasClientId: !!clientId, hasClientSecret: !!clientSecret });
+    throw new Error("Missing Twitch credentials");
+  }
+
+  const now = Date.now();
+  if (cachedToken && cachedTokenExpiresAt > now + 60_000) {
+    return cachedToken;
+  }
+
+  const params = new URLSearchParams();
+  params.set("client_id", clientId);
+  params.set("client_secret", clientSecret);
+  params.set("grant_type", "client_credentials");
+
+  const response = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("Twitch token error", response.status, text);
+    throw new Error(`Failed to fetch Twitch token: ${response.status}`);
+  }
+
+  const data = (await response.json()) as TwitchTokenResponse;
+  if (!data.access_token) {
+    console.error("Twitch token response missing access_token", data);
+    throw new Error("Invalid Twitch token response");
+  }
+
+  cachedToken = data.access_token;
+  cachedTokenExpiresAt = now + data.expires_in * 1000;
+  return cachedToken;
+}
+
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const q = url.searchParams.get("q")?.trim() || "";
+  const platformId = url.searchParams.get("platformId")?.trim() || null;
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+
+  const igdbBaseUrl = process.env.IGDB_BASE_URL;
+  const twitchClientId = process.env.TWITCH_CLIENT_ID;
+
+  if (!igdbBaseUrl || !twitchClientId) {
+    console.error("Missing IGDB/Twitch env vars", { igdbBaseUrl, twitchClientId });
+    return NextResponse.json({ error: "Server IGDB configuration error" }, { status: 500 });
+  }
+
+  const accessToken = await getTwitchAccessToken();
+
+  const limit = Math.min(parseInt(limitParam || "20", 10) || 20, 50);
+  const offset = parseInt(offsetParam || "0", 10) || 0;
+  const escapedQ = q.replace(/"/g, '\\"');
+
+  const queryParts: string[] = [];
+  if (escapedQ.length > 0) {
+    queryParts.push(`search "${escapedQ}";`);
+  }
+
+  if (platformId) {
+    queryParts.push(`where platforms = (${platformId});`);
+  }
+
+  queryParts.push(
+    "fields id,name,slug,first_release_date,summary,cover.image_id,platforms.id,platforms.name;",
+    `limit ${limit};`,
+    `offset ${offset};`,
+  );
+
+  const igdbQuery = queryParts.join("\n");
+
+  const response = await fetch(`${igdbBaseUrl}/games`, {
+    method: "POST",
+    headers: {
+      "Client-ID": twitchClientId,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "text/plain",
+    },
+    body: igdbQuery,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("IGDB search error", {
+      status: response.status,
+      statusText: response.statusText,
+      body: text,
+    });
+
     return NextResponse.json(
-      { error: "Provide a search term or choose a console to browse games." },
-      { status: 400 },
+      {
+        error: "IGDB search failed",
+        status: response.status,
+        statusText: response.statusText,
+        details: text,
+      },
+      {
+        status:
+          response.status === 400 || response.status === 404 || response.status === 403
+            ? response.status
+            : 500,
+      },
     );
   }
 
-  try {
-    const searchParamsPayload: IgdbSearchParams = {
-      search: query || undefined,
-      ordering: ordering ?? (query ? "-rating" : "-added"),
-      platforms: normalizedPlatformId ? String(normalizedPlatformId) : undefined,
-      page,
-      page_size: pageSize,
-    };
-
-    const games = await searchIgdbGames(searchParamsPayload);
-    const results = games.results.map((game) => {
-      const releaseYearValue = game.first_release_date
-        ? new Date(game.first_release_date * 1000).getFullYear()
-        : null;
-      const releaseYear =
-        typeof releaseYearValue === "number" && Number.isFinite(releaseYearValue)
-          ? releaseYearValue
-          : null;
-      return {
-        id: game.id,
-        name: game.name,
-        coverImage: game.cover?.image_id ? buildIgdbImageUrl(game.cover.image_id, "cover_big") : null,
-        releaseYear,
-        rating: typeof game.total_rating === "number" ? game.total_rating : null,
-        ratingsCount: game.total_rating_count ?? 0,
-        platforms: (game.platforms ?? [])
-          .map((platform) => ({
-            id: platform.id,
-            name: platform.name ?? "Unknown",
-            slug:
-              platform.abbreviation?.toLowerCase() ??
-              platform.name?.toLowerCase().replace(/\s+/g, "-") ??
-              String(platform.id),
-          }))
-          .filter((platform) => Boolean(platform.name)),
-      };
-    });
-
-    return NextResponse.json({
-      results,
-      pagination: {
-        total: games.total,
-        page,
-        pageSize,
-        hasNextPage: page * games.pageSize < games.total,
-        hasPreviousPage: page > 1,
-      },
-    });
-  } catch (error) {
-    console.error("IGDB search error", error);
-    const message = error instanceof Error ? error.message : "Unable to search games.";
-    const status = message.toLowerCase().includes("provide a search term") ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
-  }
+  const data = await response.json();
+  return NextResponse.json(data, { status: 200 });
 }
