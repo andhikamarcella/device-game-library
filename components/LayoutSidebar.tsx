@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Gamepad2, Monitor, Settings, X } from "lucide-react";
+import { LayoutDashboard, Gamepad2, LibraryBig, Monitor, Settings, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Library", href: "/library", icon: LibraryBig },
   { name: "Games", href: "/games", icon: Gamepad2 },
   { name: "Devices", href: "/devices", icon: Monitor },
   { name: "Settings", href: "/settings", icon: Settings },
