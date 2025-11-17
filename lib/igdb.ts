@@ -170,6 +170,21 @@ export interface IgdbVideo {
   video_id: string;
 }
 
+export interface IgdbAchievementIcon {
+  id?: number;
+  image_id?: string | null;
+}
+
+export interface IgdbAchievement {
+  id: number;
+  name?: string | null;
+  description?: string | null;
+  instructions?: string | null;
+  achievement_icon?: IgdbAchievementIcon | null;
+  locked_icon?: IgdbAchievementIcon | null;
+  unlocked_icon?: IgdbAchievementIcon | null;
+}
+
 export interface IgdbCompanyRef {
   id: number;
   company?: {
@@ -599,6 +614,32 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
   } catch (error) {
     if (error instanceof IgdbRequestError && error.status === 404) {
       return null;
+    }
+    throw error;
+  }
+}
+
+export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise<IgdbAchievement[]> {
+  const safeLimit = Math.max(limit, 1);
+  const query = `
+    fields
+      id,
+      name,
+      description,
+      instructions,
+      achievement_icon.image_id,
+      locked_icon.image_id,
+      unlocked_icon.image_id;
+    where game = ${gameId};
+    limit ${safeLimit};
+  `;
+
+  try {
+    const data = await igdbRequest<IgdbAchievement[]>("achievements", query);
+    return data ?? [];
+  } catch (error) {
+    if (error instanceof IgdbRequestError && error.status === 404) {
+      return [];
     }
     throw error;
   }

@@ -2,10 +2,12 @@ import {
   buildIgdbImageUrl,
   getIgdbGameDetails,
   getIgdbImageUrl,
+  fetchIgdbAchievements,
   resolveIgdbImage,
   searchIgdbGames as searchIgdbGamesInternal,
   searchIgdbPlatforms as searchIgdbPlatformsInternal,
   type IgdbGame,
+  type IgdbAchievement,
   type IgdbGameDetails,
   type IgdbImageAsset,
   type IgdbPlatformRef,
@@ -297,8 +299,23 @@ export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
   return mapVideos(details.videos, details.name);
 }
 
-export async function getGameAchievements(_id: number, _pageSize = 10): Promise<GameAchievement[]> {
-  return [];
+function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
+  return entries.map((entry) => {
+    const imageId =
+      entry.unlocked_icon?.image_id || entry.locked_icon?.image_id || entry.achievement_icon?.image_id || null;
+    return {
+      id: entry.id,
+      name: entry.name || "Unknown achievement",
+      description: entry.description || entry.instructions || null,
+      image: imageId ? buildIgdbImageUrl(imageId, "cover_small") : null,
+      percent: null,
+    } satisfies GameAchievement;
+  });
+}
+
+export async function getGameAchievements(id: number, pageSize = 10): Promise<GameAchievement[]> {
+  const results = await fetchIgdbAchievements(id, pageSize);
+  return mapAchievements(results);
 }
 
 export async function getGameAdditions(id: number, pageSize = 6): Promise<GameRelatedGame[]> {
