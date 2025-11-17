@@ -6,6 +6,10 @@ export type GameTrailerSource =
   | { type: "external"; title: string; youtubeId: string; thumbnailUrl: string }
   | { type: "none" };
 
+function hasYoutubeId(source: GameTrailerSource): source is Extract<GameTrailerSource, { youtubeId: string }> {
+  return "youtubeId" in source && typeof source.youtubeId === "string" && !!source.youtubeId;
+}
+
 const YOUTUBE_ID_PATTERNS = [
   /youtu\.be\/([^?&#/]+)/i,
   /youtube\.com\/(?:watch\?.*v=|embed\/|v\/)([^?&#/]+)/i,
@@ -174,14 +178,14 @@ export function collectIgdbVideos(game: GameDetailsPayload): GameTrailerSource[]
 
   const movieSources = collectAllMovieSources(game.movies, title);
   if (movieSources.length) {
-    const seen = new Set<string>(sources.map((entry) => entry.youtubeId));
+    const seen = new Set<string>(sources.filter(hasYoutubeId).map((entry) => entry.youtubeId));
     for (const movie of movieSources) {
-      if (!seen.has(movie.youtubeId)) {
+      if (hasYoutubeId(movie) && !seen.has(movie.youtubeId)) {
         sources.push(movie);
         seen.add(movie.youtubeId);
       }
     }
   }
 
-  return sources;
+  return sources.filter(hasYoutubeId);
 }
