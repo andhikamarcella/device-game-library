@@ -368,8 +368,10 @@ export default function DashboardPage() {
             const ratingsCount = typeof result.ratingsCount === "number"
               ? result.ratingsCount
               : typeof (result as { rating_count?: number | null } | null)?.rating_count === "number"
-                ? (result as { rating_count: number }).rating_count
-                : (result as { total_rating_count?: number | null } | null)?.total_rating_count ?? null;
+                ? (result as { rating_count?: number | null } | null)?.rating_count ?? 0
+                : typeof (result as { total_rating_count?: number | null } | null)?.total_rating_count === "number"
+                  ? (result as { total_rating_count?: number | null } | null)?.total_rating_count ?? 0
+                  : 0;
 
             return {
               ...result,
