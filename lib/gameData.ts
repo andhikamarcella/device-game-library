@@ -73,6 +73,8 @@ export type GameStore = {
 export type GameSummary = {
   id: number;
   slug?: string | null;
+  rawgId?: number | null;
+  rawgSlug?: string | null;
   name: string;
   cover?: { image_id?: string | null } | null;
   background_image: string | null;
@@ -645,6 +647,8 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   return {
     id: game.id,
     slug: game.slug ?? slugify(game.name),
+    rawgId: null,
+    rawgSlug: null,
     name: game.name,
     cover: game.cover ?? null,
     background_image: cover,

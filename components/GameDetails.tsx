@@ -23,6 +23,7 @@ import PlatformChips from "@/components/PlatformChips";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
 import { AchievementsList } from "@/components/game/AchievementsList";
+import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
 import {
@@ -230,6 +231,7 @@ export function GameDetails({
   const directPlatforms = game.platforms ?? [];
   const availablePlatformEntries = (directPlatforms.length ? directPlatforms : parentPlatforms) ?? [];
   const availablePlatforms = normalizePlatformList(availablePlatformEntries);
+  const rawgIdentifier = game.rawgId ?? game.rawgSlug ?? null;
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -623,6 +625,8 @@ export function GameDetails({
       ) : null}
 
       <GameTrailerSection game={trailerReadyGame} />
+
+      <RawgAchievementsSection rawgId={rawgIdentifier} />
 
       {trailers.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
