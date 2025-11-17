@@ -701,6 +701,14 @@ export default function DashboardPage() {
             }
             return yearB - yearA;
           }
+          case "igdb_popularity": {
+            const countA = metadataA?.ratingsCount ?? 0;
+            const countB = metadataB?.ratingsCount ?? 0;
+            if (countA === countB) {
+              return a.title.localeCompare(b.title);
+            }
+            return countB - countA;
+          }
           case "igdb_rating": {
             const ratingA = metadataA?.rating ?? -Infinity;
             const ratingB = metadataB?.rating ?? -Infinity;

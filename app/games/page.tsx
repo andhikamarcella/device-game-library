@@ -940,18 +940,17 @@ export default function GamesPage() {
           setIgdbError((data as { error?: string }).error ?? null);
         }
         setIgdbResults(mappedResults);
+        const totalResults = normalizedResults.length;
+        const totalPages = Math.max(1, Math.ceil(totalResults / IGDB_MODAL_PAGE_SIZE));
         const nextPagination = {
-          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
-          page:
-            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : igdbPage,
-          pageSize:
-            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
-              ? data.pagination.pageSize
-              : IGDB_MODAL_PAGE_SIZE,
-          hasNextPage: Boolean(data?.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+          total: totalResults,
+          page: 1,
+          pageSize: IGDB_MODAL_PAGE_SIZE,
+          hasNextPage: totalPages > 1,
+          hasPreviousPage: false,
         };
         setIgdbPagination(nextPagination);
+        setIgdbPage(1);
       })
       .catch((error) => {
         if (error.name === "AbortError") {
@@ -973,7 +972,7 @@ export default function GamesPage() {
       });
 
     return () => controller.abort();
-  }, [isModalOpen, igdbHasSearched, igdbCommittedQuery, igdbCommittedPlatform, igdbPage, igdbSortOrder]);
+  }, [isModalOpen, igdbHasSearched, igdbCommittedQuery, igdbCommittedPlatform, igdbSortOrder]);
 
   useEffect(() => {
     setIgdbPage(1);
@@ -1145,7 +1144,7 @@ export default function GamesPage() {
       if (direction === "previous") {
         return Math.max(1, prev - 1);
       }
-      return prev + 1;
+      return Math.min(prev + 1, igdbTotalPages);
     });
   };
 
@@ -1243,15 +1242,26 @@ export default function GamesPage() {
     }
   };
 
-  const igdbCurrentPage = igdbPagination.page > 0 ? igdbPagination.page : igdbPage;
   const safeIgdbResults = Array.isArray(igdbResults) ? igdbResults : [];
-  const igdbPageSizeValue = Math.max(igdbPagination.pageSize, 1);
-  const igdbTotalPages = Math.max(
-    1,
-    Math.ceil(Math.max(igdbPagination.total, safeIgdbResults.length) / igdbPageSizeValue),
+  const igdbPageSizeValue = IGDB_MODAL_PAGE_SIZE;
+  const igdbTotalPages = Math.max(1, Math.ceil(safeIgdbResults.length / igdbPageSizeValue));
+  const igdbCurrentPage = Math.min(Math.max(igdbPage, 1), igdbTotalPages);
+  const igdbPaginatedResults = safeIgdbResults.slice(
+    (igdbCurrentPage - 1) * igdbPageSizeValue,
+    igdbCurrentPage * igdbPageSizeValue,
   );
-  const igdbCanGoPrevious = igdbPagination.hasPreviousPage || igdbCurrentPage > 1;
-  const igdbCanGoNext = igdbPagination.hasNextPage || igdbCurrentPage < igdbTotalPages;
+  const igdbCanGoPrevious = igdbCurrentPage > 1;
+  const igdbCanGoNext = igdbCurrentPage < igdbTotalPages;
+
+  useEffect(() => {
+    setIgdbPagination({
+      total: safeIgdbResults.length,
+      page: igdbCurrentPage,
+      pageSize: igdbPageSizeValue,
+      hasNextPage: igdbCanGoNext,
+      hasPreviousPage: igdbCanGoPrevious,
+    });
+  }, [igdbCanGoNext, igdbCanGoPrevious, igdbCurrentPage, igdbPageSizeValue, safeIgdbResults.length]);
 
   useEffect(() => {
     setIgdbPageInput(String(igdbCurrentPage));
@@ -1689,7 +1699,7 @@ export default function GamesPage() {
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {safeIgdbResults.map((game) => {
+            {igdbPaginatedResults.map((game) => {
                 const isApplying = igdbSelectionLoadingId === game.id;
                 const coverImageId = game.coverImageId ?? game.cover?.image_id ?? null;
                 const coverUrl = getResultCover(game);
@@ -1725,7 +1735,7 @@ export default function GamesPage() {
                 Tidak ada hasil untuk pencarian ini. Coba judul lain atau pilih console yang berbeda.
               </p>
             ) : null}
-            {igdbHasSearched && (igdbPagination.total > igdbPagination.pageSize || igdbCanGoNext || igdbCanGoPrevious) ? (
+            {igdbHasSearched && (safeIgdbResults.length > igdbPageSizeValue || igdbCanGoNext || igdbCanGoPrevious) ? (
               <nav
                 aria-label="Paginasi pencarian IGDB"
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/70 p-3 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300"
