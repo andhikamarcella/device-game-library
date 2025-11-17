@@ -644,11 +644,12 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const screenshots = mapScreenshots(game.screenshots);
   const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
   const secondaryImage = screenshots[1]?.image ?? cover;
+  const slug = game.slug ?? slugify(game.name);
   return {
     id: game.id,
-    slug: game.slug ?? slugify(game.name),
+    slug,
     rawgId: null,
-    rawgSlug: null,
+    rawgSlug: slug,
     name: game.name,
     cover: game.cover ?? null,
     background_image: cover,

@@ -13,7 +13,6 @@ import {
   Star,
   Store,
   Tag,
-  Trophy,
   Users,
   Video,
 } from "lucide-react";
@@ -22,12 +21,10 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
-import { AchievementsList } from "@/components/game/AchievementsList";
 import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
 import {
-  type GameAchievement,
   type GameDetailsPayload,
   type GameParentPlatform,
   type GamePlatform,
@@ -60,7 +57,6 @@ interface GameDetailsProps {
   reviews: GameReview[];
   trailers: GameTrailer[];
   similarGames: GameSimilarEntry[];
-  achievements: GameAchievement[];
   additions: GameRelatedGame[];
   series: GameRelatedGame[];
 }
@@ -217,7 +213,6 @@ export function GameDetails({
   reviews,
   trailers,
   similarGames,
-  achievements,
   additions,
   series,
 }: GameDetailsProps) {
@@ -231,7 +226,7 @@ export function GameDetails({
   const directPlatforms = game.platforms ?? [];
   const availablePlatformEntries = (directPlatforms.length ? directPlatforms : parentPlatforms) ?? [];
   const availablePlatforms = normalizePlatformList(availablePlatformEntries);
-  const rawgIdentifier = game.rawgId ?? game.rawgSlug ?? null;
+  const rawgIdentifier = game.rawgId ?? game.rawgSlug ?? game.slug ?? null;
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -651,14 +646,6 @@ export function GameDetails({
           </div>
         </section>
       ) : null}
-
-      <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-          <Trophy className="h-4 w-4" aria-hidden="true" />
-          <h2 className="text-sm font-semibold uppercase tracking-widest">Achievements</h2>
-        </div>
-        <AchievementsList achievements={achievements} gameTitle={game.name} />
-      </section>
 
       {additionEntries.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
