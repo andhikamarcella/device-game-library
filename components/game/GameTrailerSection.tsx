@@ -5,7 +5,9 @@ import { Play } from "lucide-react";
 import { collectIgdbVideos } from "@/lib/gameMedia";
 import type { GameDetailsPayload } from "@/lib/gameData";
 
-function hasYoutubeId(video: ReturnType<typeof collectIgdbVideos>[number]) {
+type VideoEntry = ReturnType<typeof collectIgdbVideos>[number];
+
+function hasYoutubeId(video: VideoEntry): video is Extract<VideoEntry, { youtubeId: string }> {
   return "youtubeId" in video && typeof video.youtubeId === "string" && video.youtubeId.trim() !== "";
 }
 
