@@ -9,7 +9,7 @@ import { FiltersBar, type SortOption } from "@/components/FiltersBar";
 import { GameStatusControls } from "@/components/GameStatusControls";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
-import { igdbCoverUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl, pickBestImage } from "@/lib/images";
 
 interface SearchResponse {
@@ -52,26 +52,35 @@ const getResultCover = (game: SearchGameResult | null | undefined): string | nul
   if (game.coverImageUrl) {
     return game.coverImageUrl;
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots[0];
-  }
-  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls[0];
-  }
-  return null;
+  const screenshots = getResultScreenshots(game);
+  return screenshots[0] ?? null;
 };
 
 const getResultScreenshots = (game: SearchGameResult | null | undefined): string[] => {
   if (!game) {
     return [];
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots;
+
+  const rawScreens = (game as any)?.screenshots;
+  if (Array.isArray(rawScreens) && rawScreens.length) {
+    const resolved = rawScreens
+      .map((shot: any) => {
+        const id = shot?.image_id ?? null;
+        return id ? igdbScreenshotUrl(id) : typeof shot === "string" ? shot : null;
+      })
+      .filter((url): url is string => Boolean(url));
+    if (resolved.length) {
+      return resolved;
+    }
   }
+
   if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls;
+    return game.screenshotUrls.filter((url): url is string => typeof url === "string");
   }
-  return [];
+
+  return Array.isArray(game.screenshots)
+    ? game.screenshots.filter((url): url is string => typeof url === "string")
+    : [];
 };
 
 type DiscoverSortOption =
@@ -327,11 +336,44 @@ export default function DashboardPage() {
           | null;
         const data = (payload && typeof payload === "object" ? payload : null) as Partial<SearchResponse>;
         if (cancelled) return;
-        const normalizedResults = Array.isArray(data.results)
+        const normalizedResults = (Array.isArray(data.results)
           ? (data.results as SearchGameResult[])
           : Array.isArray((data as any)?.games)
             ? ((data as any).games as SearchGameResult[])
-            : [];
+            : [])
+          .map((result) => {
+            const coverImageId = (result as { cover?: { image_id?: string | null } }).cover?.image_id ?? null;
+            const coverUrl = normalizeImageUrl(
+              igdbCoverUrl(coverImageId) ?? result.coverUrl ?? result.coverImageUrl ?? null,
+            );
+            const screenshots = getResultScreenshots(result);
+            const releaseYear = typeof result.releaseYear === "number"
+              ? result.releaseYear
+              : (result as { first_release_date?: number | null }).first_release_date
+                  ? new Date(
+                      Number((result as { first_release_date?: number | null }).first_release_date) * 1000,
+                    ).getFullYear()
+                  : null;
+            const platforms = Array.isArray(result.platforms)
+              ? result.platforms.map((platform) => ({
+                  id: platform.id,
+                  name: platform.name,
+                  slug: platform.slug ?? platform.name?.toLowerCase() ?? `${platform.id}`,
+                  abbreviation: platform.abbreviation ?? null,
+                }))
+              : [];
+
+            return {
+              ...result,
+              coverUrl,
+              coverImageUrl: coverUrl ?? result.coverImageUrl ?? null,
+              cover: result.cover ?? (coverImageId ? { image_id: coverImageId } : undefined),
+              screenshots,
+              screenshotUrls: screenshots,
+              releaseYear,
+              platforms,
+            } as SearchGameResult;
+          });
         if ((data as { error?: string } | null)?.error) {
           setSearchError((data as { error?: string }).error ?? null);
         }

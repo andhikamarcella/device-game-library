@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
+import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 import { formatDateTime } from "@/lib/utils";
 import { GameStatus, Game } from "@/lib/types";
 
@@ -40,32 +41,86 @@ const getResultCover = (game: SearchResult | null | undefined): string | null =>
   if (!game) {
     return null;
   }
+
+  const coverId = (game as { cover?: { image_id?: string | null } } | null)?.cover?.image_id ?? null;
+  const igdbCover = igdbCoverUrl(coverId);
+  if (igdbCover) {
+    return igdbCover;
+  }
   if (game.coverUrl) {
     return game.coverUrl;
   }
   if (game.coverImageUrl) {
     return game.coverImageUrl;
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots[0];
-  }
-  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls[0];
-  }
-  return null;
+  const screenshots = getResultScreenshots(game);
+  return screenshots[0] ?? null;
 };
 
 const getResultScreenshots = (game: SearchResult | null | undefined): string[] => {
   if (!game) {
     return [];
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots;
+
+  const rawScreens = (game as any)?.screenshots;
+  if (Array.isArray(rawScreens) && rawScreens.length) {
+    const resolved = rawScreens
+      .map((shot: any) => {
+        const id = shot?.image_id ?? null;
+        return id ? igdbScreenshotUrl(id) : typeof shot === "string" ? shot : null;
+      })
+      .filter((url): url is string => Boolean(url));
+    if (resolved.length) {
+      return resolved;
+    }
   }
+
   if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls;
+    return game.screenshotUrls.filter((url): url is string => typeof url === "string");
   }
-  return [];
+
+  return Array.isArray(game.screenshots)
+    ? game.screenshots.filter((url): url is string => typeof url === "string")
+    : [];
+};
+
+const normalizePlatform = (platform: SearchPlatform | null | undefined): SearchPlatform | null => {
+  if (!platform) return null;
+  const name = typeof platform.name === "string" ? platform.name : String(platform.id ?? "").trim();
+  const slug = typeof platform.slug === "string" && platform.slug.trim().length ? platform.slug : name.toLowerCase();
+  return {
+    id: platform.id,
+    name,
+    slug,
+    abbreviation: platform.abbreviation ?? null,
+  };
+};
+
+const normalizeSearchResult = (result: SearchResult | (SearchResult & { cover?: { image_id?: string | null } }) | any):
+  SearchResult => {
+  const coverId = result?.cover?.image_id ?? null;
+  const coverUrl = igdbCoverUrl(coverId) ?? result.coverUrl ?? result.coverImageUrl ?? null;
+  const screenshots = getResultScreenshots(result);
+  const releaseYear = typeof result.releaseYear === "number"
+    ? result.releaseYear
+    : result.first_release_date
+      ? new Date(Number(result.first_release_date) * 1000).getFullYear()
+      : null;
+  const platforms = Array.isArray(result.platforms)
+    ? result.platforms
+        .map((platform: any) => normalizePlatform(platform))
+        .filter((platform): platform is SearchPlatform => Boolean(platform))
+    : [];
+
+  return {
+    ...result,
+    coverUrl,
+    coverImageUrl: coverUrl ?? result.coverImageUrl ?? null,
+    screenshots,
+    screenshotUrls: screenshots,
+    releaseYear,
+    platforms,
+  } as SearchResult;
 };
 
 type SearchResponse = {
@@ -327,11 +382,12 @@ function DashboardPageContent() {
       })
       .then((payload) => {
         const data = payload as Partial<SearchResponse> | null;
-        const normalizedResults = Array.isArray(data?.results)
+        const normalizedResults = (Array.isArray(data?.results)
           ? (data.results as SearchResult[])
           : Array.isArray((data as any)?.games)
             ? ((data as any).games as SearchResult[])
-            : [];
+            : [])
+          .map((result) => normalizeSearchResult(result));
         if ((data as { error?: string } | null)?.error) {
           setError((data as { error?: string }).error ?? null);
         }
