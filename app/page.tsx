@@ -108,7 +108,7 @@ const normalizeSearchResult = (result: SearchResult | (SearchResult & { cover?: 
       : null;
   const platforms = Array.isArray(result.platforms)
     ? result.platforms
-        .map((platform: any) => normalizePlatform(platform))
+        .map((platform: SearchPlatform | null | undefined) => normalizePlatform(platform))
         .filter((platform): platform is SearchPlatform => Boolean(platform))
     : [];
 
