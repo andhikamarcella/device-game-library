@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Loader2, Search, Star } from "lucide-react";
 import { Card } from "@/components/Card";
+import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
@@ -26,8 +27,10 @@ type SearchResult = {
   slug: string | null;
   name: string;
   summary: string;
+  cover?: { image_id?: string | null } | null;
   coverUrl: string | null;
   coverImageUrl?: string | null;
+  coverImageId?: string | null;
   screenshots: string[];
   screenshotUrls?: string[];
   releaseYear: number | null;
@@ -98,7 +101,7 @@ const normalizePlatform = (platform: SearchPlatform | null | undefined): SearchP
 
 const normalizeSearchResult = (result: SearchResult | (SearchResult & { cover?: { image_id?: string | null } }) | any):
   SearchResult => {
-  const coverId = result?.cover?.image_id ?? null;
+  const coverId = result?.cover?.image_id ?? result?.coverImageId ?? null;
   const coverUrl = igdbCoverUrl(coverId) ?? result.coverUrl ?? result.coverImageUrl ?? null;
   const screenshots = getResultScreenshots(result);
   const releaseYear = typeof result.releaseYear === "number"
@@ -117,8 +120,10 @@ const normalizeSearchResult = (result: SearchResult | (SearchResult & { cover?: 
 
   return {
     ...result,
+    cover: result?.cover ?? (coverId ? { image_id: coverId } : null),
     coverUrl,
     coverImageUrl: coverUrl ?? result.coverImageUrl ?? null,
+    coverImageId: coverId,
     screenshots,
     screenshotUrls: screenshots,
     releaseYear,
@@ -219,13 +224,12 @@ function DashboardPageContent() {
   const [query, setQuery] = useState(initialQueryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
   const [results, setResults] = useState<SearchResult[]>([]);
-  const pageSize = 5;
+  const pageSize = 6;
   const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
   const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
   const [page, setPage] = useState(initialPageParam);
   const [pageInput, setPageInput] = useState(String(initialPageParam));
   const lastSyncedSearchRef = useRef(searchParams.toString());
-  const skipPageResetRef = useRef(true);
   const [pagination, setPagination] = useState(() => ({
     total: 0,
     page: initialPageParam,
@@ -263,7 +267,6 @@ function DashboardPageContent() {
     setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
     setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
 
-    skipPageResetRef.current = true;
     lastSyncedSearchRef.current = currentSearch;
   }, [searchParams]);
 
@@ -395,18 +398,15 @@ function DashboardPageContent() {
           setError((data as { error?: string }).error ?? null);
         }
         setResults(normalizedResults);
-        const nextPagination = {
-          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
-          page:
-            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
-          pageSize:
-            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
-              ? data.pagination.pageSize
-              : pageSize,
-          hasNextPage: Boolean(data?.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
-        };
-        setPagination(nextPagination);
+        setPagination({
+          total: normalizedResults.length,
+          page: 1,
+          pageSize,
+          hasNextPage: normalizedResults.length > pageSize,
+          hasPreviousPage: false,
+        });
+        setPage(1);
+        setPageInput("1");
       })
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") {
@@ -430,20 +430,16 @@ function DashboardPageContent() {
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder]);
+  }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
-    if (skipPageResetRef.current) {
-      skipPageResetRef.current = false;
-      return;
-    }
     setPage(1);
   }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
-    const nextValue = String(pagination.page > 0 ? pagination.page : page);
+    const nextValue = String(Math.max(1, page));
     setPageInput((current) => (current === nextValue ? current : nextValue));
-  }, [page, pagination.page]);
+  }, [page]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -543,14 +539,30 @@ function DashboardPageContent() {
 
   const playingGames = trackedGames.filter((game) => game.status === "playing");
   const wishlistGames = trackedGames.filter((game) => game.wishlist);
-  const totalPages = Math.max(
-    1,
-    Math.ceil(Math.max(pagination.total, safeResults.length) / Math.max(pagination.pageSize, 1)),
-  );
-  const currentPage = pagination.page > 0 ? pagination.page : page;
-  const canGoNext = pagination.hasNextPage || currentPage < totalPages;
-  const canGoPrevious = pagination.hasPreviousPage || currentPage > 1;
+  const totalResults = Math.max(pagination.total, safeResults.length);
+  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+  const currentPage = Math.min(totalPages, Math.max(1, page));
+  const canGoNext = currentPage < totalPages;
+  const canGoPrevious = currentPage > 1;
   const isPageJumpDisabled = totalPages <= 1;
+  const paginatedResults = safeResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      setPage(currentPage);
+    }
+  }, [currentPage, page]);
+
+  useEffect(() => {
+    setPagination((prev) => ({
+      ...prev,
+      total: totalResults,
+      page: currentPage,
+      pageSize,
+      hasNextPage: currentPage < totalPages,
+      hasPreviousPage: currentPage > 1,
+    }));
+  }, [currentPage, totalPages, totalResults, pageSize]);
 
   const handlePageJump = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -874,17 +886,15 @@ function DashboardPageContent() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Tidak ada game yang cocok. Coba judul atau console lain.</p>
           ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {safeResults.map((game) => {
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-3">
+            {paginatedResults.map((game) => {
               const normalizedTitle = game.name.trim().toLowerCase();
               const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
               const normalizedPlatforms = game.platforms ?? [];
-              const platformLabels = normalizedPlatforms.map((platform) => platform.name).filter(Boolean);
-              const imageUrl = getResultCover(game);
-              const screenshotPreviews = getResultScreenshots(game).slice(0, 4);
-              const ratingLabel = game.rating?.toFixed(1) ?? "—";
+              const coverId = game.cover?.image_id ?? game.coverImageId ?? null;
+              const coverUrl = igdbCoverUrl(coverId) ?? getResultCover(game);
               const detailQuery: Record<string, string> = {};
               if (debouncedQuery) {
                 detailQuery.q = debouncedQuery;
@@ -900,112 +910,45 @@ function DashboardPageContent() {
                 query: detailQuery,
               } as const;
 
+              const cardData: CompactGameCardData = {
+                id: game.id,
+                name: game.name,
+                coverImageId: coverId,
+                coverUrl,
+                rating: game.rating ?? null,
+                ratingsCount: game.ratingsCount ?? null,
+                releaseYear: game.releaseYear ?? null,
+                platforms: normalizedPlatforms.map((platform) => ({
+                  id: platform.id,
+                  name: platform.name,
+                  abbreviation: platform.abbreviation ?? null,
+                })),
+              };
+
               return (
-                <div key={game.id} className="space-y-3">
-                  <article
-                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
-                  >
-                  <Link
-                    href={detailHref}
-                    className="relative block aspect-[3/4] w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]"
-                  >
-                    {imageUrl ? (
-                      <Image
-                        src={imageUrl}
-                        alt={`${game.name} cover`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-widest text-slate-500">
-                        No cover available
-                      </div>
-                    )}
-                    <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-xs text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
-                      <Star className="h-3 w-3 fill-current" />
-                      <span>{ratingLabel}</span>
-                    </div>
-                  </Link>
-                  <div className="flex flex-1 flex-col justify-between gap-3 p-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-slate-900 dark:text-slate-100 sm:text-lg">{game.name}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {game.releaseYear ?? "Tahun rilis tidak diketahui"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          <Star className="h-3 w-3" />
-                          <span>{ratingLabel}</span>
-                        </div>
-                      </div>
-                      {platformLabels.length ? (
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-                          {platformLabels.map((platform) => (
-                            <span
-                              key={platform}
-                              className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                            >
-                              {platform}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Platform tidak tersedia</p>
-                      )}
-                      {screenshotPreviews.length ? (
-                        <div className="flex gap-2 overflow-x-auto pb-1">
-                          {screenshotPreviews.map((url, index) => (
-                            <Image
-                              key={`${game.id}-shot-${index}`}
-                              src={url}
-                              alt={`${game.name} screenshot ${index + 1}`}
-                              width={160}
-                              height={90}
-                              className="h-24 w-40 flex-shrink-0 rounded-xl object-cover"
-                              sizes="160px"
-                            />
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pt-1">
-                      <Link
-                        href={detailHref}
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 transition hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-emerald-300 dark:hover:text-emerald-200 dark:focus-visible:ring-offset-slate-900"
-                      >
-                        Lihat detail & trailer
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleAddToWishlist(game)}
-                        disabled={isWishlisted || isProcessing}
-                        aria-pressed={isWishlisted}
-                        aria-busy={isProcessing}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
-                          isWishlisted || isProcessing
-                            ? "cursor-not-allowed border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
-                            : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100"
-                        }`}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Star className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
-                        )}
-                        {isProcessing
-                          ? "Memproses..."
-                          : isWishlisted
-                            ? "Sudah di wishlist"
-                            : "Tambah ke wishlist"}
-                      </button>
-                    </div>
-                  </div>
-                  </article>
-                </div>
+                <GameCardCompact
+                  key={game.id}
+                  game={cardData}
+                  actionLabel={
+                    isProcessing
+                      ? "Memproses..."
+                      : isWishlisted
+                        ? "Sudah di wishlist"
+                        : "Tambah ke wishlist"
+                  }
+                  onAction={() => handleAddToWishlist(game)}
+                  actionDisabled={isWishlisted || isProcessing}
+                  actionBusy={isProcessing}
+                  footer={
+                    <Link
+                      href={detailHref}
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
+                    >
+                      Lihat detail & trailer
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  }
+                />
               );
             })}
           </div>
