@@ -110,6 +110,7 @@ type IgdbSearchResult = {
   coverImageUrl?: string | null;
   screenshots: Array<{ image_id?: string | null }> | string[];
   screenshotUrls?: string[];
+  first_release_date?: number | null;
   releaseYear: number | null;
   rating: number | null;
   ratingsCount: number;
@@ -903,10 +904,15 @@ export default function GamesPage() {
             null;
           const coverUrl = getResultCover(result);
           const screenshots = getResultScreenshots(result);
+          const releaseTimestamp =
+            typeof result.first_release_date === "number"
+              ? result.first_release_date
+              : (result as { first_release_date?: number | null } | null)?.first_release_date ?? null;
+
           const releaseYear = typeof result.releaseYear === "number"
             ? result.releaseYear
-            : (result as { first_release_date?: number | null } | null)?.first_release_date
-              ? new Date(Number((result as { first_release_date: number }).first_release_date) * 1000).getFullYear()
+            : releaseTimestamp != null
+              ? new Date(Number(releaseTimestamp) * 1000).getFullYear()
               : null;
           const rating =
             typeof result.rating === "number"
