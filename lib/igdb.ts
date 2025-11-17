@@ -17,9 +17,25 @@ type TokenCache = {
 
 let tokenCache: TokenCache | null = null;
 
-const getTokenUrl = (): string => {
-  const raw = IGDB_TOKEN_URL?.trim();
-  return raw && raw.length > 0 ? raw : "https://id.twitch.tv/oauth2/token";
+const normalizeTokenUrl = (): string => {
+  const fallbacks = [IGDB_TOKEN_URL, process.env.TWITCH_TOKEN_URL];
+  const raw = fallbacks.find((value) => value && value.trim().length > 0)?.trim();
+  const defaultUrl = "https://id.twitch.tv/oauth2/token";
+
+  if (!raw) {
+    return defaultUrl;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (!parsed.pathname.endsWith("/token")) {
+      parsed.pathname = parsed.pathname.replace(/\/?$/, "/token");
+    }
+    return parsed.toString();
+  } catch (error) {
+    console.error("Invalid IGDB token URL provided, falling back to default", error);
+    return defaultUrl;
+  }
 };
 
 async function getIgdbToken(): Promise<string> {
@@ -37,7 +53,8 @@ async function getIgdbToken(): Promise<string> {
   params.set("client_secret", IGDB_CLIENT_SECRET);
   params.set("grant_type", "client_credentials");
 
-  const res = await fetch(getTokenUrl(), {
+  const tokenUrl = normalizeTokenUrl();
+  const res = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
@@ -45,7 +62,7 @@ async function getIgdbToken(): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    console.error("Failed to fetch IGDB token", res.status, text);
+    console.error("Failed to fetch IGDB token", res.status, tokenUrl, text);
     throw new Error(`Failed to fetch IGDB token: ${res.status}`);
   }
 
