@@ -5,13 +5,17 @@ import { Play } from "lucide-react";
 import { collectIgdbVideos } from "@/lib/gameMedia";
 import type { GameDetailsPayload } from "@/lib/gameData";
 
+function hasYoutubeId(video: ReturnType<typeof collectIgdbVideos>[number]) {
+  return "youtubeId" in video && typeof video.youtubeId === "string" && video.youtubeId.trim() !== "";
+}
+
 type GameTrailerSectionProps = {
   game: GameDetailsPayload;
   className?: string;
 };
 
 export function GameTrailerSection({ game, className }: GameTrailerSectionProps) {
-  const videos = useMemo(() => collectIgdbVideos(game), [game]);
+  const videos = useMemo(() => collectIgdbVideos(game).filter(hasYoutubeId), [game]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
