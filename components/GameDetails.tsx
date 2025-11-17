@@ -648,15 +648,13 @@ export function GameDetails({
         </section>
       ) : null}
 
-      {achievements.length ? (
-        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <Trophy className="h-4 w-4" aria-hidden="true" />
-            <h2 className="text-sm font-semibold uppercase tracking-widest">Achievements</h2>
-          </div>
-          <AchievementsList achievements={achievements} gameTitle={game.name} />
-        </section>
-      ) : null}
+      <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+          <Trophy className="h-4 w-4" aria-hidden="true" />
+          <h2 className="text-sm font-semibold uppercase tracking-widest">Achievements</h2>
+        </div>
+        <AchievementsList achievements={achievements} gameTitle={game.name} />
+      </section>
 
       {additionEntries.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">

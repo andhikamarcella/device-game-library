@@ -58,7 +58,7 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   );
   const trailersPromise = getGameTrailers(id).catch(() => [] as GameTrailer[]);
   const similarPromise = getSimilarGamesForGame(id).catch(() => [] as GameSimilarEntry[]);
-  const achievementsPromise = getGameAchievements(id, 20).catch(() => [] as GameAchievement[]);
+  const achievementsPromise = getGameAchievements(id, 40).catch(() => [] as GameAchievement[]);
   const additionsPromise = getGameAdditions(id, 12).catch(() => [] as GameRelatedGame[]);
   const seriesPromise = getGameSeriesEntries(id, 12).catch(() => [] as GameRelatedGame[]);
   const [screenshots, reviews, trailers, similarGames, achievements, additions, seriesEntries] = await Promise.all([

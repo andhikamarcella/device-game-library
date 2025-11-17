@@ -47,6 +47,14 @@ export function AchievementsList({ achievements, initialVisible = 4, gameTitle }
 
   const groups = buildGroups(achievements);
 
+  if (!achievements.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+        Belum ada achievement untuk game ini.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {groups.map((group) => {
