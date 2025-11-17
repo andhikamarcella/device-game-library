@@ -13,6 +13,7 @@ import {
   type IgdbSimilarGame,
   type IgdbVideo,
 } from "@/lib/igdb";
+import { igdbScreenshotUrl } from "@/lib/igdbImages";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -71,6 +72,7 @@ export type GameSummary = {
   id: number;
   slug?: string | null;
   name: string;
+  cover?: { image_id?: string | null } | null;
   background_image: string | null;
   background_image_additional?: string | null;
   short_screenshots?: GameScreenshot[];
@@ -206,6 +208,7 @@ export type GameTrailer = {
 
 export type GameScreenshot = {
   id: number;
+  image_id?: string | null;
   image: string;
   width?: number;
   height?: number;
@@ -492,12 +495,13 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = getIgdbImageUrl(asset.image_id, "screenshot");
+    const image = igdbScreenshotUrl(asset.image_id);
     if (!image) {
       return;
     }
     screenshots.push({
       id: typeof asset.id === "number" ? asset.id : index,
+      image_id: asset.image_id,
       image,
       width: asset.width,
       height: asset.height,
@@ -618,6 +622,7 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     id: game.id,
     slug: game.slug ?? slugify(game.name),
     name: game.name,
+    cover: game.cover ?? null,
     background_image: cover,
     background_image_additional: secondaryImage,
     short_screenshots: screenshots,

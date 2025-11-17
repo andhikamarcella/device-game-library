@@ -36,6 +36,7 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
@@ -292,6 +293,7 @@ export function GameDetails({
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const clipSource = game.clip?.clip ?? game.clip?.video ?? game.clip?.clips?.full ?? null;
   const clipPreview = game.clip?.preview ?? null;
+  const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -344,13 +346,28 @@ export function GameDetails({
         <div className="space-y-8 p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-start">
-              <div className="relative mx-auto h-40 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-800">
-                <CoverImage
-                  gameName={game.name}
-                  fallbackImage={igdbCoverImage}
-                  initialImage={igdbCoverImage}
-                  className="h-full w-full"
-                />
+              <div
+                className="
+                  w-full
+                  max-w-[160px] sm:max-w-[200px]
+                  aspect-[3/4]
+                  rounded-2xl
+                  overflow-hidden
+                  mx-auto
+                  bg-slate-900
+                "
+              >
+                {coverUrl ? (
+                  <Image
+                    src={coverUrl}
+                    alt={`${game.name} cover`}
+                    width={300}
+                    height={400}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No cover</div>
+                )}
               </div>
               <div className="space-y-3">
                 <div className="space-y-1">
