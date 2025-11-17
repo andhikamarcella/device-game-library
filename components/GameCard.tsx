@@ -22,6 +22,7 @@ export interface SearchGameResult {
   slug: string | null;
   name: string;
   summary: string;
+  cover?: { image_id?: string | null } | null;
   coverUrl: string | null;
   coverImageUrl?: string | null;
   screenshots: string[];
