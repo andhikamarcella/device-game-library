@@ -1,5 +1,6 @@
 const IGDB_BASE_URL = process.env.IGDB_BASE_URL ?? "https://api.igdb.com/v4";
-const IGDB_TOKEN_URL = process.env.IGDB_TOKEN_URL ?? "https://id.twitch.tv/oauth2/token";
+const IGDB_TOKEN_URL =
+  process.env.IGDB_TOKEN_URL ?? "https://id.twitch.tv/oauth2/token";
 
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID ?? process.env.TWITCH_CLIENT_ID;
 const IGDB_CLIENT_SECRET =
@@ -16,6 +17,11 @@ type TokenCache = {
 
 let tokenCache: TokenCache | null = null;
 
+const getTokenUrl = (): string => {
+  const raw = IGDB_TOKEN_URL?.trim();
+  return raw && raw.length > 0 ? raw : "https://id.twitch.tv/oauth2/token";
+};
+
 async function getIgdbToken(): Promise<string> {
   const now = Date.now();
   if (tokenCache && now < tokenCache.expiresAt - 60_000) {
@@ -31,9 +37,10 @@ async function getIgdbToken(): Promise<string> {
   params.set("client_secret", IGDB_CLIENT_SECRET);
   params.set("grant_type", "client_credentials");
 
-  const res = await fetch(IGDB_TOKEN_URL, {
+  const res = await fetch(getTokenUrl(), {
     method: "POST",
-    body: params,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
   });
 
   if (!res.ok) {
