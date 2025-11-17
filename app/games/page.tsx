@@ -185,32 +185,22 @@ const getResultScreenshots = (game: IgdbSearchResult | null | undefined): string
 };
 
 type IgdbSortOption =
-  | "popular_desc"
-  | "popular_asc"
-  | "rating_desc"
-  | "rating_asc"
-  | "release_desc"
-  | "release_asc";
+  | "none"
+  | "most_popular"
+  | "highest_rated"
+  | "newest"
+  | "oldest"
+  | "alphabetical";
 
-const mapIgdbSortToApiParam = (
-  sort: IgdbSortOption,
-): "popular" | "rating" | "release_date" => {
-  if (sort.startsWith("rating")) {
-    return "rating";
-  }
-  if (sort.startsWith("release")) {
-    return "release_date";
-  }
-  return "popular";
-};
+const mapIgdbSortToApiParam = (sort: IgdbSortOption): string => sort;
 
 const IGDB_SORT_OPTIONS: Array<{ value: IgdbSortOption; label: string }> = [
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "none", label: "No sort (default)" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "highest_rated", label: "Highest rated" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "alphabetical", label: "A → Z" },
 ];
 
 function GameForm({
@@ -769,7 +759,7 @@ export default function GamesPage() {
   const [igdbPlatformError, setGamePlatformError] = useState<string | null>(null);
   const [igdbPlatformSearch, setGamePlatformSearch] = useState("");
   const [igdbPlatformsFetched, setGamePlatformsFetched] = useState(false);
-  const [igdbSortOrder, setIgdbSortOrder] = useState<IgdbSortOption>("popular_desc");
+  const [igdbSortOrder, setIgdbSortOrder] = useState<IgdbSortOption>("none");
   const [igdbPageInput, setIgdbPageInput] = useState("1");
 
   useEffect(() => {
@@ -858,35 +848,34 @@ export default function GamesPage() {
       return;
     }
 
-    const apiParams = new URLSearchParams();
-    if (igdbCommittedQuery) {
-      apiParams.set("q", igdbCommittedQuery);
-    }
-    if (igdbCommittedPlatform !== "all") {
-      apiParams.set("platformId", igdbCommittedPlatform);
-    }
-    const apiSortParam = mapIgdbSortToApiParam(igdbSortOrder);
-    if (apiSortParam !== "popular") {
-      apiParams.set("sort", apiSortParam);
-    }
-    const searchPath = apiParams.toString();
-
     const controller = new AbortController();
     setIgdbLoading(true);
     setIgdbError(null);
 
-    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, { signal: controller.signal })
+    fetch(`/api/games/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        query: igdbCommittedQuery,
+        sort: mapIgdbSortToApiParam(igdbSortOrder),
+        platform: igdbCommittedPlatform,
+      }),
+    })
       .then(async (response) => {
         const payload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat mencari game di IGDB.";
-          throw new Error(message);
-        }
         return payload;
       })
       .then((payload) => {
         const data = payload as Partial<GameSearchResponse> | null;
-        const normalizedResults = Array.isArray(data?.results) ? (data.results as IgdbSearchResult[]) : [];
+        const normalizedResults = Array.isArray(data?.results)
+          ? (data.results as IgdbSearchResult[])
+          : Array.isArray((data as any)?.games)
+            ? ((data as any).games as IgdbSearchResult[])
+            : [];
+        if ((data as { error?: string } | null)?.error) {
+          setIgdbError((data as { error?: string }).error ?? null);
+        }
         setIgdbResults(normalizedResults);
         const nextPagination = {
           total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
@@ -1627,7 +1616,7 @@ export default function GamesPage() {
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Mengambil hasil dari IGDB...
               </div>
             ) : null}
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {safeIgdbResults.map((game) => {
                 const releaseLabel = game.releaseYear ? `Rilis ${game.releaseYear}` : "Tahun rilis tidak diketahui";
                 const isApplying = igdbSelectionLoadingId === game.id;
@@ -1641,18 +1630,20 @@ export default function GamesPage() {
                     key={game.id}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-sm transition-colors duration-200 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100"
                   >
-                    <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-200 dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]">
-                      {previewImage ? (
-                        <img
-                          src={previewImage}
-                          alt={`${game.name} cover art`}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                          Tidak ada gambar
-                        </div>
-                      )}
+                    <div className="relative mx-auto w-full max-w-[120px] overflow-hidden rounded-xl bg-slate-200 text-center dark:bg-slate-800 sm:max-w-[150px] md:max-w-[180px]">
+                      <div className="aspect-[3/4] w-full">
+                        {previewImage ? (
+                          <img
+                            src={previewImage}
+                            alt={`${game.name} cover art`}
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                            Tidak ada gambar
+                          </div>
+                        )}
+                      </div>
                       {typeof game.rating === "number" ? (
                         <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
                           <Star className="h-3 w-3" aria-hidden="true" />

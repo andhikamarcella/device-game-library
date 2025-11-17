@@ -106,27 +106,17 @@ type PlatformOption = {
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
 
 const DISCOVER_SORT_OPTIONS = [
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "none", label: "No sort (default)" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "highest_rated", label: "Highest rated" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "alphabetical", label: "A → Z" },
 ] as const;
 
 type DiscoverSortOption = (typeof DISCOVER_SORT_OPTIONS)[number]["value"];
 
-const mapSortOrderToApiParam = (
-  value: DiscoverSortOption,
-): "popular" | "rating" | "release_date" => {
-  if (value.startsWith("rating")) {
-    return "rating";
-  }
-  if (value.startsWith("release")) {
-    return "release_date";
-  }
-  return "popular";
-};
+const mapSortOrderToApiParam = (value: DiscoverSortOption): string => value;
 
 const parsePlatformValue = (value: string | null): string => {
   if (!value) {
@@ -145,11 +135,11 @@ const parsePageValue = (value: string | null): number => {
 
 const parseSortValue = (value: string | null): DiscoverSortOption => {
   if (!value) {
-    return "popular_desc";
+    return "none";
   }
   return DISCOVER_SORT_OPTIONS.some((option) => option.value === value)
     ? (value as DiscoverSortOption)
-    : "popular_desc";
+    : "none";
 };
 
 function DashboardPageContent() {
@@ -321,33 +311,30 @@ function DashboardPageContent() {
     setError(null);
     setHasSearched(true);
 
-    const apiParams = new URLSearchParams();
-    if (debouncedQuery) {
-      apiParams.set("q", debouncedQuery);
-    }
-    if (selectedPlatform !== "all") {
-      apiParams.set("platformId", selectedPlatform);
-    }
-    const apiSortParam = mapSortOrderToApiParam(sortOrder);
-    if (apiSortParam !== "popular") {
-      apiParams.set("sort", apiSortParam);
-    }
-    const searchPath = apiParams.toString();
-
-    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
+    fetch(`/api/games/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       signal: controller.signal,
+      body: JSON.stringify({
+        query: debouncedQuery,
+        sort: mapSortOrderToApiParam(sortOrder),
+        platform: selectedPlatform,
+      }),
     })
       .then(async (response) => {
         const payload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
-          throw new Error(message);
-        }
         return payload;
       })
       .then((payload) => {
         const data = payload as Partial<SearchResponse> | null;
-        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
+        const normalizedResults = Array.isArray(data?.results)
+          ? (data.results as SearchResult[])
+          : Array.isArray((data as any)?.games)
+            ? ((data as any).games as SearchResult[])
+            : [];
+        if ((data as { error?: string } | null)?.error) {
+          setError((data as { error?: string }).error ?? null);
+        }
         setResults(normalizedResults);
         const nextPagination = {
           total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
@@ -410,7 +397,7 @@ function DashboardPageContent() {
     if (page > 1) {
       params.set("page", String(page));
     }
-    if (sortOrder !== "popular_desc") {
+    if (sortOrder !== "none") {
       params.set("sort", sortOrder);
     }
 

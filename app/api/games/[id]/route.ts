@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getIgdbImageUrl, igdbRequest } from "@/lib/igdb";
+import { getIgdbImageUrl, getIgdbToken } from "@/lib/igdb";
 
 type Params = { params: { id: string } };
 
@@ -61,7 +61,24 @@ export async function GET(_request: Request, { params }: Params) {
   `;
 
   try {
-    const data = await igdbRequest<IgdbDetailRecord[]>("games", query);
+    const { accessToken, clientId } = await getIgdbToken();
+    const igdbRes = await fetch("https://api.igdb.com/v4/games", {
+      method: "POST",
+      headers: {
+        "Client-ID": clientId,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "text/plain",
+      },
+      body: query,
+    });
+
+    if (!igdbRes.ok) {
+      const text = await igdbRes.text().catch(() => "");
+      console.error("IGDB detail error", igdbRes.status, text);
+      return NextResponse.json({ error: "IGDB game lookup failed" }, { status: 200 });
+    }
+
+    const data = (await igdbRes.json().catch(() => [])) as IgdbDetailRecord[];
     const game = data[0];
 
     if (!game) {
@@ -129,8 +146,6 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
     console.error("IGDB detail error", error);
-    const message = error instanceof Error ? error.message : "Unable to load game details.";
-    const status = /404/.test(message) ? 404 : 500;
-    return NextResponse.json({ error: status === 404 ? "Game not found." : message }, { status });
+    return NextResponse.json({ error: "IGDB game lookup failed" }, { status: 200 });
   }
 }

@@ -1,68 +1,55 @@
-const IGDB_BASE_URL = process.env.IGDB_BASE_URL ?? "https://api.igdb.com/v4";
-const IGDB_TOKEN_URL =
-  process.env.IGDB_TOKEN_URL ?? "https://id.twitch.tv/oauth2/token";
+const IGDB_BASE_URL = process.env.IGDB_BASE_URL?.trim() || "https://api.igdb.com/v4";
 
-const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID ?? process.env.TWITCH_CLIENT_ID;
-const IGDB_CLIENT_SECRET =
-  process.env.IGDB_CLIENT_SECRET ?? process.env.TWITCH_CLIENT_SECRET;
-
-if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) {
-  console.error("Missing IGDB/Twitch credentials in environment variables");
-}
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID?.trim();
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET?.trim();
 
 type TokenCache = {
   accessToken: string;
-  expiresAt: number; // timestamp in ms
+  expiresAt: number;
+  clientId: string;
 };
 
 let tokenCache: TokenCache | null = null;
 
-const normalizeTokenUrl = (): string => {
-  const fallbacks = [IGDB_TOKEN_URL, process.env.TWITCH_TOKEN_URL];
-  const raw = fallbacks.find((value) => value && value.trim().length > 0)?.trim();
-  const defaultUrl = "https://id.twitch.tv/oauth2/token";
+const resolveTokenUrl = (): string => {
+  const fallbackUrl = "https://id.twitch.tv/oauth2/token";
+  const rawUrl =
+    process.env.IGDB_TOKEN_URL?.trim() || process.env.TWITCH_TOKEN_URL?.trim() || fallbackUrl;
 
-  if (!raw) {
-    return defaultUrl;
-  }
-
-  try {
-    const parsed = new URL(raw);
-    if (!parsed.pathname.endsWith("/token")) {
-      parsed.pathname = parsed.pathname.replace(/\/?$/, "/token");
-    }
-    return parsed.toString();
-  } catch (error) {
-    console.error("Invalid IGDB token URL provided, falling back to default", error);
-    return defaultUrl;
-  }
+  return rawUrl.trim();
 };
 
-async function getIgdbToken(): Promise<string> {
-  const now = Date.now();
-  if (tokenCache && now < tokenCache.expiresAt - 60_000) {
-    return tokenCache.accessToken;
+export async function getIgdbToken(): Promise<{ accessToken: string; clientId: string }> {
+  const clientId = TWITCH_CLIENT_ID;
+  const clientSecret = TWITCH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET in environment variables");
+    throw new Error("Missing Twitch credentials");
   }
 
-  if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) {
-    throw new Error("Missing IGDB/Twitch credentials");
+  const now = Date.now();
+  if (tokenCache && tokenCache.clientId === clientId && now < tokenCache.expiresAt - 60_000) {
+    return { accessToken: tokenCache.accessToken, clientId };
   }
 
   const params = new URLSearchParams();
-  params.set("client_id", IGDB_CLIENT_ID);
-  params.set("client_secret", IGDB_CLIENT_SECRET);
+  params.set("client_id", clientId);
+  params.set("client_secret", clientSecret);
   params.set("grant_type", "client_credentials");
 
-  const tokenUrl = normalizeTokenUrl();
+  const tokenUrl = resolveTokenUrl();
   const res = await fetch(tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
     body: params.toString(),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    console.error("Failed to fetch IGDB token", res.status, tokenUrl, text);
+    const text = await res.text().catch(() => "");
+    console.error("Failed to fetch IGDB token", tokenUrl, res.status, text);
     throw new Error(`Failed to fetch IGDB token: ${res.status}`);
   }
 
@@ -71,9 +58,69 @@ async function getIgdbToken(): Promise<string> {
   tokenCache = {
     accessToken: data.access_token,
     expiresAt: now + data.expires_in * 1000,
+    clientId,
   };
 
-  return data.access_token;
+  return { accessToken: data.access_token, clientId };
+}
+
+export type SortKey =
+  | "none"
+  | "most_popular"
+  | "highest_rated"
+  | "newest"
+  | "oldest"
+  | "alphabetical";
+
+export function buildIgdbQuery(opts: {
+  searchText?: string;
+  sort?: SortKey;
+  platformId?: number | null;
+}): string {
+  const lines: string[] = [];
+
+  lines.push(
+    [
+      "fields",
+      "  id,",
+      "  name,",
+      "  summary,",
+      "  total_rating,",
+      "  total_rating_count,",
+      "  first_release_date,",
+      "  cover.image_id,",
+      "  screenshots.image_id,",
+      "  platforms.name;",
+    ].join("\n"),
+  );
+
+  const trimmedSearch = opts.searchText?.trim();
+  if (trimmedSearch) {
+    const escaped = trimmedSearch.replace(/"/g, '\\"');
+    lines.push(`search "${escaped}";`);
+  }
+
+  if (typeof opts.platformId === "number") {
+    lines.push(`where platforms = (${opts.platformId});`);
+  }
+
+  const sortMapping: Record<Exclude<SortKey, "none">, string> = {
+    most_popular: "total_rating_count desc",
+    highest_rated: "total_rating desc",
+    newest: "first_release_date desc",
+    oldest: "first_release_date asc",
+    alphabetical: "name asc",
+  };
+
+  const sortKey = opts.sort ?? "none";
+  const sortExpr = sortKey === "none" ? null : sortMapping[sortKey as Exclude<SortKey, "none">];
+  if (sortExpr) {
+    lines.push(`sort ${sortExpr};`);
+  }
+
+  lines.push("limit 50;");
+
+  return lines.join("\n");
 }
 
 export interface IgdbCover {
@@ -248,15 +295,15 @@ export class IgdbRequestError extends Error {
 }
 
 export async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
-  const token = await getIgdbToken();
+  const { accessToken, clientId } = await getIgdbToken();
   const baseUrl = getBaseUrl().replace(/\/$/, "");
   const normalizedEndpoint = endpoint.replace(/^\/+/, "");
 
   const res = await fetch(`${baseUrl}/${normalizedEndpoint}`, {
     method: "POST",
     headers: {
-      "Client-ID": (IGDB_CLIENT_ID ?? "") as string,
-      Authorization: `Bearer ${token}`,
+      "Client-ID": clientId,
+      Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
       "Content-Type": "text/plain",
     },

@@ -67,33 +67,23 @@ const getResultScreenshots = (game: SearchGameResult | null | undefined): string
 };
 
 type DiscoverSortOption =
-  | "popular_desc"
-  | "popular_asc"
-  | "rating_desc"
-  | "rating_asc"
-  | "release_desc"
-  | "release_asc";
+  | "none"
+  | "most_popular"
+  | "highest_rated"
+  | "newest"
+  | "oldest"
+  | "alphabetical";
 
 const DISCOVER_SORT_OPTIONS: Array<{ value: DiscoverSortOption; label: string }> = [
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "none", label: "No sort (default)" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "highest_rated", label: "Highest rated" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "alphabetical", label: "A → Z" },
 ];
 
-const mapSortOrderToApiParam = (
-  sort: DiscoverSortOption,
-): "popular" | "rating" | "release_date" => {
-  if (sort.startsWith("rating")) {
-    return "rating";
-  }
-  if (sort.startsWith("release")) {
-    return "release_date";
-  }
-  return "popular";
-};
+const mapSortOrderToApiParam = (sort: DiscoverSortOption): string => sort;
 
 const createDefaultPagination = (): SearchResponse["pagination"] => ({
   total: 0,
@@ -121,7 +111,7 @@ export default function DashboardPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [metadataById, setMetadataById] = useState<Record<number, GameMetadata>>({});
-  const [searchSortOrder, setSearchSortOrder] = useState<DiscoverSortOption>("popular_desc");
+  const [searchSortOrder, setSearchSortOrder] = useState<DiscoverSortOption>("none");
   const [ownershipFilter, setOwnershipFilter] = useState<Ownership | "all">("all");
   const [statusFilter, setStatusFilter] = useState<PlayStatus | "all">("all");
   const [platformFilter, setPlatformFilter] = useState<string | "all">("all");
@@ -312,27 +302,30 @@ export default function DashboardPage() {
         setSearchLoading(true);
         setSearchError(null);
         const currentPage = pagination.page;
-        const apiParams = new URLSearchParams();
-        apiParams.set("q", debouncedQuery);
-        const apiSortParam = mapSortOrderToApiParam(searchSortOrder);
-        if (apiSortParam !== "popular") {
-          apiParams.set("sort", apiSortParam);
-        }
-        const searchPath = apiParams.toString();
-        const response = await fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
+        const response = await fetch(`/api/games/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           signal: controller.signal,
+          body: JSON.stringify({
+            query: debouncedQuery,
+            sort: mapSortOrderToApiParam(searchSortOrder),
+            platform: "all",
+          }),
         });
         const payload = (await response.json().catch(() => null)) as
           | Partial<SearchResponse>
           | { error?: string }
           | null;
-        if (!response.ok || !payload || typeof payload !== "object") {
-          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
-          throw new Error(message);
-        }
-        const data = payload as Partial<SearchResponse>;
+        const data = (payload && typeof payload === "object" ? payload : null) as Partial<SearchResponse>;
         if (cancelled) return;
-        const normalizedResults = Array.isArray(data.results) ? (data.results as SearchGameResult[]) : [];
+        const normalizedResults = Array.isArray(data.results)
+          ? (data.results as SearchGameResult[])
+          : Array.isArray((data as any)?.games)
+            ? ((data as any).games as SearchGameResult[])
+            : [];
+        if ((data as { error?: string } | null)?.error) {
+          setSearchError((data as { error?: string }).error ?? null);
+        }
         const paginationPayload = data.pagination;
         const nextPagination = paginationPayload
           ? {
