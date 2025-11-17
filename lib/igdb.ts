@@ -183,6 +183,7 @@ export interface IgdbAchievement {
   achievement_icon?: IgdbAchievementIcon | null;
   locked_icon?: IgdbAchievementIcon | null;
   unlocked_icon?: IgdbAchievementIcon | null;
+  platforms?: Array<{ id: number; name?: string | null } | null> | null;
 }
 
 export interface IgdbCompanyRef {
@@ -629,7 +630,9 @@ export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise
       instructions,
       achievement_icon.image_id,
       locked_icon.image_id,
-      unlocked_icon.image_id;
+      unlocked_icon.image_id,
+      platforms.id,
+      platforms.name;
     where game = ${gameId};
     limit ${safeLimit};
   `;

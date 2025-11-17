@@ -157,12 +157,12 @@ export type GameRelatedGame = {
 export type GameSimilarEntry = GameSummary;
 
 export type GameAchievement = {
-
   id: number;
   name: string;
   description: string | null;
   image: string | null;
   percent: number | null;
+  platforms: Array<{ id: number; name: string | null }>;
 };
 
 export type GameClip = {
@@ -303,12 +303,19 @@ function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
   return entries.map((entry) => {
     const imageId =
       entry.unlocked_icon?.image_id || entry.locked_icon?.image_id || entry.achievement_icon?.image_id || null;
+    const platforms = (entry.platforms ?? [])
+      .map((platform) => {
+        if (!platform || typeof platform.id !== "number") return null;
+        return { id: platform.id, name: platform.name ?? null };
+      })
+      .filter((platform): platform is { id: number; name: string | null } => Boolean(platform));
     return {
       id: entry.id,
       name: entry.name || "Unknown achievement",
       description: entry.description || entry.instructions || null,
       image: imageId ? buildIgdbImageUrl(imageId, "cover_small") : null,
       percent: null,
+      platforms,
     } satisfies GameAchievement;
   });
 }
