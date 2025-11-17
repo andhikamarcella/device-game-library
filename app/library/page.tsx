@@ -362,6 +362,14 @@ export default function DashboardPage() {
                   abbreviation: platform.abbreviation ?? null,
                 }))
               : [];
+            const rating = typeof result.rating === "number"
+              ? result.rating
+              : (result as { total_rating?: number | null } | null)?.total_rating ?? null;
+            const ratingsCount = typeof result.ratingsCount === "number"
+              ? result.ratingsCount
+              : typeof (result as { rating_count?: number | null } | null)?.rating_count === "number"
+                ? (result as { rating_count: number }).rating_count
+                : (result as { total_rating_count?: number | null } | null)?.total_rating_count ?? null;
 
             return {
               ...result,
@@ -371,6 +379,8 @@ export default function DashboardPage() {
               screenshots,
               screenshotUrls: screenshots,
               releaseYear,
+              rating,
+              ratingsCount,
               platforms,
             } as SearchGameResult;
           });

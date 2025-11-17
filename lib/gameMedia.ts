@@ -118,6 +118,36 @@ function collectMovieSources(movies: GameTrailer[] | null | undefined, title: st
   return null;
 }
 
+function collectAllMovieSources(
+  movies: GameTrailer[] | null | undefined,
+  title: string,
+): GameTrailerSource[] {
+  if (!movies || movies.length === 0) {
+    return [];
+  }
+
+  const sources: GameTrailerSource[] = [];
+  movies.forEach((movie, index) => {
+    const clipTitle = movie.name || `${title || "Trailer"} ${index + 1}`;
+    const dataValues = Object.values(movie.data ?? {});
+    const urlCandidates = [movie.preview, ...dataValues];
+    for (const url of urlCandidates) {
+      const youtubeId = extractYoutubeId(url);
+      if (youtubeId) {
+        sources.push({
+          type: "igdb-movie",
+          title: clipTitle,
+          youtubeId,
+          thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
+        });
+        break;
+      }
+    }
+  });
+
+  return sources;
+}
+
 export function extractTrailerFromIgdb(game: GameDetailsPayload): GameTrailerSource {
   const title = game.name || "";
   const clipSource = collectClipSources(game.clip, title);
@@ -131,4 +161,27 @@ export function extractTrailerFromIgdb(game: GameDetailsPayload): GameTrailerSou
   }
 
   return { type: "none" };
+}
+
+export function collectIgdbVideos(game: GameDetailsPayload): GameTrailerSource[] {
+  const title = game.name || "";
+  const sources: GameTrailerSource[] = [];
+
+  const clipSource = collectClipSources(game.clip, title);
+  if (clipSource) {
+    sources.push(clipSource);
+  }
+
+  const movieSources = collectAllMovieSources(game.movies, title);
+  if (movieSources.length) {
+    const seen = new Set<string>(sources.map((entry) => entry.youtubeId));
+    for (const movie of movieSources) {
+      if (!seen.has(movie.youtubeId)) {
+        sources.push(movie);
+        seen.add(movie.youtubeId);
+      }
+    }
+  }
+
+  return sources;
 }
