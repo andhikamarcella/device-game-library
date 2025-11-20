@@ -1,36 +1,25 @@
 import { NextResponse } from "next/server";
-import { igdbRequest } from "@/lib/igdb";
+
+import { igdbFetch } from "@/lib/igdb";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const query = [
-    "fields id, name, abbreviation, slug, generation;",
-    "sort name asc;",
-    "where name != null;",
-    "limit 500;",
-  ].join("\n");
-
   try {
-    console.log("[IGDB] Fetching platform list...");
-    const platforms = await igdbRequest<Array<{
-      id: number;
-      name: string;
-      abbreviation?: string | null;
-      slug?: string | null;
-      generation?: number | null;
-    }>>("platforms", query);
+    const body = `
+      fields id, name, abbreviation, generation;
+      sort name asc;
+      limit 500;
+    `;
 
-    console.log("[IGDB] Platform list OK:", platforms.length, "items");
+    const platforms = await igdbFetch<any[]>("platforms", body);
+
     return NextResponse.json({ platforms });
-  } catch (err: unknown) {
-    console.error("[IGDB] Platform lookup failed:", err);
+  } catch (error) {
+    console.error("IGDB platform lookup error", error);
     return NextResponse.json(
-      {
-        error: "IGDB platform lookup failed",
-        details: err instanceof Error ? err.message : String(err),
-      },
-      { status: 502 },
+      { error: "IGDB platform lookup failed" },
+      { status: 500 },
     );
   }
 }

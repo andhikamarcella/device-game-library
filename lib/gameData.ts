@@ -2,10 +2,12 @@ import {
   buildIgdbImageUrl,
   getIgdbGameDetails,
   getIgdbImageUrl,
+  fetchIgdbAchievements,
   resolveIgdbImage,
   searchIgdbGames as searchIgdbGamesInternal,
   searchIgdbPlatforms as searchIgdbPlatformsInternal,
   type IgdbGame,
+  type IgdbAchievement,
   type IgdbGameDetails,
   type IgdbImageAsset,
   type IgdbPlatformRef,
@@ -13,6 +15,7 @@ import {
   type IgdbSimilarGame,
   type IgdbVideo,
 } from "@/lib/igdb";
+import { igdbScreenshotUrl } from "@/lib/igdbImages";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -70,7 +73,10 @@ export type GameStore = {
 export type GameSummary = {
   id: number;
   slug?: string | null;
+  rawgId?: number | null;
+  rawgSlug?: string | null;
   name: string;
+  cover?: { image_id?: string | null } | null;
   background_image: string | null;
   background_image_additional?: string | null;
   short_screenshots?: GameScreenshot[];
@@ -153,12 +159,12 @@ export type GameRelatedGame = {
 export type GameSimilarEntry = GameSummary;
 
 export type GameAchievement = {
-
   id: number;
   name: string;
   description: string | null;
   image: string | null;
   percent: number | null;
+  platforms: Array<{ id: number; name: string | null }>;
 };
 
 export type GameClip = {
@@ -206,6 +212,7 @@ export type GameTrailer = {
 
 export type GameScreenshot = {
   id: number;
+  image_id?: string | null;
   image: string;
   width?: number;
   height?: number;
@@ -294,8 +301,30 @@ export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
   return mapVideos(details.videos, details.name);
 }
 
-export async function getGameAchievements(_id: number, _pageSize = 10): Promise<GameAchievement[]> {
-  return [];
+function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
+  return entries.map((entry) => {
+    const imageId =
+      entry.unlocked_icon?.image_id || entry.locked_icon?.image_id || entry.achievement_icon?.image_id || null;
+    const platforms = (entry.platforms ?? [])
+      .map((platform) => {
+        if (!platform || typeof platform.id !== "number") return null;
+        return { id: platform.id, name: platform.name ?? null };
+      })
+      .filter((platform): platform is { id: number; name: string | null } => Boolean(platform));
+    return {
+      id: entry.id,
+      name: entry.name || "Unknown achievement",
+      description: entry.description || entry.instructions || null,
+      image: imageId ? buildIgdbImageUrl(imageId, "cover_small") : null,
+      percent: null,
+      platforms,
+    } satisfies GameAchievement;
+  });
+}
+
+export async function getGameAchievements(id: number, pageSize = 10): Promise<GameAchievement[]> {
+  const results = await fetchIgdbAchievements(id, pageSize);
+  return mapAchievements(results);
 }
 
 export async function getGameAdditions(id: number, pageSize = 6): Promise<GameRelatedGame[]> {
@@ -492,12 +521,13 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = getIgdbImageUrl(asset.image_id, "screenshot");
+    const image = igdbScreenshotUrl(asset.image_id);
     if (!image) {
       return;
     }
     screenshots.push({
       id: typeof asset.id === "number" ? asset.id : index,
+      image_id: asset.image_id,
       image,
       width: asset.width,
       height: asset.height,
@@ -614,10 +644,14 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const screenshots = mapScreenshots(game.screenshots);
   const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
   const secondaryImage = screenshots[1]?.image ?? cover;
+  const slug = game.slug ?? slugify(game.name);
   return {
     id: game.id,
-    slug: game.slug ?? slugify(game.name),
+    slug,
+    rawgId: null,
+    rawgSlug: slug,
     name: game.name,
+    cover: game.cover ?? null,
     background_image: cover,
     background_image_additional: secondaryImage,
     short_screenshots: screenshots,
