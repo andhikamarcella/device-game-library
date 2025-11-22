@@ -140,7 +140,7 @@ export async function fetchGameDetail(id: number) {
     "language_supports.*",
     "language_supports.language",
     "language_supports.language.name",
-    "language_supports.mode",
+    "language_supports.language_support_type",
     "time_to_beat.*",
   ];
   const query = [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");

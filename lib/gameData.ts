@@ -753,7 +753,7 @@ const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
     .filter((entry) => entry.category !== null || entry.rating !== null || entry.rating_cover_url);
 };
 
-const normalizeModeField = (value?: number | number[] | null): number[] => {
+const normalizeSupportType = (value?: number | number[] | null): number[] => {
   if (Array.isArray(value)) {
     return value.filter((item): item is number => typeof item === "number");
   }
@@ -782,8 +782,8 @@ const mapLanguageSupports = (
   entries.forEach((entry, index) => {
     if (!entry) return;
 
-    const modes = normalizeModeField(entry.mode);
-    if (!modes.length) return;
+    const supportTypes = normalizeSupportType(entry.language_support_type);
+    if (!supportTypes.length) return;
 
     const languageName = entry.language?.name?.trim() || null;
     const languageId = typeof entry.language?.id === "number" ? entry.language.id : null;
@@ -804,10 +804,10 @@ const mapLanguageSupports = (
       interface: false,
     };
 
-    modes.forEach((mode) => {
-      if (mode === 1) existing.audio = true;
-      if (mode === 2) existing.subtitles = true;
-      if (mode === 3) existing.interface = true;
+    supportTypes.forEach((type) => {
+      if (type === 1) existing.audio = true;
+      if (type === 2) existing.subtitles = true;
+      if (type === 3) existing.interface = true;
     });
 
     grouped.set(key, existing);
