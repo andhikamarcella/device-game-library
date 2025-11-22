@@ -182,7 +182,7 @@ async function executeSearch({
     }
   }
 
-  const results: SearchResult[] = games.map((game) => {
+  const results: SearchResult[] = games.map((game: IgdbGameSearch) => {
     const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
     const screenshots = Array.isArray(game.screenshots)
       ? game.screenshots
