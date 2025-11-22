@@ -59,11 +59,6 @@ export const AGE_RATING_LABELS: Record<AgeRatingCategory, AgeLabelMap> = {
     20: "USK 12",
     21: "USK 16",
     22: "USK 18",
-    0: "USK 0",
-    6: "USK 6",
-    12: "USK 12",
-    16: "USK 16",
-    18: "USK 18",
   },
   6: {
     34: "G",
