@@ -13,7 +13,6 @@ import {
   Star,
   Store,
   Tag,
-  Trophy,
   Users,
   Video,
 } from "lucide-react";
@@ -22,11 +21,10 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
-import { AchievementsList } from "@/components/game/AchievementsList";
+import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
 import {
-  type GameAchievement,
   type GameDetailsPayload,
   type GameParentPlatform,
   type GamePlatform,
@@ -36,6 +34,7 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
@@ -58,7 +57,6 @@ interface GameDetailsProps {
   reviews: GameReview[];
   trailers: GameTrailer[];
   similarGames: GameSimilarEntry[];
-  achievements: GameAchievement[];
   additions: GameRelatedGame[];
   series: GameRelatedGame[];
 }
@@ -215,7 +213,6 @@ export function GameDetails({
   reviews,
   trailers,
   similarGames,
-  achievements,
   additions,
   series,
 }: GameDetailsProps) {
@@ -229,6 +226,7 @@ export function GameDetails({
   const directPlatforms = game.platforms ?? [];
   const availablePlatformEntries = (directPlatforms.length ? directPlatforms : parentPlatforms) ?? [];
   const availablePlatforms = normalizePlatformList(availablePlatformEntries);
+  const rawgIdentifier = game.rawgId ?? game.rawgSlug ?? game.slug ?? null;
   const genres = game.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
   const developers = game.developers?.map((developer) => developer.name).filter(Boolean) ?? [];
   const publishers = game.publishers?.map((publisher) => publisher.name).filter(Boolean) ?? [];
@@ -292,6 +290,7 @@ export function GameDetails({
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const clipSource = game.clip?.clip ?? game.clip?.video ?? game.clip?.clips?.full ?? null;
   const clipPreview = game.clip?.preview ?? null;
+  const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -344,13 +343,28 @@ export function GameDetails({
         <div className="space-y-8 p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-start">
-              <div className="relative mx-auto h-40 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm shadow-slate-900/20 dark:border-slate-700 dark:bg-slate-800">
-                <CoverImage
-                  gameName={game.name}
-                  fallbackImage={igdbCoverImage}
-                  initialImage={igdbCoverImage}
-                  className="h-full w-full"
-                />
+              <div
+                className="
+                  w-full
+                  max-w-[160px] sm:max-w-[200px]
+                  aspect-[3/4]
+                  rounded-2xl
+                  overflow-hidden
+                  mx-auto
+                  bg-slate-900
+                "
+              >
+                {coverUrl ? (
+                  <Image
+                    src={coverUrl}
+                    alt={`${game.name} cover`}
+                    width={300}
+                    height={400}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No cover</div>
+                )}
               </div>
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -607,6 +621,8 @@ export function GameDetails({
 
       <GameTrailerSection game={trailerReadyGame} />
 
+      <RawgAchievementsSection rawgId={rawgIdentifier} gameTitle={game.name} />
+
       {trailers.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
@@ -628,16 +644,6 @@ export function GameDetails({
               );
             })}
           </div>
-        </section>
-      ) : null}
-
-      {achievements.length ? (
-        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <Trophy className="h-4 w-4" aria-hidden="true" />
-            <h2 className="text-sm font-semibold uppercase tracking-widest">Achievements</h2>
-          </div>
-          <AchievementsList achievements={achievements} gameTitle={game.name} />
         </section>
       ) : null}
 

@@ -2,11 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2, Search, SlidersHorizontal, X } from "lucide-react";
-import { GameCard, type SearchGameResult } from "@/components/GameCard";
+import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
+import type { SearchGameResult } from "@/components/GameCard";
 import { DashboardStats } from "@/components/DashboardStats";
 import { FiltersBar, type SortOption } from "@/components/FiltersBar";
+import { GameStatusControls } from "@/components/GameStatusControls";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
+import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl, pickBestImage } from "@/lib/images";
 
 interface SearchResponse {
@@ -32,11 +35,16 @@ interface SimilarResponse {
 }
 
 const SEARCH_STORAGE_KEY = "dgtracker:librarySearch";
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 6;
 
 const getResultCover = (game: SearchGameResult | null | undefined): string | null => {
   if (!game) {
     return null;
+  }
+  const coverId = (game as { cover?: { image_id?: string | null } } | null)?.cover?.image_id ?? null;
+  const igdbCover = igdbCoverUrl(coverId);
+  if (igdbCover) {
+    return igdbCover;
   }
   if (game.coverUrl) {
     return game.coverUrl;
@@ -44,56 +52,55 @@ const getResultCover = (game: SearchGameResult | null | undefined): string | nul
   if (game.coverImageUrl) {
     return game.coverImageUrl;
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots[0];
-  }
-  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls[0];
-  }
-  return null;
+  const screenshots = getResultScreenshots(game);
+  return screenshots[0] ?? null;
 };
 
 const getResultScreenshots = (game: SearchGameResult | null | undefined): string[] => {
   if (!game) {
     return [];
   }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots;
+
+  const rawScreens = (game as any)?.screenshots;
+  if (Array.isArray(rawScreens) && rawScreens.length) {
+    const resolved = rawScreens
+      .map((shot: any) => {
+        const id = shot?.image_id ?? null;
+        return id ? igdbScreenshotUrl(id) : typeof shot === "string" ? shot : null;
+      })
+      .filter((url): url is string => Boolean(url));
+    if (resolved.length) {
+      return resolved;
+    }
   }
+
   if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls;
+    return game.screenshotUrls.filter((url): url is string => typeof url === "string");
   }
-  return [];
+
+  return Array.isArray(game.screenshots)
+    ? game.screenshots.filter((url): url is string => typeof url === "string")
+    : [];
 };
 
 type DiscoverSortOption =
-  | "popular_desc"
-  | "popular_asc"
-  | "rating_desc"
-  | "rating_asc"
-  | "release_desc"
-  | "release_asc";
+  | "none"
+  | "most_popular"
+  | "highest_rated"
+  | "newest"
+  | "oldest"
+  | "alphabetical";
 
 const DISCOVER_SORT_OPTIONS: Array<{ value: DiscoverSortOption; label: string }> = [
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "none", label: "No sort (default)" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "highest_rated", label: "Highest rated" },
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "alphabetical", label: "A → Z" },
 ];
 
-const mapSortOrderToApiParam = (
-  sort: DiscoverSortOption,
-): "popular" | "rating" | "release_date" => {
-  if (sort.startsWith("rating")) {
-    return "rating";
-  }
-  if (sort.startsWith("release")) {
-    return "release_date";
-  }
-  return "popular";
-};
+const mapSortOrderToApiParam = (sort: DiscoverSortOption): string => sort;
 
 const createDefaultPagination = (): SearchResponse["pagination"] => ({
   total: 0,
@@ -121,7 +128,8 @@ export default function DashboardPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [metadataById, setMetadataById] = useState<Record<number, GameMetadata>>({});
-  const [searchSortOrder, setSearchSortOrder] = useState<DiscoverSortOption>("popular_desc");
+  const [searchSortOrder, setSearchSortOrder] = useState<DiscoverSortOption>("none");
+  const [librarySearch, setLibrarySearch] = useState("");
   const [ownershipFilter, setOwnershipFilter] = useState<Ownership | "all">("all");
   const [statusFilter, setStatusFilter] = useState<PlayStatus | "all">("all");
   const [platformFilter, setPlatformFilter] = useState<string | "all">("all");
@@ -312,52 +320,85 @@ export default function DashboardPage() {
         setSearchLoading(true);
         setSearchError(null);
         const currentPage = pagination.page;
-        const apiParams = new URLSearchParams();
-        apiParams.set("q", debouncedQuery);
-        const apiSortParam = mapSortOrderToApiParam(searchSortOrder);
-        if (apiSortParam !== "popular") {
-          apiParams.set("sort", apiSortParam);
-        }
-        const searchPath = apiParams.toString();
-        const response = await fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
+        const response = await fetch(`/api/games/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           signal: controller.signal,
+          body: JSON.stringify({
+            query: debouncedQuery,
+            sort: mapSortOrderToApiParam(searchSortOrder),
+            platform: "all",
+          }),
         });
         const payload = (await response.json().catch(() => null)) as
           | Partial<SearchResponse>
           | { error?: string }
           | null;
-        if (!response.ok || !payload || typeof payload !== "object") {
-          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
-          throw new Error(message);
-        }
-        const data = payload as Partial<SearchResponse>;
+        const data = (payload && typeof payload === "object" ? payload : null) as Partial<SearchResponse>;
         if (cancelled) return;
-        const normalizedResults = Array.isArray(data.results) ? (data.results as SearchGameResult[]) : [];
-        const paginationPayload = data.pagination;
-        const nextPagination = paginationPayload
-          ? {
-              total:
-                typeof paginationPayload.total === "number"
-                  ? paginationPayload.total
-                  : normalizedResults.length,
-              page:
-                typeof paginationPayload.page === "number" && paginationPayload.page > 0
-                  ? paginationPayload.page
-                  : pagination.page,
-              pageSize:
-                typeof paginationPayload.pageSize === "number" && paginationPayload.pageSize > 0
-                  ? paginationPayload.pageSize
-                  : PAGE_SIZE,
-              hasNextPage: Boolean(paginationPayload.hasNextPage),
-              hasPreviousPage: Boolean(paginationPayload.hasPreviousPage),
-            }
-          : {
-              total: normalizedResults.length,
-              page: currentPage,
-              pageSize: PAGE_SIZE,
-              hasNextPage: normalizedResults.length === PAGE_SIZE,
-              hasPreviousPage: currentPage > 1,
-            };
+        const normalizedResults = (Array.isArray(data.results)
+          ? (data.results as SearchGameResult[])
+          : Array.isArray((data as any)?.games)
+            ? ((data as any).games as SearchGameResult[])
+            : [])
+          .map((result) => {
+            const coverImageId = (result as { cover?: { image_id?: string | null } }).cover?.image_id ?? null;
+            const coverUrl = normalizeImageUrl(
+              igdbCoverUrl(coverImageId) ?? result.coverUrl ?? result.coverImageUrl ?? null,
+            );
+            const screenshots = getResultScreenshots(result);
+            const releaseYear = typeof result.releaseYear === "number"
+              ? result.releaseYear
+              : (result as { first_release_date?: number | null }).first_release_date
+                  ? new Date(
+                      Number((result as { first_release_date?: number | null }).first_release_date) * 1000,
+                    ).getFullYear()
+                  : null;
+            const platforms = Array.isArray(result.platforms)
+              ? result.platforms.map((platform) => ({
+                  id: platform.id,
+                  name: platform.name,
+                  slug: platform.slug ?? platform.name?.toLowerCase() ?? `${platform.id}`,
+                  abbreviation: platform.abbreviation ?? null,
+                }))
+              : [];
+            const rating = typeof result.rating === "number"
+              ? result.rating
+              : (result as { total_rating?: number | null } | null)?.total_rating ?? null;
+            const ratingsCount = typeof result.ratingsCount === "number"
+              ? result.ratingsCount
+              : typeof (result as { rating_count?: number | null } | null)?.rating_count === "number"
+                ? (result as { rating_count?: number | null } | null)?.rating_count ?? 0
+                : typeof (result as { total_rating_count?: number | null } | null)?.total_rating_count === "number"
+                  ? (result as { total_rating_count?: number | null } | null)?.total_rating_count ?? 0
+                  : 0;
+
+            return {
+              ...result,
+              coverUrl,
+              coverImageUrl: coverUrl ?? result.coverImageUrl ?? null,
+              cover: result.cover ?? (coverImageId ? { image_id: coverImageId } : undefined),
+              screenshots,
+              screenshotUrls: screenshots,
+              releaseYear,
+              rating,
+              ratingsCount,
+              platforms,
+            } as SearchGameResult;
+          });
+        if ((data as { error?: string } | null)?.error) {
+          setSearchError((data as { error?: string }).error ?? null);
+        }
+        const totalResults = normalizedResults.length;
+        const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
+        const safePage = Math.min(Math.max(currentPage, 1), totalPages);
+        const nextPagination = {
+          total: totalResults,
+          page: safePage,
+          pageSize: PAGE_SIZE,
+          hasNextPage: safePage < totalPages,
+          hasPreviousPage: safePage > 1,
+        };
         setSearchResults(normalizedResults);
         setPagination(nextPagination);
         setMetadataById((prev) => {
@@ -569,9 +610,10 @@ export default function DashboardPage() {
     setDebouncedQuery(query.trim());
   };
 
-  const totalDiscoverPages = Math.max(
-    1,
-    Math.ceil(Math.max(pagination.total, searchResults.length) / pagination.pageSize),
+  const totalDiscoverPages = Math.max(1, Math.ceil(Math.max(pagination.total, searchResults.length) / PAGE_SIZE));
+  const paginatedResults = searchResults.slice(
+    (pagination.page - 1) * PAGE_SIZE,
+    pagination.page * PAGE_SIZE,
   );
 
   const handlePageJumpSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -629,6 +671,8 @@ export default function DashboardPage() {
   }, [libraryGames]);
 
   const filteredLibrary = useMemo(() => {
+    const normalizedQuery = librarySearch.trim().toLowerCase();
+
     return libraryGames
       .filter((game) => {
         if (ownershipFilter !== "all" && game.ownership !== ownershipFilter) {
@@ -643,6 +687,13 @@ export default function DashboardPage() {
         if (minRating !== null) {
           const rating = typeof game.personalRating === "number" ? game.personalRating : 0;
           if (rating < minRating) {
+            return false;
+          }
+        }
+        if (normalizedQuery) {
+          const title = game.title.toLowerCase();
+          const platforms = game.platforms.map((platform) => platform.toLowerCase()).join(" ");
+          if (!title.includes(normalizedQuery) && !platforms.includes(normalizedQuery)) {
             return false;
           }
         }
@@ -661,6 +712,14 @@ export default function DashboardPage() {
               return a.title.localeCompare(b.title);
             }
             return yearB - yearA;
+          }
+          case "igdb_popularity": {
+            const countA = metadataA?.ratingsCount ?? 0;
+            const countB = metadataB?.ratingsCount ?? 0;
+            if (countA === countB) {
+              return a.title.localeCompare(b.title);
+            }
+            return countB - countA;
           }
           case "igdb_rating": {
             const ratingA = metadataA?.rating ?? -Infinity;
@@ -697,7 +756,16 @@ export default function DashboardPage() {
           }
         }
       });
-  }, [libraryGames, metadataById, ownershipFilter, statusFilter, platformFilter, minRating, sortOrder]);
+  }, [
+    libraryGames,
+    librarySearch,
+    metadataById,
+    ownershipFilter,
+    statusFilter,
+    platformFilter,
+    minRating,
+    sortOrder,
+  ]);
 
   const hasSearchQuery = debouncedQuery.length > 0;
   const discoverCanGoPrevious = pagination.hasPreviousPage || pagination.page > 1;
@@ -758,31 +826,39 @@ export default function DashboardPage() {
             </div>
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {searchResults.map((result) => {
+            {paginatedResults.map((result) => {
               const userGame = libraryGames.find((game) => game.igdbId === result.id);
               const metadata = metadataById[result.id];
+              const coverImageId = (result as { cover?: { image_id?: string | null } }).cover?.image_id ?? null;
               const coverOverride = normalizeImageUrl(
-                metadata?.coverImage ?? getResultCover(result),
+                igdbCoverUrl(coverImageId) ?? metadata?.coverImage ?? getResultCover(result),
               );
-              const cardData: SearchGameResult = {
+              const normalizedScreenshots = getResultScreenshots(result);
+              const normalizedResult: SearchGameResult = {
                 ...result,
                 genres: Array.isArray(result.genres) ? result.genres : [],
                 coverUrl: coverOverride ?? result.coverUrl ?? result.coverImageUrl ?? null,
                 coverImageUrl: coverOverride ?? result.coverImageUrl ?? null,
-                screenshots: getResultScreenshots(result),
-                screenshotUrls: getResultScreenshots(result),
+                screenshots: normalizedScreenshots,
+                screenshotUrls: normalizedScreenshots,
+              };
+              const cardData: CompactGameCardData = {
+                id: normalizedResult.id,
+                name: normalizedResult.name,
+                coverImageId,
+                coverUrl: normalizedResult.coverUrl,
+                rating: normalizedResult.rating ?? metadata?.rating ?? null,
+                ratingsCount: normalizedResult.ratingsCount ?? metadata?.ratingsCount ?? null,
+                releaseYear: normalizedResult.releaseYear ?? metadata?.releaseYear ?? null,
+                platforms: normalizedResult.platforms ?? [],
               };
               return (
-                <GameCard
+                <GameCardCompact
                   key={result.id}
                   game={cardData}
-                  coverOverride={coverOverride}
-                  userGame={userGame}
-                  onAdd={handleAddToLibrary}
-                  onUpdate={handleUpdateLibrary}
-                  onRemove={handleRemoveLibrary}
-                  onShowSimilar={setSimilarSource}
-                  detailReturnTo={currentLibraryRoute}
+                  actionLabel={userGame ? "Saved" : "Add to library"}
+                  onAction={() => handleAddToLibrary(normalizedResult)}
+                  actionDisabled={Boolean(userGame)}
                 />
               );
             })}
@@ -850,6 +926,20 @@ export default function DashboardPage() {
             <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{libraryGames.length} games saved</span>
           )}
         </div>
+        <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr]">
+          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Search library
+            </span>
+            <input
+              type="text"
+              value={librarySearch}
+              onChange={(event) => setLibrarySearch(event.target.value)}
+              placeholder="Cari judul game di library..."
+              className="w-full rounded-lg bg-slate-900/5 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-emerald-500 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+            />
+          </label>
+        </div>
         <DashboardStats games={libraryGames} />
         <FiltersBar
           ownership={ownershipFilter}
@@ -871,37 +961,32 @@ export default function DashboardPage() {
               const coverImage = normalizeImageUrl(
                 userGame.coverImage ?? metadata?.coverImage ?? null,
               );
-              const cardData: SearchGameResult = {
+              const cardData: CompactGameCardData = {
                 id: userGame.igdbId,
-                slug: userGame.slug ?? `${userGame.igdbId}`,
                 name: userGame.title,
-                summary: userGame.notes ?? "",
+                coverImageId: null,
                 coverUrl: coverImage,
-                coverImageUrl: coverImage,
-                screenshots: [],
-                screenshotUrls: [],
-                releaseYear: metadata?.releaseYear ?? null,
                 rating: metadata?.rating ?? null,
                 ratingsCount: metadata?.ratingsCount ?? 0,
+                releaseYear: metadata?.releaseYear ?? null,
                 platforms: userGame.platforms.map((platform, index) => ({
                   id: index,
                   name: platform,
                   slug: platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
                   abbreviation: null,
                 })),
-                genres: [],
-                popularity: metadata?.rating ?? null,
               };
               return (
-                <GameCard
+                <GameCardCompact
                   key={userGame.igdbId}
                   game={cardData}
-                  coverOverride={coverImage}
-                  userGame={userGame}
-                  onUpdate={handleUpdateLibrary}
-                  onRemove={handleRemoveLibrary}
-                  onShowSimilar={setSimilarSource}
-                  detailReturnTo={currentLibraryRoute}
+                  footer={
+                    <GameStatusControls
+                      userGame={userGame}
+                      onUpdate={handleUpdateLibrary}
+                      onRemove={handleRemoveLibrary}
+                    />
+                  }
                 />
               );
             })}
