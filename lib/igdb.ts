@@ -67,7 +67,9 @@ export async function getIgdbToken(): Promise<{ accessToken: string; clientId: s
 export type SortKey =
   | "none"
   | "most_popular"
+  | "least_popular"
   | "highest_rated"
+  | "lowest_rated"
   | "newest"
   | "oldest"
   | "alphabetical";
@@ -109,7 +111,9 @@ export function buildIgdbQuery(opts: {
 
   const sortMapping: Record<Exclude<SortKey, "none">, string> = {
     most_popular: "total_rating_count desc",
+    least_popular: "total_rating_count asc",
     highest_rated: "total_rating desc",
+    lowest_rated: "total_rating asc",
     newest: "first_release_date desc",
     oldest: "first_release_date asc",
     alphabetical: "name asc",
