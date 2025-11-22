@@ -184,6 +184,14 @@ export interface IgdbAgeRating {
   rating_cover_url?: string | null;
 }
 
+export interface IgdbLanguageSupport {
+  id: number;
+  language?: { id: number; name?: string | null } | null;
+  audio?: number | number[] | null;
+  subtitles?: number | number[] | null;
+  interface?: number | number[] | null;
+}
+
 export interface IgdbAchievementIcon {
   id?: number;
   image_id?: string | null;
@@ -248,6 +256,7 @@ export interface IgdbGameDetails extends IgdbGame {
   parent_game?: IgdbSimilarGame;
   involved_companies?: IgdbCompanyRef[];
   age_ratings?: IgdbAgeRating[] | null;
+  language_supports?: IgdbLanguageSupport[] | null;
 }
 
 export interface IgdbSimilarGame
@@ -598,6 +607,12 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       age_ratings.rating,
       age_ratings.synopsis,
       age_ratings.rating_cover_url,
+      language_supports.id,
+      language_supports.language.id,
+      language_supports.language.name,
+      language_supports.audio,
+      language_supports.subtitles,
+      language_supports.interface,
       websites.url,
       websites.category,
       videos.name,

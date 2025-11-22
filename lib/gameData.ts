@@ -14,6 +14,7 @@ import {
   type IgdbSearchParams,
   type IgdbSimilarGame,
   type IgdbAgeRating,
+  type IgdbLanguageSupport,
   type IgdbVideo,
 } from "@/lib/igdb";
 import { igdbScreenshotUrl } from "@/lib/igdbImages";
@@ -220,6 +221,7 @@ export type GameDetailsPayload = GameSummary & {
   reactions?: GameReactionSummary | null;
   playtime_distribution?: GamePlaytimeDistribution | null;
   age_ratings?: IgdbAgeRating[] | null;
+  language_supports?: GameLanguageSupport[] | null;
 };
 
 export type GameScreenshot = {
@@ -236,6 +238,14 @@ export type GameArtwork = {
   image: string;
   width?: number;
   height?: number;
+};
+
+export type GameLanguageSupport = {
+  id: number;
+  language: { id: number; name: string | null } | null;
+  audio: number[];
+  subtitles: number[];
+  interface: number[];
 };
 
 export type GameReview = {
@@ -743,6 +753,43 @@ const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
     .filter((entry) => entry.category !== null || entry.rating !== null || entry.rating_cover_url);
 };
 
+const normalizeSupportField = (value?: number | number[] | null): number[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is number => typeof item === "number");
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return [value];
+  }
+  return [];
+};
+
+const mapLanguageSupports = (
+  entries?: IgdbLanguageSupport[] | null,
+): GameLanguageSupport[] => {
+  if (!entries?.length) return [];
+
+  return entries
+    .map((entry, index) => {
+      if (!entry) return null;
+
+      const audio = normalizeSupportField(entry.audio);
+      const subtitles = normalizeSupportField(entry.subtitles);
+      const interfaceOptions = normalizeSupportField(entry.interface);
+      const languageName = entry.language?.name?.trim() || null;
+      const languageId = typeof entry.language?.id === "number" ? entry.language.id : null;
+      const idFallback = languageId ?? index;
+
+      return {
+        id: typeof entry.id === "number" ? entry.id : idFallback,
+        language: languageName || languageId !== null ? { id: languageId ?? idFallback, name: languageName } : null,
+        audio,
+        subtitles,
+        interface: interfaceOptions,
+      } satisfies GameLanguageSupport;
+    })
+    .filter((entry): entry is GameLanguageSupport => Boolean(entry));
+};
+
 const mapCompanies = (
   details: IgdbGameDetails,
   role: "developer" | "publisher",
@@ -833,6 +880,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     playtime_distribution: {},
     tags: mapKeywords(details.keywords),
     age_ratings: mapAgeRatings(details.age_ratings),
+    language_supports: mapLanguageSupports(details.language_supports),
     game_modes: mapModes(details.game_modes),
     player_perspectives: mapModes(details.player_perspectives),
     franchises: mapNamedEntities(details.franchises),

@@ -92,9 +92,9 @@ export type IgdbGameDetail = {
   language_supports?: Array<{
     id: number;
     language?: { id: number; name?: string | null } | null;
-    audio?: number | null;
-    subtitles?: number | null;
-    interface?: number | null;
+    audio?: number | number[] | null;
+    subtitles?: number | number[] | null;
+    interface?: number | number[] | null;
   }> | null;
   time_to_beat?: { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
 };

@@ -22,6 +22,7 @@ import PlatformChips from "@/components/PlatformChips";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
 import AgeRating from "@/components/AgeRating";
 import DevPubList from "@/components/DevPubList";
+import LanguageTable from "@/components/LanguageTable";
 import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
@@ -454,6 +455,8 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
 
         <MetadataList title="Game Engine" items={engineItems} />
       </div>
+
+      <LanguageTable supports={game.language_supports} />
 
       <section className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-400">Description</h2>
