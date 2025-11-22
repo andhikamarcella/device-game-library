@@ -13,7 +13,7 @@ interface PlatformLike {
 interface ROMDownloadProps {
   game: {
     name?: string | null;
-    platforms?: PlatformLike[];
+    platforms?: PlatformLike[] | null;
   } | null;
 }
 
