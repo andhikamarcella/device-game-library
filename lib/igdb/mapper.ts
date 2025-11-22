@@ -109,6 +109,9 @@ const parseRatingFromCoverUrl = (
   }
 };
 
+const fallbackDescription = (system: string, code?: string | number | null) =>
+  `Official ${system}${code ? ` ${code}` : ""} rating`;
+
 const resolveDescriptorFromCover = (coverUrl?: string | null): AgeRatingDescriptor | null => {
   const parsed = parseRatingFromCoverUrl(coverUrl);
   if (!parsed.code || !parsed.category) return null;
@@ -144,7 +147,7 @@ export function mapAgeRatingsToDisplay(ageRatings?: IgdbAgeRating[] | null): Map
 
     const systemInfo = CATEGORY_SLUGS[category];
     const label = descriptor?.label ?? `${systemInfo.system} ${descriptor?.code ?? parsedFromCover.code ?? ratingCode ?? ""}`.trim();
-    const description = descriptor?.description ?? systemInfo.system;
+    const description = descriptor?.description ?? fallbackDescription(systemInfo.system, parsedFromCover.code ?? ratingCode);
     const code = descriptor?.code ?? parsedFromCover.code ?? `${ratingCode || ""}`;
 
     const icon = entry.rating_cover_url

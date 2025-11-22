@@ -608,23 +608,36 @@ const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
 
 const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
   if (!entries?.length) return [];
+
   return entries
-    .filter((entry): entry is IgdbAgeRating => Boolean(entry) && typeof entry.id === "number")
-    .map((entry) => ({
-      id: entry.id,
-      category: typeof entry.category === "number" ? entry.category : null,
-      rating:
+    .filter((entry): entry is IgdbAgeRating => Boolean(entry))
+    .map((entry, index) => {
+      const rating =
         typeof entry.rating === "number"
           ? entry.rating
           : typeof entry.rating === "string"
             ? Number.parseInt(entry.rating, 10)
-            : null,
-      synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
-      rating_cover_url:
+            : null;
+
+      const category = typeof entry.category === "number" ? entry.category : null;
+      const rating_cover_url =
         typeof entry.rating_cover_url === "string" && entry.rating_cover_url.trim()
           ? entry.rating_cover_url.trim()
-          : null,
-    }));
+          : null;
+
+      const idFallback = Number.isFinite(rating)
+        ? Number(`${category ?? ""}${rating}`.replace(/\D+/g, "")) || index
+        : index;
+
+      return {
+        id: typeof entry.id === "number" ? entry.id : idFallback,
+        category,
+        rating,
+        synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
+        rating_cover_url,
+      } satisfies IgdbAgeRating;
+    })
+    .filter((entry) => entry.category !== null || entry.rating !== null || entry.rating_cover_url);
 };
 
 const mapCompanies = (

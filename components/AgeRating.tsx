@@ -8,7 +8,10 @@ type AgeRatingProps = {
 };
 
 export default function AgeRating({ ageRatings }: AgeRatingProps) {
-  const mapped = mapAgeRatingsToDisplay(ageRatings);
+  const mapped = mapAgeRatingsToDisplay(ageRatings).sort((a, b) => {
+    if (a.system === b.system) return a.label.localeCompare(b.label);
+    return a.system.localeCompare(b.system);
+  });
 
   if (!mapped.length) {
     return <p className="text-sm text-muted-foreground">No age rating information available for this game.</p>;
