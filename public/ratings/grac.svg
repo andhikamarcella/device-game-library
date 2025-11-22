@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="title desc">
+  <title id="title">GRAC rating</title>
+  <desc id="desc">GRAC rating badge</desc>
+  <rect width="120" height="120" rx="16" fill="#0f172a" />
+  <rect x="8" y="8" width="104" height="104" rx="12" fill="#111827" stroke="#f59e0b" stroke-width="4" opacity="0.85" />
+  <text x="60" y="68" fill="#fef3c7" font-family="'Inter', 'Segoe UI', sans-serif" font-size="34" font-weight="700" text-anchor="middle">GRAC</text>
+</svg>

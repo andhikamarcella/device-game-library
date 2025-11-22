@@ -8,12 +8,11 @@ import { ArrowLeft, ExternalLink, Loader2, MapPin, Star } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { SimilarGamesRow } from "@/components/SimilarGamesRow";
-import { VideoPlayer } from "@/components/VideoPlayer";
-import { GameTrailerSection } from "@/components/game/GameTrailerSection";
+import { VideoCarousel } from "@/components/video/VideoCarousel";
 import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
 import { normalizeImageUrl } from "@/lib/images";
 import { truncateText } from "@/lib/text";
-import type { GameDetailsPayload } from "@/lib/gameData";
+import type { IgdbVideo } from "@/lib/igdb";
 
 interface ScreenshotEntry {
   id: number;
@@ -49,7 +48,7 @@ interface ScreenshotResponse {
 }
 
 interface MoviesResponse {
-  results: Array<{ id: number; name: string; preview: string | null; data: { 480?: string; max?: string } }>;
+  results: IgdbVideo[];
 }
 
 interface SimilarResponse {
@@ -84,42 +83,6 @@ export default function GameDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
-
-  const trailerReadyGame = useMemo<GameDetailsPayload | null>(() => {
-    if (!details) {
-      return null;
-    }
-    const parentPlatforms = (details.parent_platforms ?? []).map((platform) => ({
-      platform: { id: platform.id, name: platform.name, slug: platform.slug },
-    }));
-    return {
-      id: details.id,
-      slug: details.slug,
-      name: details.name,
-      background_image: details.background_image,
-      background_image_additional: details.background_image_additional,
-      released: details.released,
-      rating: details.rating ?? 0,
-      ratings_count: details.ratings_count ?? 0,
-      platforms: parentPlatforms,
-      description: details.description_raw,
-      description_raw: details.description_raw,
-      website: null,
-      genres: details.genres ?? [],
-      developers: details.developers ?? [],
-      publishers: details.publishers ?? [],
-      short_screenshots: screenshots,
-      playtime: details.playtime,
-      added_by_status: null,
-      ratings: null,
-      tags: details.tags ?? [],
-      parent_game: null,
-      parent_platforms: parentPlatforms,
-      series: null,
-      clip: null,
-      movies: trailers,
-    } satisfies GameDetailsPayload;
-  }, [details, screenshots, trailers]);
 
   useEffect(() => {
     if (!Number.isFinite(gameId)) {
@@ -403,20 +366,9 @@ export default function GameDetailsPage() {
 
       {screenshots.length ? <ScreenshotGallery screenshots={screenshots} /> : null}
 
-      {trailerReadyGame ? <GameTrailerSection game={trailerReadyGame} /> : null}
-
-      {trailers.length ? (
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">IGDB trailers</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {trailers.slice(0, 2).map((trailer) => {
-              const src = trailer.data.max ?? trailer.data[480];
-              if (!src) return null;
-              return <VideoPlayer key={trailer.id} src={src} poster={trailer.preview} title={trailer.name} />;
-            })}
-          </div>
-        </section>
-      ) : null}
+      <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+        <VideoCarousel videos={trailers} />
+      </section>
 
       {stores.length ? (
         <section className="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
