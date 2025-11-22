@@ -180,6 +180,20 @@ export type GameClip = {
 
 export type GameDetailsPayload = GameSummary & {
   genres: { id: number; name: string }[];
+  themes?: { id: number; name: string }[];
+  game_modes?: { id: number; name: string }[];
+  player_perspectives?: { id: number; name: string }[];
+  franchises?: { id: number; name: string; slug?: string | null }[];
+  collections?: { id: number; name: string; slug?: string | null }[];
+  engines?: { id: number; name: string; slug?: string | null }[];
+  involved_companies?:
+    | Array<{
+        id: number;
+        developer?: boolean;
+        publisher?: boolean;
+        company?: { id: number; name?: string | null; slug?: string | null } | null;
+      }>
+    | null;
   description?: string | null;
   description_raw?: string | null;
   website?: string | null;
@@ -524,6 +538,60 @@ const mapGenres = (genres?: IgdbGameDetails["genres"]): Array<{ id: number; name
   );
 };
 
+const mapNamedEntities = (
+  entries?: Array<{ id: number; name?: string | null; slug?: string | null }> | null,
+): Array<{ id: number; name: string; slug?: string | null }> => {
+  if (!entries?.length) return [];
+
+  return uniqueById(
+    entries
+      .filter((entry) => entry && typeof entry.id === "number")
+      .map((entry) => ({
+        id: entry!.id,
+        name: entry!.name ?? `Item ${entry!.id}`,
+        slug: entry!.slug ?? slugify(entry!.name ?? ""),
+      })),
+  );
+};
+
+const mapModes = (entries?: IgdbGameDetails["game_modes"]): Array<{ id: number; name: string }> => {
+  if (!entries?.length) return [];
+
+  return uniqueById(
+    entries
+      .filter((entry) => entry && typeof entry.id === "number")
+      .map((entry) => ({ id: entry!.id, name: entry!.name ?? `Mode ${entry!.id}` })),
+  );
+};
+
+const mapInvolvedCompanies = (
+  entries?: IgdbGameDetails["involved_companies"],
+):
+  | Array<{
+      id: number;
+      developer?: boolean;
+      publisher?: boolean;
+      company?: { id: number; name?: string | null; slug?: string | null } | null;
+    }>
+  | null => {
+  if (!entries?.length) return [];
+
+  return entries
+    .filter((entry) => entry && typeof entry.id === "number")
+    .map((entry) => ({
+      id: entry!.id,
+      developer: Boolean(entry!.developer),
+      publisher: Boolean(entry!.publisher),
+      company: entry!.company
+        ? {
+            id: entry!.company.id,
+            name: entry!.company.name,
+            slug: entry!.company.slug ?? slugify(entry!.company.name ?? undefined),
+          }
+        : null,
+    }));
+};
+
 const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
   if (!assets?.length) {
     return [];
@@ -740,6 +808,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     clip: mapClip(details.videos, details.name),
     movies: [],
     genres: mapGenres(details.genres),
+    themes: mapNamedEntities(details.themes),
     description: descriptionRaw || null,
     description_raw: descriptionRaw || null,
     website: details.websites?.[0]?.url ?? null,
@@ -764,5 +833,11 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     playtime_distribution: {},
     tags: mapKeywords(details.keywords),
     age_ratings: mapAgeRatings(details.age_ratings),
+    game_modes: mapModes(details.game_modes),
+    player_perspectives: mapModes(details.player_perspectives),
+    franchises: mapNamedEntities(details.franchises),
+    collections: mapNamedEntities(details.collections),
+    engines: mapNamedEntities(details.game_engines),
+    involved_companies: mapInvolvedCompanies(details.involved_companies),
   };
 };

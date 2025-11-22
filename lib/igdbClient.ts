@@ -70,6 +70,7 @@ export type IgdbGameDetail = {
   player_perspectives?: Array<{ id: number; name?: string | null }> | null;
   franchises?: Array<{ id: number; name?: string | null; slug?: string | null }> | null;
   collections?: Array<{ id: number; name?: string | null; slug?: string | null }> | null;
+  game_engines?: Array<{ id: number; name?: string | null; slug?: string | null }> | null;
   involved_companies?: Array<{
     id: number;
     developer?: boolean;
@@ -118,6 +119,8 @@ export async function fetchGameDetail(id: number) {
     "franchises.slug",
     "collections.name",
     "collections.slug",
+    "game_engines.name",
+    "game_engines.slug",
     "involved_companies.*",
     "involved_companies.company.name",
     "involved_companies.company.slug",

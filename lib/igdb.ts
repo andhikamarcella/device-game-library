@@ -158,6 +158,12 @@ export interface IgdbModeRef {
   name?: string;
 }
 
+export interface IgdbEntityRef {
+  id: number;
+  name?: string;
+  slug?: string | null;
+}
+
 export interface IgdbWebsite {
   id: number;
   url: string;
@@ -199,6 +205,7 @@ export interface IgdbCompanyRef {
   company?: {
     id: number;
     name?: string;
+    slug?: string | null;
   };
   developer?: boolean;
   publisher?: boolean;
@@ -226,6 +233,9 @@ export interface IgdbGameDetails extends IgdbGame {
   keywords?: IgdbKeywordRef[];
   game_modes?: IgdbModeRef[];
   player_perspectives?: IgdbModeRef[];
+  franchises?: IgdbEntityRef[];
+  collections?: IgdbEntityRef[];
+  game_engines?: IgdbEntityRef[];
   websites?: IgdbWebsite[];
   videos?: IgdbVideo[];
   screenshots?: IgdbImageAsset[];
@@ -567,7 +577,19 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       game_modes.name,
       player_perspectives.id,
       player_perspectives.name,
+      franchises.id,
+      franchises.name,
+      franchises.slug,
+      collections.id,
+      collections.name,
+      collections.slug,
+      game_engines.id,
+      game_engines.name,
+      game_engines.slug,
+      involved_companies.id,
+      involved_companies.company.id,
       involved_companies.company.name,
+      involved_companies.company.slug,
       involved_companies.developer,
       involved_companies.publisher,
       age_ratings.*,
