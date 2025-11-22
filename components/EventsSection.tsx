@@ -1,7 +1,16 @@
-import { igdbPost } from "@/lib/igdbClient";
-import { igdbHD } from "@/lib/igdb-image";
-import type { SearchGameResult } from "@/components/GameCard";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
 import { GameCard } from "@/components/GameCard";
+import type { SearchGameResult } from "@/components/GameCard";
+import { igdbHD } from "@/lib/igdb-image";
+
+type EventBucket = {
+  upcoming: IgdbEventGame[];
+  anniversaries: IgdbEventGame[];
+  fallback: IgdbEventGame[];
+};
 
 type IgdbEventGame = {
   id: number;
@@ -10,8 +19,6 @@ type IgdbEventGame = {
   first_release_date?: number | null;
   cover?: { image_id?: string | null } | null;
 };
-
-const today = new Date();
 
 function toGameCard(game: IgdbEventGame): SearchGameResult {
   const coverUrl = game.cover?.image_id ? igdbHD(game.cover.image_id) : null;
@@ -38,56 +45,10 @@ function toGameCard(game: IgdbEventGame): SearchGameResult {
   };
 }
 
-async function safeIgdbQuery(body: string): Promise<IgdbEventGame[]> {
-  try {
-    const data = await igdbPost("games", body);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.warn("IGDB events query failed", error);
-    return [];
-  }
-}
-
-async function getUpcomingReleases(): Promise<IgdbEventGame[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const next30 = now + 30 * 24 * 60 * 60;
-  const body = [
-    "fields id,name,slug,first_release_date,cover.image_id;",
-    `where first_release_date != null & first_release_date > ${now} & first_release_date < ${next30};`,
-    "sort first_release_date asc;",
-    "limit 12;",
-  ].join("\n");
-  return safeIgdbQuery(body);
-}
-
-async function getAnniversaries(): Promise<IgdbEventGame[]> {
-  const body = [
-    "fields id,name,slug,first_release_date,cover.image_id;",
-    "where first_release_date != null;",
-    "sort rating_count desc;",
-    "limit 60;",
-  ].join("\n");
-  const games = await safeIgdbQuery(body);
-  return games.filter((game) => {
-    if (!game.first_release_date) return false;
-    const date = new Date(Number(game.first_release_date) * 1000);
-    return date.getDate() === today.getDate() && date.getMonth() === today.getMonth();
-  });
-}
-
-async function getNotableUpdates(): Promise<IgdbEventGame[]> {
-  const body = [
-    "fields id,name,slug,first_release_date,cover.image_id;",
-    "sort rating_count desc;",
-    "limit 12;",
-  ].join("\n");
-  return safeIgdbQuery(body);
-}
-
 function formatAnniversaryLabel(release: number | null | undefined): string | null {
   if (!release) return null;
   const releaseDate = new Date(Number(release) * 1000);
-  const years = today.getFullYear() - releaseDate.getFullYear();
+  const years = new Date().getFullYear() - releaseDate.getFullYear();
   if (years <= 0) return "Releasing";
   return `Celebrating ${years} year${years === 1 ? "" : "s"}`;
 }
@@ -109,11 +70,44 @@ function EventGrid({ games, note }: { games: IgdbEventGame[]; note?: (game: Igdb
   );
 }
 
-export default async function EventsSection() {
-  const [upcoming, anniversaries] = await Promise.all([getUpcomingReleases(), getAnniversaries()]);
-  const fallback = !upcoming.length && !anniversaries.length ? await getNotableUpdates() : [];
+export default function EventsSection() {
+  const [events, setEvents] = useState<EventBucket>({ upcoming: [], anniversaries: [], fallback: [] });
+  const [loading, setLoading] = useState(true);
 
-  if (!upcoming.length && !anniversaries.length && !fallback.length) {
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/igdb/events", { method: "POST" });
+        const json = (await res.json()) as Partial<EventBucket> & { error?: string };
+        if (cancelled || json?.error) return;
+        setEvents({
+          upcoming: Array.isArray(json.upcoming) ? json.upcoming : [],
+          anniversaries: Array.isArray(json.anniversaries) ? json.anniversaries : [],
+          fallback: Array.isArray(json.fallback) ? json.fallback : [],
+        });
+      } catch (error) {
+        console.warn("Failed to fetch events", error);
+        if (!cancelled) {
+          setEvents({ upcoming: [], anniversaries: [], fallback: [] });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const hasAny = useMemo(
+    () => events.upcoming.length > 0 || events.anniversaries.length > 0 || events.fallback.length > 0,
+    [events],
+  );
+
+  if (!loading && !hasAny) {
     return (
       <section className="space-y-4 rounded-2xl border border-border bg-card/60 p-6 shadow-lg">
         <h2 className="text-xl font-semibold">Game Events</h2>
@@ -128,27 +122,44 @@ export default async function EventsSection() {
         <h2 className="text-xl font-semibold">Game Events</h2>
       </div>
 
-      {upcoming.length ? (
+      {loading ? (
+        <div className="grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-3 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="h-72 animate-pulse rounded-2xl border border-border/60 bg-muted/40 shadow-inner"
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {!loading && events.upcoming.length ? (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Upcoming Releases (next 30 days)</h3>
-          <EventGrid games={upcoming} note={(game) => {
-            const date = game.first_release_date ? new Date(Number(game.first_release_date) * 1000) : null;
-            return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
-          }} />
+          <EventGrid
+            games={events.upcoming}
+            note={(game) => {
+              const date = game.first_release_date ? new Date(Number(game.first_release_date) * 1000) : null;
+              return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+            }}
+          />
         </div>
       ) : null}
 
-      {anniversaries.length ? (
+      {!loading && events.anniversaries.length ? (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Anniversaries</h3>
-          <EventGrid games={anniversaries} note={(game) => formatAnniversaryLabel(game.first_release_date)} />
+          <EventGrid
+            games={events.anniversaries}
+            note={(game) => formatAnniversaryLabel(game.first_release_date)}
+          />
         </div>
       ) : null}
 
-      {!upcoming.length && !anniversaries.length && fallback.length ? (
+      {!loading && !events.upcoming.length && !events.anniversaries.length && events.fallback.length ? (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Notable Updates</h3>
-          <EventGrid games={fallback} />
+          <EventGrid games={events.fallback} />
         </div>
       ) : null}
     </section>

@@ -9,6 +9,7 @@ import { Card } from "@/components/Card";
 import { GameCard, type SearchGameResult as CardResult } from "@/components/GameCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
+import EventsSection from "@/components/EventsSection";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import { igdbCoverUrl } from "@/lib/igdbImages";
@@ -896,35 +897,7 @@ function DashboardPageContent() {
           )}
         </Card>
 
-        <Card title="Game Events" description="Upcoming releases in the next 30 days">
-          {headlineLoading && !comingSoonGames.length ? (
-            <div className={HOMEPAGE_GRID}>
-              {Array.from({ length: 4 }).map((_, idx) => (
-                <div
-                  key={idx}
-                  className="h-72 animate-pulse rounded-2xl border border-slate-200/60 bg-slate-100/70 shadow-inner shadow-slate-900/10 dark:border-slate-800/60 dark:bg-slate-900/60"
-                />
-              ))}
-            </div>
-          ) : comingSoonGames.length ? (
-            <div className={HOMEPAGE_GRID}>
-              {comingSoonGames.slice(0, 8).map((game) => {
-                const releaseTimestamp = (game as { first_release_date?: number | null }).first_release_date ?? null;
-                const label = releaseTimestamp
-                  ? new Date(Number(releaseTimestamp) * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-                  : null;
-                return (
-                  <div key={game.id} className="space-y-2">
-                    <GameCard game={game} />
-                    {label ? <p className="text-sm text-slate-600 dark:text-slate-300">{label}</p> : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-600 dark:text-slate-300">No event data available.</p>
-          )}
-        </Card>
+        <EventsSection />
       </div>
 
       <Card
