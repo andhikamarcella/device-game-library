@@ -1,34 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  BarChart3,
-  Clapperboard,
-  ExternalLink,
-  Gamepad2,
-  Globe,
-  Layers,
-  MessageCircle,
-  Radio,
-  Star,
-  Store,
-  Tag,
-  Users,
-  Video,
-} from "lucide-react";
+import { ArrowLeft, BarChart3, ExternalLink, Gamepad2, Globe, Layers, MessageCircle, Radio, Star, Store, Tag, Users } from "lucide-react";
 import { CoverImage } from "@/components/CoverImage";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
-import { GameTrailerSection } from "@/components/game/GameTrailerSection";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
 import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
+import { VideoCarousel } from "@/components/video/VideoCarousel";
 import {
   type GameDetailsPayload,
   type GameParentPlatform,
   type GamePlatform,
-  type GameTrailer,
   type GameRelatedGame,
   type GameScreenshot,
   type GameSimilarEntry,
@@ -39,6 +23,7 @@ import { normalizeImageUrl } from "@/lib/images";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/lib/platformIcons";
+import type { IgdbVideo } from "@/lib/igdb";
 
 export type GameReview = {
   id: number;
@@ -55,7 +40,7 @@ interface GameDetailsProps {
   backLink: { href: string; label: string };
   screenshots: GameScreenshot[];
   reviews: GameReview[];
-  trailers: GameTrailer[];
+  videos: IgdbVideo[];
   similarGames: GameSimilarEntry[];
   additions: GameRelatedGame[];
   series: GameRelatedGame[];
@@ -206,16 +191,7 @@ const buildPlaytimeDistribution = (distribution: GameDetailsPayload["playtime_di
   return entries.map((entry) => ({ label: entry.label, percent: (entry.value / total) * 100 }));
 };
 
-export function GameDetails({
-  game,
-  backLink,
-  screenshots,
-  reviews,
-  trailers,
-  similarGames,
-  additions,
-  series,
-}: GameDetailsProps) {
+export function GameDetails({ game, backLink, screenshots, reviews, videos, similarGames, additions, series }: GameDetailsProps) {
   const backTarget = backLink?.href?.startsWith("/") ? backLink.href : null;
   const buildInternalHref = (idOrSlug: number | string) => {
     const base = `/games/${idOrSlug}`;
@@ -250,7 +226,6 @@ export function GameDetails({
     .map((tag) => tag.name)
     .filter((name): name is string => Boolean(name))
     .slice(0, 10);
-  const trailerReadyGame: GameDetailsPayload = { ...game, movies: trailers };
   const additionEntries = uniqueRelatedGames([
     ...(game.additions ?? []),
     ...(game.expansions ?? []),
@@ -288,8 +263,6 @@ export function GameDetails({
     .filter(([, value]) => typeof value === "number" && value > 0)
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
-  const clipSource = game.clip?.clip ?? game.clip?.video ?? game.clip?.clips?.full ?? null;
-  const clipPreview = game.clip?.preview ?? null;
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
@@ -607,45 +580,11 @@ export function GameDetails({
 
       {screenshots.length ? <ScreenshotGallery screenshots={screenshots} /> : null}
 
-      {clipSource ? (
-        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <Video className="h-4 w-4" aria-hidden="true" />
-            <h2 className="text-sm font-semibold uppercase tracking-widest">IGDB clips</h2>
-          </div>
-          <video controls loop muted poster={clipPreview ?? undefined} className="w-full rounded-2xl">
-            <source src={clipSource} />
-          </video>
-        </section>
-      ) : null}
-
-      <GameTrailerSection game={trailerReadyGame} />
+      <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <VideoCarousel videos={videos} />
+      </section>
 
       <RawgAchievementsSection rawgId={rawgIdentifier} gameTitle={game.name} />
-
-      {trailers.length ? (
-        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <Clapperboard className="h-4 w-4" aria-hidden="true" />
-            <h2 className="text-sm font-semibold uppercase tracking-widest">IGDB trailers</h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {trailers.slice(0, 2).map((trailer) => {
-              const sources = trailer.data ?? {};
-              const src = sources.max ?? sources["1080"] ?? sources["720"] ?? sources[480];
-              if (!src) return null;
-              return (
-                <figure key={trailer.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800">
-                  <video controls poster={trailer.preview ?? undefined} className="h-64 w-full object-cover">
-                    <source src={src} type="video/mp4" />
-                  </video>
-                  <figcaption className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200">{trailer.name}</figcaption>
-                </figure>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
 
       {additionEntries.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">

@@ -39,6 +39,8 @@ export type GamePlatformSummary = {
   image_background: string | null;
 };
 
+export type GameTrailer = IgdbVideo;
+
 export type GameEsrbRating = {
   id: number;
   name: string;
@@ -203,13 +205,6 @@ export type GameDetailsPayload = GameSummary & {
   playtime_distribution?: GamePlaytimeDistribution | null;
 };
 
-export type GameTrailer = {
-  id: number;
-  name: string;
-  preview: string | null;
-  data: Record<string, string | undefined> & { 480?: string; max?: string };
-};
-
 export type GameScreenshot = {
   id: number;
   image_id?: string | null;
@@ -296,9 +291,15 @@ export async function getGameReviews(_id: number, _page = 1, _pageSize = 6): Pro
   return [];
 }
 
-export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
+export async function getGameVideos(id: number): Promise<IgdbVideo[]> {
   const details = await loadIgdbDetails(id);
-  return mapVideos(details.videos, details.name);
+  const videos = (details.videos ?? []).filter((video) => Boolean(video?.video_id));
+  return videos.map((video, index) => ({
+    ...video!,
+    id: typeof video?.id === "number" ? video.id : index + 1,
+    name: video?.name?.trim() || `${details.name ?? "Trailer"} ${index + 1}`,
+    video_id: video!.video_id.trim(),
+  }));
 }
 
 function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
@@ -589,28 +590,6 @@ const relatedToSeriesEntry = (entry?: GameRelatedGame | null): GameSeriesEntry |
   };
 };
 
-const mapVideos = (videos?: IgdbVideo[], gameName?: string): GameTrailer[] => {
-  if (!videos?.length) {
-    return [];
-  }
-  let index = 1;
-  return videos
-    .filter((video) => Boolean(video?.video_id))
-    .map((video) => {
-      const videoId = video!.video_id.trim();
-      const name = video!.name ?? `${gameName ?? "Trailer"} ${index}`;
-      const url = buildYoutubeUrl(videoId);
-      const movie: GameTrailer = {
-        id: index,
-        name,
-        preview: buildYoutubeThumb(videoId),
-        data: { 480: url, max: url },
-      };
-      index += 1;
-      return movie;
-    });
-};
-
 const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
   const source = videos?.find((video) => video?.video_id);
   if (!source?.video_id) {
@@ -687,7 +666,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
       base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
     short_screenshots: screenshots,
     clip: mapClip(details.videos, details.name),
-    movies: mapVideos(details.videos, details.name),
+    movies: [],
     genres: mapGenres(details.genres),
     description: descriptionRaw || null,
     description_raw: descriptionRaw || null,
