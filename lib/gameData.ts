@@ -613,8 +613,13 @@ const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
     .map((entry) => ({
       id: entry.id,
       category: typeof entry.category === "number" ? entry.category : null,
-      rating: typeof entry.rating === "number" ? entry.rating : null,
-      synopsis: entry.synopsis ?? null,
+      rating:
+        typeof entry.rating === "number"
+          ? entry.rating
+          : typeof entry.rating === "string"
+            ? Number.parseInt(entry.rating, 10)
+            : null,
+      synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
     }));
 };
 
