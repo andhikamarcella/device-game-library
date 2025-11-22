@@ -143,7 +143,7 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
       >
         <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
 
-        <div className="absolute left-4 top-4 flex items-center gap-3 sm:left-6 sm:top-6">
+        <div className="absolute left-4 top-4 z-20 flex items-center gap-3 sm:left-6 sm:top-6">
           <button
             onClick={onClose}
             className="pointer-events-auto inline-flex items-center justify-center rounded-full bg-white/15 p-2 text-white shadow-lg transition hover:bg-white/25"
@@ -157,7 +157,7 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
         </div>
 
         <button
-          className="pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:left-6"
+          className="pointer-events-auto absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:left-6"
           onClick={prev}
           aria-label="Previous screenshot"
         >
@@ -165,14 +165,14 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
         </button>
 
         <button
-          className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:right-6"
+          className="pointer-events-auto absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:right-6"
           onClick={next}
           aria-label="Next screenshot"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
 
-        <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center justify-center gap-2 px-4 sm:bottom-6">
+        <div className="absolute bottom-4 left-0 right-0 z-20 flex flex-col items-center justify-center gap-2 px-4 sm:bottom-6">
           <div className="pointer-events-none flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow">
             <span>Swipe / drag to pan</span>
             <span className="hidden sm:inline-block">•</span>
@@ -198,7 +198,7 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
         </div>
 
         <div
-          className="relative h-full w-full overflow-hidden rounded-2xl bg-slate-950 shadow-2xl ring-1 ring-white/5"
+          className="relative z-10 h-full w-full overflow-hidden rounded-2xl bg-slate-950 shadow-2xl ring-1 ring-white/5"
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
