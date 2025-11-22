@@ -190,7 +190,7 @@ type IgdbListGame = {
 };
 
 const HOMEPAGE_GRID =
-  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 sm:auto-cols-[45%] lg:auto-cols-[30%] xl:auto-cols-[25%]";
 
 const mapIgdbListGame = (game: IgdbListGame): CardResult => {
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
