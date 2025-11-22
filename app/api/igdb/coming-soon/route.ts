@@ -7,10 +7,10 @@ export async function POST() {
   try {
     const now = Math.floor(Date.now() / 1000);
     const body = [
-      "fields id,name,slug,first_release_date,cover.image_id,platforms.name;",
+      "fields id,name,slug,first_release_date,cover.image_id,platforms.name,platforms.slug;",
       `where first_release_date != null & first_release_date > ${now};`,
       "sort first_release_date asc;",
-      "limit 50;",
+      "limit 20;",
     ].join("\n");
     const data = await igdbPost("games", body);
     return NextResponse.json(data, { status: 200 });
