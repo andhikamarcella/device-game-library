@@ -187,9 +187,7 @@ export interface IgdbAgeRating {
 export interface IgdbLanguageSupport {
   id: number;
   language?: { id: number; name?: string | null } | null;
-  audio?: number | number[] | null;
-  subtitles?: number | number[] | null;
-  interface?: number | number[] | null;
+  mode?: number | number[] | null;
 }
 
 export interface IgdbAchievementIcon {
@@ -610,9 +608,8 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       language_supports.id,
       language_supports.language.id,
       language_supports.language.name,
-      language_supports.audio,
-      language_supports.subtitles,
-      language_supports.interface,
+      language_supports.language,
+      language_supports.mode,
       websites.url,
       websites.category,
       videos.name,

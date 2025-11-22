@@ -243,9 +243,9 @@ export type GameArtwork = {
 export type GameLanguageSupport = {
   id: number;
   language: { id: number; name: string | null } | null;
-  audio: number[];
-  subtitles: number[];
-  interface: number[];
+  audio: boolean;
+  subtitles: boolean;
+  interface: boolean;
 };
 
 export type GameReview = {
@@ -753,7 +753,7 @@ const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
     .filter((entry) => entry.category !== null || entry.rating !== null || entry.rating_cover_url);
 };
 
-const normalizeSupportField = (value?: number | number[] | null): number[] => {
+const normalizeModeField = (value?: number | number[] | null): number[] => {
   if (Array.isArray(value)) {
     return value.filter((item): item is number => typeof item === "number");
   }
@@ -768,26 +768,52 @@ const mapLanguageSupports = (
 ): GameLanguageSupport[] => {
   if (!entries?.length) return [];
 
-  return entries
-    .map((entry, index) => {
-      if (!entry) return null;
+  const grouped = new Map<
+    string,
+    {
+      id: number;
+      language: { id: number; name: string | null } | null;
+      audio: boolean;
+      subtitles: boolean;
+      interface: boolean;
+    }
+  >();
 
-      const audio = normalizeSupportField(entry.audio);
-      const subtitles = normalizeSupportField(entry.subtitles);
-      const interfaceOptions = normalizeSupportField(entry.interface);
-      const languageName = entry.language?.name?.trim() || null;
-      const languageId = typeof entry.language?.id === "number" ? entry.language.id : null;
-      const idFallback = languageId ?? index;
+  entries.forEach((entry, index) => {
+    if (!entry) return;
 
-      return {
-        id: typeof entry.id === "number" ? entry.id : idFallback,
-        language: languageName || languageId !== null ? { id: languageId ?? idFallback, name: languageName } : null,
-        audio,
-        subtitles,
-        interface: interfaceOptions,
-      } satisfies GameLanguageSupport;
-    })
-    .filter((entry): entry is GameLanguageSupport => Boolean(entry));
+    const modes = normalizeModeField(entry.mode);
+    if (!modes.length) return;
+
+    const languageName = entry.language?.name?.trim() || null;
+    const languageId = typeof entry.language?.id === "number" ? entry.language.id : null;
+    const idFallback = languageId ?? index;
+    const key = languageId !== null ? `lang-${languageId}` : `idx-${index}-${languageName ?? "unknown"}`;
+
+    const existing = grouped.get(key) ?? {
+      id: typeof entry.id === "number" ? entry.id : idFallback,
+      language:
+        languageName || languageId !== null
+          ? {
+              id: languageId ?? idFallback,
+              name: languageName,
+            }
+          : null,
+      audio: false,
+      subtitles: false,
+      interface: false,
+    };
+
+    modes.forEach((mode) => {
+      if (mode === 1) existing.audio = true;
+      if (mode === 2) existing.subtitles = true;
+      if (mode === 3) existing.interface = true;
+    });
+
+    grouped.set(key, existing);
+  });
+
+  return Array.from(grouped.values());
 };
 
 const mapCompanies = (

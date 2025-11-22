@@ -138,10 +138,9 @@ export async function fetchGameDetail(id: number) {
     "release_dates.*",
     "websites.*",
     "language_supports.*",
+    "language_supports.language",
     "language_supports.language.name",
-    "language_supports.audio",
-    "language_supports.subtitles",
-    "language_supports.interface",
+    "language_supports.mode",
     "time_to_beat.*",
   ];
   const query = [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
