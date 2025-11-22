@@ -1,38 +1,46 @@
 export const romsfunPlatformMap: Record<string, string> = {
-  "Nintendo Entertainment System": "nes",
+  // Nintendo – full platform names
+  "Nintendo Entertainment System": "nintendo-entertainment-system",
   "Super Nintendo Entertainment System": "super-nintendo",
-  "Nintendo 64": "n64",
-  "Nintendo GameCube": "gamecube",
-  "Nintendo DS": "nds",
-  "Nintendo 3DS": "3ds",
-  "Game Boy": "gb",
-  "Game Boy Color": "gbc",
-  "Game Boy Advance": "gba",
+  "Nintendo 64": "nintendo-64",
+  "Nintendo GameCube": "nintendo-gamecube",
 
+  "Game Boy": "game-boy",
+  "Game Boy Color": "game-boy-color",
+  "Game Boy Advance": "game-boy-advance",
+
+  "Nintendo DS": "nintendo-ds",
+  "Nintendo 3DS": "nintendo-3ds",
+
+  // Sega
   "Sega Genesis": "sega-genesis",
-  "Sega Mega Drive": "sega-genesis",
-  "Sega Master System": "sms",
-  "Sega Game Gear": "game-gear",
-  "Sega Saturn": "saturn",
-  "Sega Dreamcast": "dreamcast",
+  "Sega Mega Drive": "sega-mega-drive",
+  "Sega Master System": "sega-master-system",
+  "Sega Game Gear": "sega-game-gear",
+  "Sega Saturn": "sega-saturn",
+  "Sega Dreamcast": "sega-dreamcast",
 
-  "Sony PlayStation": "ps1",
-  "PlayStation": "ps1",
-  "PlayStation 2": "ps2",
-  "PlayStation 3": "ps3",
-  "PlayStation Portable": "psp",
+  // PlayStation – full ROMsFun format
+  "PlayStation": "playstation", // PS1
+  "Sony PlayStation": "playstation", // alias PS1
+  "PlayStation 2": "playstation-2",
+  "PlayStation 3": "playstation-3",
+  "PlayStation Portable": "playstation-portable",
+  "PSP": "playstation-portable",
 
+  // Atari
   "Atari 2600": "atari-2600",
   "Atari 5200": "atari-5200",
   "Atari 7800": "atari-7800",
-  "Atari Jaguar": "jaguar",
-  "Atari Lynx": "lynx",
+  "Atari Jaguar": "atari-jaguar",
+  "Atari Lynx": "atari-lynx",
 
+  // Misc
   "3DO Interactive Multiplayer": "3do",
   "Neo Geo": "neo-geo",
   "TurboGrafx-16": "turbografx-16",
   "PC Engine": "pc-engine",
 
-  // fallback
+  // → fallback if platform unsupported
   default: "",
 };
