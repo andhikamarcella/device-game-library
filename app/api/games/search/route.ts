@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildIgdbQuery, getIgdbToken, type SortKey } from "@/lib/igdb";
+import { buildIgdbCountQuery, buildIgdbQuery, getIgdbToken, type SortKey } from "@/lib/igdb";
 import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 
 type IgdbPlatformRef = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
@@ -141,6 +141,18 @@ async function executeSearch({
     offset,
   });
 
+  const countQuery = buildIgdbCountQuery({ searchText: query, platformId });
+
+  const countPromise = fetch("https://api.igdb.com/v4/games/count", {
+    method: "POST",
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "text/plain",
+    },
+    body: countQuery,
+  }).catch(() => null);
+
   const igdbRes = await fetch("https://api.igdb.com/v4/games", {
     method: "POST",
     headers: {
@@ -157,7 +169,18 @@ async function executeSearch({
     return NextResponse.json({ error: "IGDB search failed", games: [] }, { status: 200 });
   }
 
-  const games = (await igdbRes.json().catch(() => [])) as IgdbGameSearch[];
+  const [countRes, games] = await Promise.all([
+    countPromise,
+    igdbRes.json().catch(() => [] as IgdbGameSearch[]),
+  ]);
+
+  let totalFromCount: number | null = null;
+  if (countRes && "ok" in countRes && countRes.ok) {
+    const countPayload = (await countRes.json().catch(() => null)) as { count?: number } | null;
+    if (typeof countPayload?.count === "number") {
+      totalFromCount = countPayload.count;
+    }
+  }
 
   const results: SearchResult[] = games.map((game) => {
     const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
@@ -219,9 +242,17 @@ async function executeSearch({
     };
   });
 
-  const hasNextPage = results.length === limit;
+  const derivedTotal =
+    typeof totalFromCount === "number"
+      ? totalFromCount
+      : results.length === limit
+        ? page * pageSize + 1
+        : (page - 1) * pageSize + results.length;
+
+  const hasNextPage =
+    typeof totalFromCount === "number" ? page * pageSize < totalFromCount : results.length === limit;
   const hasPreviousPage = page > 1;
-  const total = hasNextPage ? page * pageSize + 1 : (page - 1) * pageSize + results.length;
+  const total = derivedTotal;
 
   return NextResponse.json({
     games: results,

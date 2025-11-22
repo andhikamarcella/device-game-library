@@ -141,6 +141,22 @@ export function buildIgdbQuery(opts: {
   return lines.join("\n");
 }
 
+export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: number | null }): string {
+  const lines: string[] = ["fields count;"];
+
+  const trimmedSearch = opts.searchText?.trim();
+  if (trimmedSearch) {
+    const escaped = trimmedSearch.replace(/"/g, '\\"');
+    lines.push(`search "${escaped}";`);
+  }
+
+  if (typeof opts.platformId === "number") {
+    lines.push(`where platforms = (${opts.platformId});`);
+  }
+
+  return lines.join("\n");
+}
+
 export interface IgdbCover {
   id: number;
   image_id: string;
