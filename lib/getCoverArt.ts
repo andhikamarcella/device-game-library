@@ -1,15 +1,20 @@
 import type { GameSummary } from "@/lib/gameData";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { pickBestImage } from "@/lib/images";
 
-type CoverArtSource = Pick<GameSummary, "background_image" | "background_image_additional" | "short_screenshots" | "clip">;
+type CoverArtSource = Pick<
+  GameSummary,
+  "background_image" | "background_image_additional" | "short_screenshots" | "clip" | "cover"
+>;
 
 const FALLBACK_COVER = "/fallback/cover-placeholder.svg";
 
 export function getBestCover(game: CoverArtSource): string {
+  const coverFromIgdb = igdbCoverUrl(game.cover?.image_id ?? null);
   const screenshotSources = game.short_screenshots?.map((shot) => shot.image) ?? [];
   const clipPreview = game.clip?.preview ?? null;
 
-  const prioritizedSources: Array<string | null | undefined> = [game.background_image];
+  const prioritizedSources: Array<string | null | undefined> = [coverFromIgdb ?? game.background_image];
 
   if (!game.background_image) {
     prioritizedSources.push(game.background_image_additional);

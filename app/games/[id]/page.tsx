@@ -7,9 +7,7 @@ import {
   getGameScreenshots,
   getGameTrailers,
   getSimilarGamesForGame,
-  getGameAchievements,
   getGameSeriesEntries,
-  type GameAchievement,
   type GameDetailsPayload,
   type GameTrailer,
   type GameRelatedGame,
@@ -58,15 +56,13 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   );
   const trailersPromise = getGameTrailers(id).catch(() => [] as GameTrailer[]);
   const similarPromise = getSimilarGamesForGame(id).catch(() => [] as GameSimilarEntry[]);
-  const achievementsPromise = getGameAchievements(id, 20).catch(() => [] as GameAchievement[]);
   const additionsPromise = getGameAdditions(id, 12).catch(() => [] as GameRelatedGame[]);
   const seriesPromise = getGameSeriesEntries(id, 12).catch(() => [] as GameRelatedGame[]);
-  const [screenshots, reviews, trailers, similarGames, achievements, additions, seriesEntries] = await Promise.all([
+  const [screenshots, reviews, trailers, similarGames, additions, seriesEntries] = await Promise.all([
     screenshotsPromise,
     reviewsPromise,
     trailersPromise,
     similarPromise,
-    achievementsPromise,
     additionsPromise,
     seriesPromise,
   ]);
@@ -144,7 +140,6 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
       reviews={cleanedReviews}
       trailers={trailers}
       similarGames={similarGames}
-      achievements={achievements}
       additions={additions}
       series={seriesEntries}
     />
