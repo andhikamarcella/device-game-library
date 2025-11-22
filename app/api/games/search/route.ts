@@ -177,7 +177,8 @@ async function executeSearch({
     igdbRes.json().catch(() => [] as IgdbGameSearch[]),
   ]);
 
-  const games: IgdbGameSearch[] = Array.isArray(gamesRaw) ? gamesRaw : [];
+  const gamesRawTyped = gamesRaw as IgdbGameSearch[] | null;
+  const games: IgdbGameSearch[] = Array.isArray(gamesRawTyped) ? gamesRawTyped : [];
 
   let totalFromCount: number | null = null;
   if (countRes && "ok" in countRes && countRes.ok) {
