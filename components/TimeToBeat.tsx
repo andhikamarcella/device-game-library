@@ -20,6 +20,11 @@ const formatHours = (value: number | null) => {
   return `${minutes}m`;
 };
 
+type RawgError = { error?: string };
+
+const isErrorResponse = (data: TimeToBeatResponse | RawgError): data is RawgError =>
+  typeof data === "object" && data !== null && "error" in data;
+
 async function fetchTimeToBeat(title: string): Promise<TimeToBeatResponse | null> {
   try {
     const response = await fetch(`${buildBaseUrl()}/api/rawg/ttb`, {
@@ -34,9 +39,9 @@ async function fetchTimeToBeat(title: string): Promise<TimeToBeatResponse | null
       return null;
     }
 
-    const data = (await response.json()) as TimeToBeatResponse | { error?: string };
+    const data = (await response.json()) as TimeToBeatResponse | RawgError;
 
-    if ("error" in data) {
+    if (isErrorResponse(data)) {
       return {
         main: null,
         extra: null,
