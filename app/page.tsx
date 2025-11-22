@@ -39,7 +39,6 @@ const toCard = (game: IgdbGame): SearchGameResult => {
     cover: game.cover,
     coverUrl,
     coverImageUrl: coverUrl,
-    coverImageId: game.cover?.image_id ?? null,
     screenshots: [],
     screenshotUrls: [],
     releaseYear: game.first_release_date
