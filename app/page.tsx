@@ -170,21 +170,23 @@ export default function HomePage() {
         <p className="text-muted-foreground">Browse top rated releases, upcoming titles, and special events powered by IGDB.</p>
       </div>
 
-      <Suspense fallback={<SectionSkeleton count={8} />}>
-        <Top100Section />
-      </Suspense>
+      <div className="space-y-10">
+        <Suspense fallback={<SectionSkeleton count={8} />}>
+          <Top100Section />
+        </Suspense>
 
-      <Suspense fallback={<SectionSkeleton count={6} />}>
-        <ComingSoonSection />
-      </Suspense>
+        <Suspense fallback={<SectionSkeleton count={6} />}>
+          <ComingSoonSection />
+        </Suspense>
 
-      <Suspense fallback={<SectionSkeleton count={6} />}>
-        <RecentlyReleasedSection />
-      </Suspense>
+        <Suspense fallback={<SectionSkeleton count={6} />}>
+          <RecentlyReleasedSection />
+        </Suspense>
 
-      <Suspense fallback={<SectionSkeleton count={4} />}>
-        <EventsSection />
-      </Suspense>
+        <Suspense fallback={<SectionSkeleton count={4} />}>
+          <EventsSection />
+        </Suspense>
+      </div>
     </main>
   );
 }
