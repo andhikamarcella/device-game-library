@@ -169,10 +169,15 @@ async function executeSearch({
     return NextResponse.json({ error: "IGDB search failed", games: [] }, { status: 200 });
   }
 
-  const [countRes, games] = await Promise.all([
+  const [countRes, gamesRaw] = await Promise.all<[
+    Response | null,
+    IgdbGameSearch[],
+  ]>([
     countPromise,
     igdbRes.json().catch(() => [] as IgdbGameSearch[]),
   ]);
+
+  const games: IgdbGameSearch[] = Array.isArray(gamesRaw) ? gamesRaw : [];
 
   let totalFromCount: number | null = null;
   if (countRes && "ok" in countRes && countRes.ok) {
