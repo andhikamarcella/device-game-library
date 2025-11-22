@@ -9,7 +9,7 @@ type AgeRatingProps = {
   ratings?: IgdbAgeRating[] | null;
 };
 
-const buildKey = (info: AgeRatingInfo, index: number) => `${info.system}-${info.label}-${index}`;
+type AgeRatingEntry = AgeRatingInfo & { synopsis: string | null; key: number };
 
 export default function AgeRating({ ratings }: AgeRatingProps) {
   const mapped = (ratings ?? [])
@@ -21,12 +21,12 @@ export default function AgeRating({ ratings }: AgeRatingProps) {
       return {
         ...info,
         synopsis: rating?.synopsis?.trim() || null,
-        key: rating.id ?? buildKey(info, index),
+        key: rating.id ?? index,
       };
     })
-    .filter((entry): entry is AgeRatingInfo & { synopsis: string | null; key: string | number } => Boolean(entry));
+    .filter((entry): entry is AgeRatingEntry => Boolean(entry));
 
-  const unique: Array<AgeRatingInfo & { synopsis: string | null; key: string | number }> = [];
+  const unique: AgeRatingEntry[] = [];
   const seen = new Set<string>();
   for (const entry of mapped) {
     const key = `${entry.system}-${entry.label}`;
