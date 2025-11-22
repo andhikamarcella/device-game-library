@@ -430,7 +430,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
         <MetadataList title="Game Engine" items={engineItems} />
       </div>
 
-      <TimeToBeat ttb={game.time_to_beat} />
+      <TimeToBeat title={game.name} />
 
       <LanguageTable supports={game.language_supports} />
 
