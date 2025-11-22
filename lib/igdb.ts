@@ -175,6 +175,7 @@ export interface IgdbAgeRating {
   category?: number | null;
   rating?: number | null;
   synopsis?: string | null;
+  rating_cover_url?: string | null;
 }
 
 export interface IgdbAchievementIcon {
@@ -574,6 +575,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       age_ratings.category,
       age_ratings.rating,
       age_ratings.synopsis,
+      age_ratings.rating_cover_url,
       websites.url,
       websites.category,
       videos.name,

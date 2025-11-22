@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchGameDetail } from "@/lib/igdbClient";
+import { fetchGameDetail } from "@/lib/igdb/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

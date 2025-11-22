@@ -79,7 +79,13 @@ export type IgdbGameDetail = {
   screenshots?: Array<{ id: number; image_id: string }> | null;
   artworks?: Array<{ id: number; image_id: string }> | null;
   videos?: Array<{ id?: number; name?: string | null; video_id: string }> | null;
-  age_ratings?: Array<{ id: number; category?: number | null; rating?: number | null; synopsis?: string | null }> | null;
+  age_ratings?: Array<{
+    id: number;
+    category?: number | null;
+    rating?: number | null;
+    synopsis?: string | null;
+    rating_cover_url?: string | null;
+  }> | null;
   release_dates?: Array<{ id: number; human?: string | null; platform?: number | null; region?: number | null; y?: number | null }> | null;
   websites?: Array<{ id: number; url: string; category?: number | null }> | null;
   language_supports?: Array<{
@@ -125,6 +131,7 @@ export async function fetchGameDetail(id: number) {
     "age_ratings.category",
     "age_ratings.rating",
     "age_ratings.synopsis",
+    "age_ratings.rating_cover_url",
     "release_dates.*",
     "websites.*",
     "language_supports.*",

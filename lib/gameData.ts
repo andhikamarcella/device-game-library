@@ -620,6 +620,10 @@ const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
             ? Number.parseInt(entry.rating, 10)
             : null,
       synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
+      rating_cover_url:
+        typeof entry.rating_cover_url === "string" && entry.rating_cover_url.trim()
+          ? entry.rating_cover_url.trim()
+          : null,
     }));
 };
 

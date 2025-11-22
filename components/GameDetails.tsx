@@ -498,7 +498,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
           <Shield className="h-4 w-4" aria-hidden="true" />
           <h2 className="text-sm font-semibold uppercase tracking-widest">Age Rating</h2>
         </div>
-        <AgeRating ratings={ageRatings} />
+        <AgeRating ageRatings={ageRatings} />
       </section>
 
       {modeLabels.length ? (
