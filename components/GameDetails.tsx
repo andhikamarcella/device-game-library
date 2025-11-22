@@ -19,7 +19,7 @@ import { CoverImage } from "@/components/CoverImage";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
-import { AgeRating } from "@/components/game/AgeRating";
+import AgeRating from "@/components/AgeRating";
 import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
@@ -237,7 +237,6 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .map(([key, value]) => ({ key, value }));
   const ratingBreakdown = (game.ratings ?? []).filter((rating) => rating.count > 0);
   const ageRatings = game.age_ratings ?? [];
-  const hasAgeRatings = ageRatings.length > 0;
   const modeLabels = buildModeLabels(game.tags);
   const displayTags = (game.tags ?? [])
     .map((tag) => tag.name)
@@ -499,11 +498,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
           <Shield className="h-4 w-4" aria-hidden="true" />
           <h2 className="text-sm font-semibold uppercase tracking-widest">Age Rating</h2>
         </div>
-        {hasAgeRatings ? (
-          <AgeRating ageRatings={ageRatings} />
-        ) : (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No age rating information available for this game.</p>
-        )}
+        <AgeRating ageRatings={ageRatings} />
       </section>
 
       {modeLabels.length ? (

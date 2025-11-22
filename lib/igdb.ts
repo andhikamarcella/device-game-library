@@ -569,6 +569,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       involved_companies.company.name,
       involved_companies.developer,
       involved_companies.publisher,
+      age_ratings.*,
       age_ratings.id,
       age_ratings.category,
       age_ratings.rating,
