@@ -168,6 +168,7 @@ export interface IgdbWebsite {
   id: number;
   url: string;
   category?: number;
+  trusted?: boolean | null;
 }
 
 export interface IgdbVideo {
@@ -612,6 +613,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       language_supports.language_support_type,
       websites.url,
       websites.category,
+      websites.trusted,
       videos.name,
       videos.video_id,
       screenshots.image_id,

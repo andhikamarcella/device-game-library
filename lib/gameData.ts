@@ -14,6 +14,7 @@ import {
   type IgdbSearchParams,
   type IgdbSimilarGame,
   type IgdbAgeRating,
+  type IgdbWebsite,
   type IgdbLanguageSupport,
   type IgdbVideo,
 } from "@/lib/igdb";
@@ -203,6 +204,7 @@ export type GameDetailsPayload = GameSummary & {
   reddit_count?: number | null;
   twitch_count?: number | null;
   youtube_count?: number | null;
+  websites?: Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }> | null;
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
   added_by_status?: GameAddedByStatus | null;
@@ -652,6 +654,31 @@ const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
   return artworks;
 };
 
+const mapWebsites = (websites?: IgdbWebsite[] | null) => {
+  if (!websites?.length) return [] as Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }>;
+
+  const mapped = websites
+    .filter((entry): entry is IgdbWebsite => Boolean(entry && entry.url))
+    .map((entry) => ({
+      id: entry.id,
+      url: entry.url,
+      category: entry.category ?? null,
+      trusted: typeof entry.trusted === "boolean" ? entry.trusted : null,
+    }));
+
+  const deduped: Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }> = [];
+  const seen = new Set<string>();
+
+  mapped.forEach((entry) => {
+    const key = entry.url.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    deduped.push(entry);
+  });
+
+  return deduped;
+};
+
 const mapSimilar = (similar?: IgdbSimilarGame[]): GameSimilarEntry[] => {
   if (!similar?.length) {
     return [];
@@ -885,6 +912,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     description: descriptionRaw || null,
     description_raw: descriptionRaw || null,
     website: details.websites?.[0]?.url ?? null,
+    websites: mapWebsites(details.websites),
     reddit_url: null,
     reddit_name: null,
     reddit_count: null,

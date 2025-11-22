@@ -3,9 +3,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
-  ExternalLink,
   Gamepad2,
-  Globe,
   Layers,
   MessageCircle,
   Radio,
@@ -45,6 +43,7 @@ import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/lib/platformIcons";
 import type { IgdbVideo } from "@/lib/igdb";
+import { LinksBox } from "@/components/LinksBox";
 
 export type GameReview = {
   id: number;
@@ -289,32 +288,6 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
-
-  const officialLinks: Array<{ label: string; href: string; description?: string }> = [];
-  if (game.website) {
-    officialLinks.push({ label: "Official website", href: game.website });
-  }
-  if (game.reddit_url) {
-    officialLinks.push({
-      label: game.reddit_name ? `${game.reddit_name} on Reddit` : "Reddit community",
-      href: game.reddit_url,
-      description: game.reddit_count ? `${game.reddit_count.toLocaleString()} members` : undefined,
-    });
-  }
-  if (game.twitch_count) {
-    officialLinks.push({
-      label: "Twitch streams",
-      href: `https://www.twitch.tv/directory/game/${encodeURIComponent(game.name)}`,
-      description: `${game.twitch_count.toLocaleString()} streams on IGDB`,
-    });
-  }
-  if (game.youtube_count) {
-    officialLinks.push({
-      label: "YouTube videos",
-      href: `https://www.youtube.com/results?search_query=${encodeURIComponent(game.name)}`,
-      description: `${game.youtube_count.toLocaleString()} clips indexed on IGDB`,
-    });
-  }
 
   return (
     <div className="space-y-6">
@@ -596,29 +569,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
         </section>
       ) : null}
 
-      {officialLinks.length ? (
-        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <Globe className="h-4 w-4" aria-hidden="true" />
-            <h2 className="text-sm font-semibold uppercase tracking-widest">Official & community links</h2>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {officialLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-400/70 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-200"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>{link.label}</span>
-                {link.description ? <span className="text-xs text-slate-500">{link.description}</span> : null}
-              </a>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <LinksBox websites={game.websites} />
 
       {reactionEntries.length ? (
         <section className="space-y-2 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">

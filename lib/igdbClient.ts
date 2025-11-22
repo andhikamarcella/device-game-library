@@ -88,7 +88,7 @@ export type IgdbGameDetail = {
     rating_cover_url?: string | null;
   }> | null;
   release_dates?: Array<{ id: number; human?: string | null; platform?: number | null; region?: number | null; y?: number | null }> | null;
-  websites?: Array<{ id: number; url: string; category?: number | null }> | null;
+  websites?: Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }> | null;
   language_supports?: Array<{
     id: number;
     language?: { id: number; name?: string | null } | null;
@@ -137,6 +137,7 @@ export async function fetchGameDetail(id: number) {
     "age_ratings.rating_cover_url",
     "release_dates.*",
     "websites.*",
+    "websites.trusted",
     "language_supports.*",
     "language_supports.language",
     "language_supports.language.name",
