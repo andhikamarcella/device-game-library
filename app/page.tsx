@@ -481,6 +481,8 @@ function DashboardPageContent() {
     }
     const apiSortParam = mapSortOrderToApiParam(sortOrder);
     apiParams.set("sort", apiSortParam);
+    apiParams.set("page", String(page));
+    apiParams.set("pageSize", String(pageSize));
     const searchPath = apiParams.toString();
 
     fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {

@@ -91,6 +91,8 @@ type SearchParams = {
   sort?: string;
   platform?: string | number | null;
   platformId?: string | number | null;
+  page?: string | number | null;
+  pageSize?: string | number | null;
 };
 
 const resolveSearchParams = (params: SearchParams) => {
@@ -104,16 +106,39 @@ const resolveSearchParams = (params: SearchParams) => {
         ? platformRaw
         : null;
 
-  return { query, sort, platformId };
+  const parsedPage = Number.parseInt((params.page ?? "") as string, 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+  const parsedPageSize = Number.parseInt((params.pageSize ?? "") as string, 10);
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? Math.min(parsedPageSize, 50) : 20;
+
+  return { query, sort, platformId, page, pageSize };
 };
 
-async function executeSearch({ query, sort, platformId }: { query: string; sort: SortKey; platformId: number | null }) {
+async function executeSearch({
+  query,
+  sort,
+  platformId,
+  page,
+  pageSize,
+}: {
+  query: string;
+  sort: SortKey;
+  platformId: number | null;
+  page: number;
+  pageSize: number;
+}) {
   const { accessToken, clientId } = await getIgdbToken();
+
+  const limit = pageSize;
+  const offset = (page - 1) * pageSize;
 
   const igdbQuery = buildIgdbQuery({
     searchText: query,
     sort,
     platformId,
+    limit,
+    offset,
   });
 
   const igdbRes = await fetch("https://api.igdb.com/v4/games", {
@@ -194,20 +219,21 @@ async function executeSearch({ query, sort, platformId }: { query: string; sort:
     };
   });
 
-  return NextResponse.json(
-    {
-      games: results,
-      results,
-      pagination: {
-        total: results.length,
-        page: 1,
-        pageSize: results.length,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      },
+  const hasNextPage = results.length === limit;
+  const hasPreviousPage = page > 1;
+  const total = hasNextPage ? page * pageSize + 1 : (page - 1) * pageSize + results.length;
+
+  return NextResponse.json({
+    games: results,
+    results,
+    pagination: {
+      total,
+      page,
+      pageSize: limit,
+      hasNextPage,
+      hasPreviousPage,
     },
-    { status: 200 },
-  );
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -217,7 +243,7 @@ export async function GET(req: NextRequest) {
     const sort = params.get("sort") ?? undefined;
     const platform = params.get("platformId") ?? params.get("platform") ?? undefined;
 
-    const resolved = resolveSearchParams({ query, sort, platformId: platform });
+    const resolved = resolveSearchParams({ query, sort, platformId: platform, page: params.get("page"), pageSize: params.get("pageSize") });
     return await executeSearch(resolved);
   } catch (error) {
     console.error("IGDB games search error", error);

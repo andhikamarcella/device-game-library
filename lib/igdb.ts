@@ -78,6 +78,8 @@ export function buildIgdbQuery(opts: {
   searchText?: string;
   sort?: SortKey;
   platformId?: number | null;
+  limit?: number;
+  offset?: number;
 }): string {
   const lines: string[] = [];
 
@@ -128,7 +130,13 @@ export function buildIgdbQuery(opts: {
     lines.push(`sort ${sortExpr};`);
   }
 
-  lines.push("limit 50;");
+  const limit = typeof opts.limit === "number" && opts.limit > 0 ? Math.min(opts.limit, 50) : 50;
+  const offset = typeof opts.offset === "number" && opts.offset > 0 ? opts.offset : 0;
+
+  lines.push(`limit ${limit};`);
+  if (offset) {
+    lines.push(`offset ${offset};`);
+  }
 
   return lines.join("\n");
 }
