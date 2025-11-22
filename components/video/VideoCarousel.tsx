@@ -104,47 +104,45 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
       {hasVideos ? (
         <div className="space-y-4">
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-slate-50/80 shadow-2xl ring-1 ring-black/10 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/80 dark:ring-white/5">
-            <div className="aspect-video w-full bg-black/80">
-              {embedUrl ? (
-                <iframe
-                  title={activeVideo?.name ?? "IGDB video"}
-                  src={embedUrl}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="h-full w-full"
-                />
-              ) : null}
-            </div>
+          <div className="relative w-full">
+            <div className="relative overflow-visible rounded-2xl border border-slate-200/60 bg-slate-50/80 shadow-2xl ring-1 ring-black/10 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/80 dark:ring-white/5">
+              <div className="aspect-video w-full bg-black/80">
+                {embedUrl ? (
+                  <iframe
+                    title={activeVideo?.name ?? "IGDB video"}
+                    src={embedUrl}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="h-full w-full"
+                  />
+                ) : null}
+              </div>
 
-            <div className="absolute inset-y-0 left-0 flex items-center px-3">
               <button
                 type="button"
                 onClick={goPrev}
-                className="rounded-full bg-white/80 p-2 text-slate-800 shadow-lg ring-1 ring-slate-200 transition hover:scale-105 hover:bg-white dark:bg-slate-800/80 dark:text-slate-50 dark:ring-slate-700"
+                className="absolute top-1/2 -translate-y-1/2 -left-7 md:-left-10 z-20 rounded-full bg-black/50 p-2 md:p-3 shadow-lg hover:bg-black/70 transition"
                 aria-label="Previous video"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
-            </div>
-            <div className="absolute inset-y-0 right-0 flex items-center px-3">
               <button
                 type="button"
                 onClick={goNext}
-                className="rounded-full bg-white/80 p-2 text-slate-800 shadow-lg ring-1 ring-slate-200 transition hover:scale-105 hover:bg-white dark:bg-slate-800/80 dark:text-slate-50 dark:ring-slate-700"
+                className="absolute top-1/2 -translate-y-1/2 -right-7 md:-right-10 z-20 rounded-full bg-black/50 p-2 md:p-3 shadow-lg hover:bg-black/70 transition"
                 aria-label="Next video"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
-            </div>
 
-            <div className="flex items-center justify-between border-t border-slate-200/80 bg-gradient-to-r from-white/70 via-white/60 to-white/70 px-4 py-3 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:from-slate-900/80 dark:via-slate-900/60 dark:to-slate-900/80 dark:text-slate-100">
-              <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:bg-white/5 dark:text-slate-200">
-                {activeVideo?.role ?? "other"}
-              </span>
-              <span className="truncate text-right text-sm font-semibold text-slate-900 dark:text-white">
-                {activeVideo?.name ?? "IGDB video"}
-              </span>
+              <div className="flex items-center justify-between border-t border-slate-200/80 bg-gradient-to-r from-white/70 via-white/60 to-white/70 px-4 py-3 text-sm font-semibold text-slate-800 dark:border-slate-800 dark:from-slate-900/80 dark:via-slate-900/60 dark:to-slate-900/80 dark:text-slate-100">
+                <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:bg-white/5 dark:text-slate-200">
+                  {activeVideo?.role ?? "other"}
+                </span>
+                <span className="truncate text-right text-sm font-semibold text-slate-900 dark:text-white">
+                  {activeVideo?.name ?? "IGDB video"}
+                </span>
+              </div>
             </div>
           </div>
 
