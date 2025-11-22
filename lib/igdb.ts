@@ -67,7 +67,9 @@ export async function getIgdbToken(): Promise<{ accessToken: string; clientId: s
 export type SortKey =
   | "none"
   | "most_popular"
+  | "least_popular"
   | "highest_rated"
+  | "lowest_rated"
   | "newest"
   | "oldest"
   | "alphabetical";
@@ -76,6 +78,8 @@ export function buildIgdbQuery(opts: {
   searchText?: string;
   sort?: SortKey;
   platformId?: number | null;
+  limit?: number;
+  offset?: number;
 }): string {
   const lines: string[] = [];
 
@@ -85,12 +89,18 @@ export function buildIgdbQuery(opts: {
       "  id,",
       "  name,",
       "  summary,",
+      "  aggregated_rating,",
+      "  rating,",
+      "  rating_count,",
       "  total_rating,",
       "  total_rating_count,",
       "  first_release_date,",
       "  cover.image_id,",
       "  screenshots.image_id,",
-      "  platforms.name;",
+      "  platforms.name,",
+      "  platforms.slug,",
+      "  platforms.abbreviation,",
+      "  genres.name;",
     ].join("\n"),
   );
 
@@ -106,7 +116,9 @@ export function buildIgdbQuery(opts: {
 
   const sortMapping: Record<Exclude<SortKey, "none">, string> = {
     most_popular: "total_rating_count desc",
+    least_popular: "total_rating_count asc",
     highest_rated: "total_rating desc",
+    lowest_rated: "total_rating asc",
     newest: "first_release_date desc",
     oldest: "first_release_date asc",
     alphabetical: "name asc",
@@ -118,7 +130,29 @@ export function buildIgdbQuery(opts: {
     lines.push(`sort ${sortExpr};`);
   }
 
-  lines.push("limit 50;");
+  const limit = typeof opts.limit === "number" && opts.limit > 0 ? Math.min(opts.limit, 50) : 50;
+  const offset = typeof opts.offset === "number" && opts.offset > 0 ? opts.offset : 0;
+
+  lines.push(`limit ${limit};`);
+  if (offset) {
+    lines.push(`offset ${offset};`);
+  }
+
+  return lines.join("\n");
+}
+
+export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: number | null }): string {
+  const lines: string[] = ["fields count;"];
+
+  const trimmedSearch = opts.searchText?.trim();
+  if (trimmedSearch) {
+    const escaped = trimmedSearch.replace(/"/g, '\\"');
+    lines.push(`search "${escaped}";`);
+  }
+
+  if (typeof opts.platformId === "number") {
+    lines.push(`where platforms = (${opts.platformId});`);
+  }
 
   return lines.join("\n");
 }
@@ -158,16 +192,37 @@ export interface IgdbModeRef {
   name?: string;
 }
 
+export interface IgdbEntityRef {
+  id: number;
+  name?: string;
+  slug?: string | null;
+}
+
 export interface IgdbWebsite {
   id: number;
   url: string;
   category?: number;
+  trusted?: boolean | null;
 }
 
 export interface IgdbVideo {
   id?: number;
   name?: string;
   video_id: string;
+}
+
+export interface IgdbAgeRating {
+  id: number;
+  category?: number | null;
+  rating?: number | null;
+  synopsis?: string | null;
+  rating_cover_url?: string | null;
+}
+
+export interface IgdbLanguageSupport {
+  id: number;
+  language?: { id: number; name?: string | null } | null;
+  language_support_type?: number | number[] | null;
 }
 
 export interface IgdbAchievementIcon {
@@ -191,6 +246,7 @@ export interface IgdbCompanyRef {
   company?: {
     id: number;
     name?: string;
+    slug?: string | null;
   };
   developer?: boolean;
   publisher?: boolean;
@@ -202,6 +258,7 @@ export interface IgdbGame {
   slug?: string;
   summary?: string | null;
   first_release_date?: number | null;
+  aggregated_rating?: number | null;
   total_rating?: number | null;
   total_rating_count?: number | null;
   rating?: number | null;
@@ -218,6 +275,9 @@ export interface IgdbGameDetails extends IgdbGame {
   keywords?: IgdbKeywordRef[];
   game_modes?: IgdbModeRef[];
   player_perspectives?: IgdbModeRef[];
+  franchises?: IgdbEntityRef[];
+  collections?: IgdbEntityRef[];
+  game_engines?: IgdbEntityRef[];
   websites?: IgdbWebsite[];
   videos?: IgdbVideo[];
   screenshots?: IgdbImageAsset[];
@@ -229,10 +289,19 @@ export interface IgdbGameDetails extends IgdbGame {
   remasters?: IgdbSimilarGame[];
   parent_game?: IgdbSimilarGame;
   involved_companies?: IgdbCompanyRef[];
+  age_ratings?: IgdbAgeRating[] | null;
+  language_supports?: IgdbLanguageSupport[] | null;
+  time_to_beat?:
+    | { hastly?: number | null; normally?: number | null; completely?: number | null }
+    | number
+    | null;
 }
 
 export interface IgdbSimilarGame
-  extends Pick<IgdbGame, "id" | "name" | "slug" | "total_rating" | "total_rating_count"> {
+  extends Pick<
+    IgdbGame,
+    "id" | "name" | "slug" | "aggregated_rating" | "total_rating" | "total_rating_count" | "rating" | "rating_count"
+  > {
   cover?: IgdbCover;
   platforms?: IgdbPlatformRef[];
   screenshots?: IgdbImageAsset[];
@@ -532,8 +601,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 }
 
 export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | null> {
-  const query = `
-    fields
+  const sharedFields = `
       id,
       name,
       slug,
@@ -558,11 +626,38 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       game_modes.name,
       player_perspectives.id,
       player_perspectives.name,
+      franchises.id,
+      franchises.name,
+      franchises.slug,
+      collections.id,
+      collections.name,
+      collections.slug,
+      game_engines.id,
+      game_engines.name,
+      game_engines.slug,
+      involved_companies.id,
+      involved_companies.company.id,
       involved_companies.company.name,
+      involved_companies.company.slug,
       involved_companies.developer,
       involved_companies.publisher,
+      age_ratings.*,
+      age_ratings.id,
+      age_ratings.category,
+      age_ratings.rating,
+      age_ratings.synopsis,
+      age_ratings.rating_cover_url,
+      aggregated_rating,
+      rating,
+      rating_count,
+      language_supports.id,
+      language_supports.language.id,
+      language_supports.language.name,
+      language_supports.language,
+      language_supports.language_support_type,
       websites.url,
       websites.category,
+      websites.trusted,
       videos.name,
       videos.video_id,
       screenshots.image_id,
@@ -575,11 +670,13 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       similar_games.name,
       similar_games.slug,
       similar_games.cover.image_id,
+      similar_games.aggregated_rating,
+      similar_games.rating,
+      similar_games.rating_count,
       similar_games.screenshots.image_id,
-      similar_games.total_rating,
-      similar_games.total_rating_count,
       similar_games.platforms.id,
       similar_games.platforms.name,
+      similar_games.platforms.slug,
       dlcs.id,
       dlcs.name,
       dlcs.slug,
@@ -604,20 +701,28 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       parent_game.name,
       parent_game.slug,
       parent_game.cover.image_id,
-      parent_game.screenshots.image_id;
+      parent_game.screenshots.image_id,
+      bundles.id,
+      bundles.name,
+      bundles.slug,
+      bundles.cover.image_id,
+      bundles.screenshots.image_id,
+      status,
+      category`;
+
+  const query = `
+    fields
+      ${sharedFields};
     where id = ${id};
     limit 1;
   `;
 
-  try {
-    const data = await igdbRequest<IgdbGameDetails[]>("games", query);
-    return data[0] ?? null;
-  } catch (error) {
-    if (error instanceof IgdbRequestError && error.status === 404) {
-      return null;
-    }
-    throw error;
-  }
+  const data = await igdbRequest<IgdbGameDetails[]>("games", query);
+  const game = data[0];
+
+  if (!game) return null;
+
+  return game;
 }
 
 export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise<IgdbAchievement[]> {

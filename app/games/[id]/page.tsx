@@ -5,15 +5,15 @@ import {
   getGameDetails,
   getGameReviews,
   getGameScreenshots,
-  getGameTrailers,
+  getGameVideos,
   getSimilarGamesForGame,
   getGameSeriesEntries,
   type GameDetailsPayload,
-  type GameTrailer,
   type GameRelatedGame,
   type GameScreenshot,
   type GameSimilarEntry,
 } from "@/lib/gameData";
+import type { IgdbVideo } from "@/lib/igdb";
 
 export const revalidate = 300;
 
@@ -54,14 +54,14 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const reviewsPromise = getGameReviews(id, 1, 6).catch(
     () => [] as Awaited<ReturnType<typeof getGameReviews>>,
   );
-  const trailersPromise = getGameTrailers(id).catch(() => [] as GameTrailer[]);
+  const videosPromise = getGameVideos(id).catch(() => [] as IgdbVideo[]);
   const similarPromise = getSimilarGamesForGame(id).catch(() => [] as GameSimilarEntry[]);
   const additionsPromise = getGameAdditions(id, 12).catch(() => [] as GameRelatedGame[]);
   const seriesPromise = getGameSeriesEntries(id, 12).catch(() => [] as GameRelatedGame[]);
-  const [screenshots, reviews, trailers, similarGames, additions, seriesEntries] = await Promise.all([
+  const [screenshots, reviews, videos, similarGames, additions, seriesEntries] = await Promise.all([
     screenshotsPromise,
     reviewsPromise,
-    trailersPromise,
+    videosPromise,
     similarPromise,
     additionsPromise,
     seriesPromise,
@@ -133,15 +133,17 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const backLabel = sanitizedReturnTo?.startsWith("/library") ? "Back to library" : "Back to search";
 
   return (
-    <GameDetails
-      game={game}
-      backLink={{ href: backHref, label: backLabel }}
-      screenshots={gallery}
-      reviews={cleanedReviews}
-      trailers={trailers}
-      similarGames={similarGames}
-      additions={additions}
-      series={seriesEntries}
-    />
+    <div className="space-y-6">
+      <GameDetails
+        game={game}
+        backLink={{ href: backHref, label: backLabel }}
+        screenshots={gallery}
+        reviews={cleanedReviews}
+        videos={videos}
+        similarGames={similarGames}
+        additions={additions}
+        series={seriesEntries}
+      />
+    </div>
   );
 }

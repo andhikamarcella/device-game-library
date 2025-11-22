@@ -13,6 +13,9 @@ import {
   type IgdbPlatformRef,
   type IgdbSearchParams,
   type IgdbSimilarGame,
+  type IgdbAgeRating,
+  type IgdbWebsite,
+  type IgdbLanguageSupport,
   type IgdbVideo,
 } from "@/lib/igdb";
 import { igdbScreenshotUrl } from "@/lib/igdbImages";
@@ -38,6 +41,8 @@ export type GamePlatformSummary = {
   year_start: number | null;
   image_background: string | null;
 };
+
+export type GameTrailer = IgdbVideo;
 
 export type GameEsrbRating = {
   id: number;
@@ -80,6 +85,7 @@ export type GameSummary = {
   background_image: string | null;
   background_image_additional?: string | null;
   short_screenshots?: GameScreenshot[];
+  artworks?: GameArtwork[] | null;
   clip?: GameClip | null;
   released: string | null;
   rating: number | null;
@@ -176,6 +182,20 @@ export type GameClip = {
 
 export type GameDetailsPayload = GameSummary & {
   genres: { id: number; name: string }[];
+  themes?: { id: number; name: string }[];
+  game_modes?: { id: number; name: string }[];
+  player_perspectives?: { id: number; name: string }[];
+  franchises?: { id: number; name: string; slug?: string | null }[];
+  collections?: { id: number; name: string; slug?: string | null }[];
+  engines?: { id: number; name: string; slug?: string | null }[];
+  involved_companies?:
+    | Array<{
+        id: number;
+        developer?: boolean;
+        publisher?: boolean;
+        company?: { id: number; name?: string | null; slug?: string | null } | null;
+      }>
+    | null;
   description?: string | null;
   description_raw?: string | null;
   website?: string | null;
@@ -184,6 +204,7 @@ export type GameDetailsPayload = GameSummary & {
   reddit_count?: number | null;
   twitch_count?: number | null;
   youtube_count?: number | null;
+  websites?: Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }> | null;
   developers: { id: number; name: string }[];
   publishers: { id: number; name: string }[];
   added_by_status?: GameAddedByStatus | null;
@@ -201,13 +222,9 @@ export type GameDetailsPayload = GameSummary & {
   expansions?: GameRelatedGame[] | null;
   reactions?: GameReactionSummary | null;
   playtime_distribution?: GamePlaytimeDistribution | null;
-};
-
-export type GameTrailer = {
-  id: number;
-  name: string;
-  preview: string | null;
-  data: Record<string, string | undefined> & { 480?: string; max?: string };
+  age_ratings?: IgdbAgeRating[] | null;
+  language_supports?: GameLanguageSupport[] | null;
+  time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
 };
 
 export type GameScreenshot = {
@@ -216,6 +233,22 @@ export type GameScreenshot = {
   image: string;
   width?: number;
   height?: number;
+};
+
+export type GameArtwork = {
+  id: number;
+  image_id: string;
+  image: string;
+  width?: number;
+  height?: number;
+};
+
+export type GameLanguageSupport = {
+  id: number;
+  language: { id: number; name: string | null } | null;
+  audio: boolean;
+  subtitles: boolean;
+  interface: boolean;
 };
 
 export type GameReview = {
@@ -296,9 +329,15 @@ export async function getGameReviews(_id: number, _page = 1, _pageSize = 6): Pro
   return [];
 }
 
-export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
+export async function getGameVideos(id: number): Promise<IgdbVideo[]> {
   const details = await loadIgdbDetails(id);
-  return mapVideos(details.videos, details.name);
+  const videos = (details.videos ?? []).filter((video) => Boolean(video?.video_id));
+  return videos.map((video, index) => ({
+    ...video!,
+    id: typeof video?.id === "number" ? video.id : index + 1,
+    name: video?.name?.trim() || `${details.name ?? "Trailer"} ${index + 1}`,
+    video_id: video!.video_id.trim(),
+  }));
 }
 
 function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
@@ -339,7 +378,7 @@ export async function getGameSeriesEntries(id: number, pageSize = 10): Promise<G
   return series.slice(0, Math.max(pageSize, 1));
 }
 
-export async function getSimilarGamesForGame(id: number, limit = 6): Promise<GameSimilarEntry[]> {
+export async function getSimilarGamesForGame(id: number, limit = 10): Promise<GameSimilarEntry[]> {
   const details = await loadIgdbDetails(id);
   const similar = mapSimilar(details.similar_games).filter((game) => game.id !== id);
   return similar.slice(0, Math.max(limit, 1));
@@ -435,7 +474,7 @@ const mapPlatformRef = (platform?: IgdbPlatformRef | null): GamePlatform | null 
     platform: {
       id: platform.id,
       name: label,
-      slug: platform.abbreviation?.toLowerCase() ?? slugify(label),
+      slug: platform.slug ?? platform.abbreviation?.toLowerCase() ?? slugify(label),
     },
   };
 };
@@ -512,6 +551,60 @@ const mapGenres = (genres?: IgdbGameDetails["genres"]): Array<{ id: number; name
   );
 };
 
+const mapNamedEntities = (
+  entries?: Array<{ id: number; name?: string | null; slug?: string | null }> | null,
+): Array<{ id: number; name: string; slug?: string | null }> => {
+  if (!entries?.length) return [];
+
+  return uniqueById(
+    entries
+      .filter((entry) => entry && typeof entry.id === "number")
+      .map((entry) => ({
+        id: entry!.id,
+        name: entry!.name ?? `Item ${entry!.id}`,
+        slug: entry!.slug ?? slugify(entry!.name ?? ""),
+      })),
+  );
+};
+
+const mapModes = (entries?: IgdbGameDetails["game_modes"]): Array<{ id: number; name: string }> => {
+  if (!entries?.length) return [];
+
+  return uniqueById(
+    entries
+      .filter((entry) => entry && typeof entry.id === "number")
+      .map((entry) => ({ id: entry!.id, name: entry!.name ?? `Mode ${entry!.id}` })),
+  );
+};
+
+const mapInvolvedCompanies = (
+  entries?: IgdbGameDetails["involved_companies"],
+):
+  | Array<{
+      id: number;
+      developer?: boolean;
+      publisher?: boolean;
+      company?: { id: number; name?: string | null; slug?: string | null } | null;
+    }>
+  | null => {
+  if (!entries?.length) return [];
+
+  return entries
+    .filter((entry) => entry && typeof entry.id === "number")
+    .map((entry) => ({
+      id: entry!.id,
+      developer: Boolean(entry!.developer),
+      publisher: Boolean(entry!.publisher),
+      company: entry!.company
+        ? {
+            id: entry!.company.id,
+            name: entry!.company.name,
+            slug: entry!.company.slug ?? slugify(entry!.company.name ?? undefined),
+          }
+        : null,
+    }));
+};
+
 const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
   if (!assets?.length) {
     return [];
@@ -534,6 +627,57 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     });
   });
   return screenshots;
+};
+
+const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
+  if (!assets?.length) {
+    return [];
+  }
+
+  const artworks: GameArtwork[] = [];
+  assets.forEach((asset, index) => {
+    if (!asset?.image_id) {
+      return;
+    }
+    const image = igdbScreenshotUrl(asset.image_id);
+    if (!image) {
+      return;
+    }
+    artworks.push({
+      id: typeof asset.id === "number" ? asset.id : index,
+      image_id: asset.image_id,
+      image,
+      width: asset.width,
+      height: asset.height,
+    });
+  });
+
+  return artworks;
+};
+
+const mapWebsites = (websites?: IgdbWebsite[] | null) => {
+  if (!websites?.length) return [] as Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }>;
+
+  const mapped = websites
+    .filter((entry): entry is IgdbWebsite => Boolean(entry && entry.url))
+    .map((entry) => ({
+      id: entry.id,
+      url: entry.url,
+      category: entry.category ?? null,
+      trusted: typeof entry.trusted === "boolean" ? entry.trusted : null,
+    }));
+
+  const deduped: Array<{ id: number; url: string; category?: number | null; trusted?: boolean | null }> = [];
+  const seen = new Set<string>();
+
+  mapped.forEach((entry) => {
+    const key = entry.url.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    deduped.push(entry);
+  });
+
+  return deduped;
 };
 
 const mapSimilar = (similar?: IgdbSimilarGame[]): GameSimilarEntry[] => {
@@ -589,28 +733,6 @@ const relatedToSeriesEntry = (entry?: GameRelatedGame | null): GameSeriesEntry |
   };
 };
 
-const mapVideos = (videos?: IgdbVideo[], gameName?: string): GameTrailer[] => {
-  if (!videos?.length) {
-    return [];
-  }
-  let index = 1;
-  return videos
-    .filter((video) => Boolean(video?.video_id))
-    .map((video) => {
-      const videoId = video!.video_id.trim();
-      const name = video!.name ?? `${gameName ?? "Trailer"} ${index}`;
-      const url = buildYoutubeUrl(videoId);
-      const movie: GameTrailer = {
-        id: index,
-        name,
-        preview: buildYoutubeThumb(videoId),
-        data: { 480: url, max: url },
-      };
-      index += 1;
-      return movie;
-    });
-};
-
 const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
   const source = videos?.find((video) => video?.video_id);
   if (!source?.video_id) {
@@ -623,6 +745,121 @@ const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
     preview: buildYoutubeThumb(source.video_id),
     clips: { full: url, featured: url },
   };
+};
+
+const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
+  if (!entries?.length) return [];
+
+  return entries
+    .filter((entry): entry is IgdbAgeRating => Boolean(entry))
+    .map((entry, index) => {
+      const rating =
+        typeof entry.rating === "number"
+          ? entry.rating
+          : typeof entry.rating === "string"
+            ? Number.parseInt(entry.rating, 10)
+            : null;
+
+      const category = typeof entry.category === "number" ? entry.category : null;
+      const rating_cover_url =
+        typeof entry.rating_cover_url === "string" && entry.rating_cover_url.trim()
+          ? entry.rating_cover_url.trim()
+          : null;
+
+      const idFallback = Number.isFinite(rating)
+        ? Number(`${category ?? ""}${rating}`.replace(/\D+/g, "")) || index
+        : index;
+
+      return {
+        id: typeof entry.id === "number" ? entry.id : idFallback,
+        category,
+        rating,
+        synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
+        rating_cover_url,
+      } satisfies IgdbAgeRating;
+    })
+    .filter((entry) => entry.category !== null || entry.rating !== null || entry.rating_cover_url);
+};
+
+const normalizeSupportType = (value?: number | number[] | null): number[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is number => typeof item === "number");
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return [value];
+  }
+  return [];
+};
+
+const mapLanguageSupports = (
+  entries?: IgdbLanguageSupport[] | null,
+): GameLanguageSupport[] => {
+  if (!entries?.length) return [];
+
+  const grouped = new Map<
+    string,
+    {
+      id: number;
+      language: { id: number; name: string | null } | null;
+      audio: boolean;
+      subtitles: boolean;
+      interface: boolean;
+    }
+  >();
+
+  entries.forEach((entry, index) => {
+    if (!entry) return;
+
+    const supportTypes = normalizeSupportType(entry.language_support_type);
+    if (!supportTypes.length) return;
+
+    const languageName = entry.language?.name?.trim() || null;
+    const languageId = typeof entry.language?.id === "number" ? entry.language.id : null;
+    const idFallback = languageId ?? index;
+    const key = languageId !== null ? `lang-${languageId}` : `idx-${index}-${languageName ?? "unknown"}`;
+
+    const existing = grouped.get(key) ?? {
+      id: typeof entry.id === "number" ? entry.id : idFallback,
+      language:
+        languageName || languageId !== null
+          ? {
+              id: languageId ?? idFallback,
+              name: languageName,
+            }
+          : null,
+      audio: false,
+      subtitles: false,
+      interface: false,
+    };
+
+    supportTypes.forEach((type) => {
+      if (type === 1) existing.audio = true;
+      if (type === 2) existing.subtitles = true;
+      if (type === 3) existing.interface = true;
+    });
+
+    grouped.set(key, existing);
+  });
+
+  return Array.from(grouped.values());
+};
+
+const mapTimeToBeat = (
+  ttb?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null,
+): { hastly?: number | null; normally?: number | null; completely?: number | null } | null => {
+  if (!ttb) return null;
+  const toMinutes = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+
+  const hastly = toMinutes(ttb.hastly);
+  const normally = toMinutes(ttb.normally);
+  const completely = toMinutes(ttb.completely);
+
+  if (hastly === null && normally === null && completely === null) {
+    return null;
+  }
+
+  return { hastly, normally, completely };
 };
 
 const mapCompanies = (
@@ -645,6 +882,16 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
   const secondaryImage = screenshots[1]?.image ?? cover;
   const slug = game.slug ?? slugify(game.name);
+  const aggregated = typeof game.aggregated_rating === "number" ? game.aggregated_rating : null;
+  const critics = typeof game.total_rating === "number" ? game.total_rating : null;
+  const userRating = typeof game.rating === "number" ? game.rating : null;
+  const ratingValue = aggregated ?? critics ?? userRating;
+  const ratingCount =
+    typeof game.rating_count === "number"
+      ? game.rating_count
+      : typeof game.total_rating_count === "number"
+        ? game.total_rating_count
+        : null;
   return {
     id: game.id,
     slug,
@@ -657,8 +904,8 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     short_screenshots: screenshots,
     clip: null,
     released: toIsoDate(game.first_release_date),
-    rating: typeof game.total_rating === "number" ? game.total_rating : null,
-    ratings_count: typeof game.total_rating_count === "number" ? game.total_rating_count : null,
+    rating: ratingValue,
+    ratings_count: ratingCount,
     metacritic: null,
     playtime: null,
     genres: mapGenres(game.genres),
@@ -686,12 +933,15 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     background_image_additional:
       base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
     short_screenshots: screenshots,
+    artworks: mapArtworks(details.artworks),
     clip: mapClip(details.videos, details.name),
-    movies: mapVideos(details.videos, details.name),
+    movies: [],
     genres: mapGenres(details.genres),
+    themes: mapNamedEntities(details.themes),
     description: descriptionRaw || null,
     description_raw: descriptionRaw || null,
     website: details.websites?.[0]?.url ?? null,
+    websites: mapWebsites(details.websites),
     reddit_url: null,
     reddit_name: null,
     reddit_count: null,
@@ -712,5 +962,16 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     reactions: {},
     playtime_distribution: {},
     tags: mapKeywords(details.keywords),
+    age_ratings: mapAgeRatings(details.age_ratings),
+    language_supports: mapLanguageSupports(details.language_supports),
+    time_to_beat: mapTimeToBeat(
+      typeof details.time_to_beat === "object" && details.time_to_beat ? details.time_to_beat : null,
+    ),
+    game_modes: mapModes(details.game_modes),
+    player_perspectives: mapModes(details.player_perspectives),
+    franchises: mapNamedEntities(details.franchises),
+    collections: mapNamedEntities(details.collections),
+    engines: mapNamedEntities(details.game_engines),
+    involved_companies: mapInvolvedCompanies(details.involved_companies),
   };
 };

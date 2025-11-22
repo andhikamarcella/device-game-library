@@ -6,12 +6,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Loader2, Search, Star } from "lucide-react";
 import { Card } from "@/components/Card";
-import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
+import { GameCard, type SearchGameResult as CardResult } from "@/components/GameCard";
+import { GameCardCompact } from "@/components/GameCardCompact";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
+import EventsSection from "@/components/EventsSection";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl } from "@/lib/igdbImages";
+import { normalizeImageUrl } from "@/lib/images";
 import { formatDateTime } from "@/lib/utils";
 import { GameStatus, Game } from "@/lib/types";
 
@@ -27,10 +30,8 @@ type SearchResult = {
   slug: string | null;
   name: string;
   summary: string;
-  cover?: { image_id?: string | null } | null;
   coverUrl: string | null;
   coverImageUrl?: string | null;
-  coverImageId?: string | null;
   screenshots: string[];
   screenshotUrls?: string[];
   releaseYear: number | null;
@@ -40,95 +41,37 @@ type SearchResult = {
   genres: string[];
 };
 
-const getResultCover = (game: SearchResult | null | undefined): string | null => {
+const getResultCover = (game: SearchResult | null | undefined): string => {
   if (!game) {
-    return null;
+    return "/fallback/cover-placeholder.svg";
   }
 
-  const coverId = (game as { cover?: { image_id?: string | null } } | null)?.cover?.image_id ?? null;
-  const igdbCover = igdbCoverUrl(coverId);
-  if (igdbCover) {
-    return igdbCover;
+  const candidates = [
+    game.coverUrl,
+    game.coverImageUrl,
+    Array.isArray(game.screenshots) && game.screenshots.length ? game.screenshots[0] : null,
+    Array.isArray(game.screenshotUrls) && game.screenshotUrls.length ? game.screenshotUrls[0] : null,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeImageUrl(candidate);
+    if (normalized) return normalized;
   }
-  if (game.coverUrl) {
-    return game.coverUrl;
-  }
-  if (game.coverImageUrl) {
-    return game.coverImageUrl;
-  }
-  const screenshots = getResultScreenshots(game);
-  return screenshots[0] ?? null;
+
+  return "/fallback/cover-placeholder.svg";
 };
 
 const getResultScreenshots = (game: SearchResult | null | undefined): string[] => {
   if (!game) {
     return [];
   }
-
-  const rawScreens = (game as any)?.screenshots;
-  if (Array.isArray(rawScreens) && rawScreens.length) {
-    const resolved = rawScreens
-      .map((shot: any) => {
-        const id = shot?.image_id ?? null;
-        return id ? igdbScreenshotUrl(id) : typeof shot === "string" ? shot : null;
-      })
-      .filter((url): url is string => Boolean(url));
-    if (resolved.length) {
-      return resolved;
-    }
+  if (Array.isArray(game.screenshots) && game.screenshots.length) {
+    return game.screenshots;
   }
-
   if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls.filter((url): url is string => typeof url === "string");
+    return game.screenshotUrls;
   }
-
-  return Array.isArray(game.screenshots)
-    ? game.screenshots.filter((url): url is string => typeof url === "string")
-    : [];
-};
-
-const normalizePlatform = (platform: SearchPlatform | null | undefined): SearchPlatform | null => {
-  if (!platform) return null;
-  const name = typeof platform.name === "string" ? platform.name : String(platform.id ?? "").trim();
-  const slug = typeof platform.slug === "string" && platform.slug.trim().length ? platform.slug : name.toLowerCase();
-  return {
-    id: platform.id,
-    name,
-    slug,
-    abbreviation: platform.abbreviation ?? null,
-  };
-};
-
-const normalizeSearchResult = (result: SearchResult | (SearchResult & { cover?: { image_id?: string | null } }) | any):
-  SearchResult => {
-  const coverId = result?.cover?.image_id ?? result?.coverImageId ?? null;
-  const coverUrl = igdbCoverUrl(coverId) ?? result.coverUrl ?? result.coverImageUrl ?? null;
-  const screenshots = getResultScreenshots(result);
-  const releaseYear = typeof result.releaseYear === "number"
-    ? result.releaseYear
-    : result.first_release_date
-      ? new Date(Number(result.first_release_date) * 1000).getFullYear()
-      : null;
-  const platforms = Array.isArray(result.platforms)
-    ? result.platforms
-        .map((platform: SearchPlatform | null | undefined) => normalizePlatform(platform))
-        .filter(
-          (platform: SearchPlatform | null | undefined): platform is SearchPlatform =>
-            Boolean(platform)
-        )
-    : [];
-
-  return {
-    ...result,
-    cover: result?.cover ?? (coverId ? { image_id: coverId } : null),
-    coverUrl,
-    coverImageUrl: coverUrl ?? result.coverImageUrl ?? null,
-    coverImageId: coverId,
-    screenshots,
-    screenshotUrls: screenshots,
-    releaseYear,
-    platforms,
-  } as SearchResult;
+  return [];
 };
 
 type SearchResponse = {
@@ -169,17 +112,45 @@ type PlatformOption = {
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
 
 const DISCOVER_SORT_OPTIONS = [
-  { value: "none", label: "No sort (default)" },
-  { value: "most_popular", label: "Most popular" },
-  { value: "highest_rated", label: "Highest rated" },
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "alphabetical", label: "A → Z" },
+  { value: "none", label: "No sort" },
+  { value: "popular_desc", label: "Most popular" },
+  { value: "popular_asc", label: "Least popular" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "rating_asc", label: "Lowest rated" },
+  { value: "release_desc", label: "Newest releases" },
+  { value: "release_asc", label: "Oldest releases" },
 ] as const;
 
 type DiscoverSortOption = (typeof DISCOVER_SORT_OPTIONS)[number]["value"];
 
-const mapSortOrderToApiParam = (value: DiscoverSortOption): string => value;
+type SearchSortKey =
+  | "none"
+  | "most_popular"
+  | "least_popular"
+  | "highest_rated"
+  | "lowest_rated"
+  | "newest"
+  | "oldest";
+
+const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => {
+  switch (value) {
+    case "none":
+      return "none";
+    case "popular_asc":
+      return "least_popular";
+    case "rating_desc":
+      return "highest_rated";
+    case "rating_asc":
+      return "lowest_rated";
+    case "release_desc":
+      return "newest";
+    case "release_asc":
+      return "oldest";
+    case "popular_desc":
+    default:
+      return "most_popular";
+  }
+};
 
 const parsePlatformValue = (value: string | null): string => {
   if (!value) {
@@ -198,11 +169,96 @@ const parsePageValue = (value: string | null): number => {
 
 const parseSortValue = (value: string | null): DiscoverSortOption => {
   if (!value) {
-    return "none";
+    return "popular_desc";
   }
   return DISCOVER_SORT_OPTIONS.some((option) => option.value === value)
     ? (value as DiscoverSortOption)
-    : "none";
+    : "popular_desc";
+};
+
+type IgdbListPlatform = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
+type IgdbListGame = {
+  id: number;
+  name: string;
+  slug?: string | null;
+  cover?: { image_id?: string | null } | null;
+  aggregated_rating?: number | null;
+  rating?: number | null;
+  rating_count?: number | null;
+  platforms?: IgdbListPlatform[] | null;
+  first_release_date?: number | null;
+};
+
+const HOMEPAGE_GRID =
+  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
+const mapIgdbListGame = (game: IgdbListGame): CardResult => {
+  const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
+  const platforms = Array.isArray(game.platforms)
+    ? game.platforms
+        .map((platform) => ({
+          id: platform?.id ?? 0,
+          name: platform?.name ?? "Unknown",
+          slug: platform?.slug ?? platform?.name ?? "",
+          abbreviation: platform?.abbreviation ?? platform?.slug ?? platform?.name ?? undefined,
+        }))
+        .filter((p) => Boolean(p.name))
+    : [];
+
+  return {
+    id: game.id,
+    slug: game.slug ?? null,
+    name: game.name,
+    summary: "",
+    cover: game.cover,
+    coverUrl,
+    coverImageUrl: coverUrl,
+    screenshots: [],
+    screenshotUrls: [],
+    releaseYear: game.first_release_date
+      ? new Date(Number(game.first_release_date) * 1000).getFullYear()
+      : null,
+    rating:
+      typeof game.aggregated_rating === "number"
+        ? game.aggregated_rating
+        : typeof game.rating === "number"
+          ? game.rating
+          : null,
+    ratingsCount: game.rating_count ?? 0,
+    platforms,
+    genres: [],
+    popularity: null,
+    first_release_date: game.first_release_date ?? null,
+  } as CardResult & { first_release_date?: number | null };
+};
+
+const daysUntil = (timestamp: number | null | undefined): number | null => {
+  if (!timestamp) return null;
+  const today = new Date();
+  const target = new Date(Number(timestamp) * 1000);
+  const diff = target.getTime() - today.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+const daysSince = (timestamp: number | null | undefined): number | null => {
+  if (!timestamp) return null;
+  const today = new Date();
+  const target = new Date(Number(timestamp) * 1000);
+  const diff = today.getTime() - target.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+const formatCountdown = (days: number | null) => {
+  if (days === null) return null;
+  if (days <= 0) return "Releasing soon";
+  if (days === 1) return "Releases tomorrow";
+  return `Releases in ${days} days`;
+};
+
+const formatDaysAgo = (days: number | null) => {
+  if (days === null) return null;
+  if (days <= 1) return "Released yesterday";
+  return `Released ${days} days ago`;
 };
 
 function DashboardPageContent() {
@@ -224,12 +280,13 @@ function DashboardPageContent() {
   const [query, setQuery] = useState(initialQueryParam);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
   const [results, setResults] = useState<SearchResult[]>([]);
-  const pageSize = 6;
+  const pageSize = 5;
   const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
   const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
   const [page, setPage] = useState(initialPageParam);
   const [pageInput, setPageInput] = useState(String(initialPageParam));
   const lastSyncedSearchRef = useRef(searchParams.toString());
+  const skipPageResetRef = useRef(true);
   const [pagination, setPagination] = useState(() => ({
     total: 0,
     page: initialPageParam,
@@ -246,7 +303,49 @@ function DashboardPageContent() {
   const [platformSearch, setPlatformSearch] = useState("");
   const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+  const [topGames, setTopGames] = useState<CardResult[]>([]);
+  const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
+  const [recentGames, setRecentGames] = useState<CardResult[]>([]);
+  const [headlineLoading, setHeadlineLoading] = useState(true);
   const safeResults = Array.isArray(results) ? results : [];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchList = async (endpoint: string, limit: number): Promise<CardResult[]> => {
+      try {
+        const res = await fetch(endpoint, { method: "POST" });
+        if (!res.ok) return [];
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        return list.slice(0, limit).map(mapIgdbListGame);
+      } catch (error) {
+        console.warn(`Failed to load ${endpoint}`, error);
+        return [];
+      }
+    };
+
+    const loadHeadlines = async () => {
+      setHeadlineLoading(true);
+      const [top, upcoming, recent] = await Promise.all([
+        fetchList("/api/igdb/top100", 100),
+        fetchList("/api/igdb/coming-soon", 20),
+        fetchList("/api/igdb/recent", 20),
+      ]);
+
+      if (cancelled) return;
+      setTopGames(top);
+      setComingSoonGames(upcoming);
+      setRecentGames(recent);
+      setHeadlineLoading(false);
+    };
+
+    loadHeadlines();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const currentSearch = searchParams.toString();
@@ -267,6 +366,7 @@ function DashboardPageContent() {
     setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
     setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
 
+    skipPageResetRef.current = true;
     lastSyncedSearchRef.current = currentSearch;
   }, [searchParams]);
 
@@ -372,41 +472,46 @@ function DashboardPageContent() {
     setError(null);
     setHasSearched(true);
 
-    fetch(`/api/games/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const apiParams = new URLSearchParams();
+    if (debouncedQuery) {
+      apiParams.set("q", debouncedQuery);
+    }
+    if (selectedPlatform !== "all") {
+      apiParams.set("platformId", selectedPlatform);
+    }
+    const apiSortParam = mapSortOrderToApiParam(sortOrder);
+    apiParams.set("sort", apiSortParam);
+    apiParams.set("page", String(page));
+    apiParams.set("pageSize", String(pageSize));
+    const searchPath = apiParams.toString();
+
+    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
       signal: controller.signal,
-      body: JSON.stringify({
-        query: debouncedQuery,
-        sort: mapSortOrderToApiParam(sortOrder),
-        platform: selectedPlatform,
-      }),
     })
       .then(async (response) => {
         const payload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+          throw new Error(message);
+        }
         return payload;
       })
       .then((payload) => {
         const data = payload as Partial<SearchResponse> | null;
-        const normalizedResults = (Array.isArray(data?.results)
-          ? (data.results as SearchResult[])
-          : Array.isArray((data as any)?.games)
-            ? ((data as any).games as SearchResult[])
-            : [])
-          .map((result) => normalizeSearchResult(result));
-        if ((data as { error?: string } | null)?.error) {
-          setError((data as { error?: string }).error ?? null);
-        }
+        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
         setResults(normalizedResults);
-        setPagination({
-          total: normalizedResults.length,
-          page: 1,
-          pageSize,
-          hasNextPage: normalizedResults.length > pageSize,
-          hasPreviousPage: false,
-        });
-        setPage(1);
-        setPageInput("1");
+        const nextPagination = {
+          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+          page:
+            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
+          pageSize:
+            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+              ? data.pagination.pageSize
+              : pageSize,
+          hasNextPage: Boolean(data?.pagination?.hasNextPage),
+          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+        };
+        setPagination(nextPagination);
       })
       .catch((fetchError) => {
         if (fetchError.name === "AbortError") {
@@ -430,16 +535,20 @@ function DashboardPageContent() {
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, selectedPlatform, sortOrder]);
+  }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder]);
 
   useEffect(() => {
+    if (skipPageResetRef.current) {
+      skipPageResetRef.current = false;
+      return;
+    }
     setPage(1);
   }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
-    const nextValue = String(Math.max(1, page));
+    const nextValue = String(pagination.page > 0 ? pagination.page : page);
     setPageInput((current) => (current === nextValue ? current : nextValue));
-  }, [page]);
+  }, [page, pagination.page]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -452,7 +561,7 @@ function DashboardPageContent() {
     if (page > 1) {
       params.set("page", String(page));
     }
-    if (sortOrder !== "none") {
+    if (sortOrder !== "popular_desc") {
       params.set("sort", sortOrder);
     }
 
@@ -533,36 +642,20 @@ function DashboardPageContent() {
   }, [platforms]);
 
   const totalGames = trackedGames.length || 1;
-  const recentGames = [...trackedGames]
+  const recentLibraryGames = [...trackedGames]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
   const playingGames = trackedGames.filter((game) => game.status === "playing");
   const wishlistGames = trackedGames.filter((game) => game.wishlist);
-  const totalResults = Math.max(pagination.total, safeResults.length);
-  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
-  const currentPage = Math.min(totalPages, Math.max(1, page));
-  const canGoNext = currentPage < totalPages;
-  const canGoPrevious = currentPage > 1;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(Math.max(pagination.total, safeResults.length) / Math.max(pagination.pageSize, 1)),
+  );
+  const currentPage = pagination.page > 0 ? pagination.page : page;
+  const canGoNext = pagination.hasNextPage || currentPage < totalPages;
+  const canGoPrevious = pagination.hasPreviousPage || currentPage > 1;
   const isPageJumpDisabled = totalPages <= 1;
-  const paginatedResults = safeResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  useEffect(() => {
-    if (page !== currentPage) {
-      setPage(currentPage);
-    }
-  }, [currentPage, page]);
-
-  useEffect(() => {
-    setPagination((prev) => ({
-      ...prev,
-      total: totalResults,
-      page: currentPage,
-      pageSize,
-      hasNextPage: currentPage < totalPages,
-      hasPreviousPage: currentPage > 1,
-    }));
-  }, [currentPage, totalPages, totalResults, pageSize]);
 
   const handlePageJump = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -740,6 +833,94 @@ function DashboardPageContent() {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-4">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Discover Games</h1>
+        <p className="text-slate-600 dark:text-slate-300">
+          Telusuri rilisan terbaik, game yang akan datang, dan acara menarik berbasis data IGDB.
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        <Card title="Top 100 Games">
+          {headlineLoading && !topGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {Array.from({ length: 8 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-72 animate-pulse rounded-2xl border border-slate-200/60 bg-slate-100/70 shadow-inner shadow-slate-900/10 dark:border-slate-800/60 dark:bg-slate-900/60"
+                />
+              ))}
+            </div>
+          ) : topGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {topGames.map((game) => (
+                <GameCard key={game.id} game={game} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">No data available.</p>
+          )}
+        </Card>
+
+        <Card title="Coming Soon" description="Releases ordered by date">
+          {headlineLoading && !comingSoonGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-72 animate-pulse rounded-2xl border border-slate-200/60 bg-slate-100/70 shadow-inner shadow-slate-900/10 dark:border-slate-800/60 dark:bg-slate-900/60"
+                />
+              ))}
+            </div>
+          ) : comingSoonGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {comingSoonGames.map((game) => {
+                const releaseTimestamp = (game as { first_release_date?: number | null }).first_release_date ?? null;
+                const label = formatCountdown(daysUntil(releaseTimestamp));
+                return (
+                  <div key={game.id} className="space-y-2">
+                    <GameCard game={game} />
+                    {label ? <p className="text-sm text-slate-600 dark:text-slate-300">{label}</p> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">No upcoming releases found.</p>
+          )}
+        </Card>
+
+        <Card title="Recently Released" description="Latest launches in the past 90 days">
+          {headlineLoading && !recentGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-72 animate-pulse rounded-2xl border border-slate-200/60 bg-slate-100/70 shadow-inner shadow-slate-900/10 dark:border-slate-800/60 dark:bg-slate-900/60"
+                />
+              ))}
+            </div>
+          ) : recentGames.length ? (
+            <div className={HOMEPAGE_GRID}>
+              {recentGames.map((game) => {
+                const releaseTimestamp = (game as { first_release_date?: number | null }).first_release_date ?? null;
+                const ago = formatDaysAgo(daysSince(releaseTimestamp));
+                return (
+                  <div key={game.id} className="space-y-2">
+                    <GameCard game={game} />
+                    {ago ? <p className="text-sm text-slate-600 dark:text-slate-300">{ago}</p> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">No recent releases found.</p>
+          )}
+        </Card>
+
+        <EventsSection />
+      </div>
+
       <Card
         title="Discover games"
         description="Search the IGDB database, filter by console, and save wishlist ideas instantly."
@@ -886,15 +1067,13 @@ function DashboardPageContent() {
             <p className="text-sm text-slate-500 dark:text-slate-400">Tidak ada game yang cocok. Coba judul atau console lain.</p>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-3">
-            {paginatedResults.map((game) => {
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {safeResults.map((game) => {
               const normalizedTitle = game.name.trim().toLowerCase();
               const existing = trackedGames.find((item) => item.title.trim().toLowerCase() === normalizedTitle);
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
               const normalizedPlatforms = game.platforms ?? [];
-              const coverId = game.cover?.image_id ?? game.coverImageId ?? null;
-              const coverUrl = igdbCoverUrl(coverId) ?? getResultCover(game);
               const detailQuery: Record<string, string> = {};
               if (debouncedQuery) {
                 detailQuery.q = debouncedQuery;
@@ -910,45 +1089,41 @@ function DashboardPageContent() {
                 query: detailQuery,
               } as const;
 
-              const cardData: CompactGameCardData = {
+              const coverImageId = (game as { cover?: { image_id?: string | null } | null })?.cover?.image_id ?? null;
+              const compactData = {
                 id: game.id,
                 name: game.name,
-                coverImageId: coverId,
-                coverUrl,
-                rating: game.rating ?? null,
-                ratingsCount: game.ratingsCount ?? null,
-                releaseYear: game.releaseYear ?? null,
+                coverImageId: coverImageId ?? undefined,
+                coverUrl: getResultCover(game) ?? undefined,
+                rating: game.rating,
+                ratingsCount: game.ratingsCount,
+                releaseYear: game.releaseYear ?? undefined,
                 platforms: normalizedPlatforms.map((platform) => ({
                   id: platform.id,
                   name: platform.name,
-                  abbreviation: platform.abbreviation ?? null,
+                  abbreviation: platform.abbreviation ?? platform.slug ?? platform.name,
                 })),
-              };
+              } satisfies Parameters<typeof GameCardCompact>[0]["game"];
 
               return (
-                <GameCardCompact
-                  key={game.id}
-                  game={cardData}
-                  actionLabel={
-                    isProcessing
-                      ? "Memproses..."
-                      : isWishlisted
-                        ? "Sudah di wishlist"
-                        : "Tambah ke wishlist"
-                  }
-                  onAction={() => handleAddToWishlist(game)}
-                  actionDisabled={isWishlisted || isProcessing}
-                  actionBusy={isProcessing}
-                  footer={
-                    <Link
-                      href={detailHref}
-                      className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300 dark:hover:text-emerald-200"
-                    >
-                      Lihat detail & trailer
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  }
-                />
+                <div key={game.id} className="space-y-2">
+                  <GameCardCompact
+                    game={compactData}
+                    actionLabel={isWishlisted ? "Sudah di wishlist" : "Tambah ke wishlist"}
+                    actionDisabled={isWishlisted}
+                    actionBusy={isProcessing}
+                    onAction={() => handleAddToWishlist(game)}
+                    footer={
+                      <Link
+                        href={detailHref}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 transition hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-emerald-300 dark:hover:text-emerald-200 dark:focus-visible:ring-offset-slate-900"
+                      >
+                        Lihat detail & trailer
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    }
+                  />
+                </div>
               );
             })}
           </div>
@@ -1103,10 +1278,10 @@ function DashboardPageContent() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Recently added" description="Latest games added to your collection">
           <div className="space-y-3">
-            {recentGames.length === 0 ? (
+            {recentLibraryGames.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">No games added yet.</p>
             ) : (
-              recentGames.map((game) => (
+              recentLibraryGames.map((game) => (
                 <div
                   key={game.id}
                   className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/70"
