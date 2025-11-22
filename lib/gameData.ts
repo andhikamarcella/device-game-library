@@ -378,7 +378,7 @@ export async function getGameSeriesEntries(id: number, pageSize = 10): Promise<G
   return series.slice(0, Math.max(pageSize, 1));
 }
 
-export async function getSimilarGamesForGame(id: number, limit = 6): Promise<GameSimilarEntry[]> {
+export async function getSimilarGamesForGame(id: number, limit = 10): Promise<GameSimilarEntry[]> {
   const details = await loadIgdbDetails(id);
   const similar = mapSimilar(details.similar_games).filter((game) => game.id !== id);
   return similar.slice(0, Math.max(limit, 1));
@@ -474,7 +474,7 @@ const mapPlatformRef = (platform?: IgdbPlatformRef | null): GamePlatform | null 
     platform: {
       id: platform.id,
       name: label,
-      slug: platform.abbreviation?.toLowerCase() ?? slugify(label),
+      slug: platform.slug ?? platform.abbreviation?.toLowerCase() ?? slugify(label),
     },
   };
 };
@@ -882,6 +882,16 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
   const secondaryImage = screenshots[1]?.image ?? cover;
   const slug = game.slug ?? slugify(game.name);
+  const aggregated = typeof game.aggregated_rating === "number" ? game.aggregated_rating : null;
+  const critics = typeof game.total_rating === "number" ? game.total_rating : null;
+  const userRating = typeof game.rating === "number" ? game.rating : null;
+  const ratingValue = aggregated ?? critics ?? userRating;
+  const ratingCount =
+    typeof game.rating_count === "number"
+      ? game.rating_count
+      : typeof game.total_rating_count === "number"
+        ? game.total_rating_count
+        : null;
   return {
     id: game.id,
     slug,
@@ -894,8 +904,8 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     short_screenshots: screenshots,
     clip: null,
     released: toIsoDate(game.first_release_date),
-    rating: typeof game.total_rating === "number" ? game.total_rating : null,
-    ratings_count: typeof game.total_rating_count === "number" ? game.total_rating_count : null,
+    rating: ratingValue,
+    ratings_count: ratingCount,
     metacritic: null,
     playtime: null,
     genres: mapGenres(game.genres),

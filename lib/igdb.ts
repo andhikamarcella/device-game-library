@@ -85,6 +85,9 @@ export function buildIgdbQuery(opts: {
       "  id,",
       "  name,",
       "  summary,",
+      "  aggregated_rating,",
+      "  rating,",
+      "  rating_count,",
       "  total_rating,",
       "  total_rating_count,",
       "  first_release_date,",
@@ -224,6 +227,7 @@ export interface IgdbGame {
   slug?: string;
   summary?: string | null;
   first_release_date?: number | null;
+  aggregated_rating?: number | null;
   total_rating?: number | null;
   total_rating_count?: number | null;
   rating?: number | null;
@@ -263,7 +267,10 @@ export interface IgdbGameDetails extends IgdbGame {
 }
 
 export interface IgdbSimilarGame
-  extends Pick<IgdbGame, "id" | "name" | "slug" | "total_rating" | "total_rating_count"> {
+  extends Pick<
+    IgdbGame,
+    "id" | "name" | "slug" | "aggregated_rating" | "total_rating" | "total_rating_count" | "rating" | "rating_count"
+  > {
   cover?: IgdbCover;
   platforms?: IgdbPlatformRef[];
   screenshots?: IgdbImageAsset[];
@@ -609,6 +616,9 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       age_ratings.rating,
       age_ratings.synopsis,
       age_ratings.rating_cover_url,
+      aggregated_rating,
+      rating,
+      rating_count,
       language_supports.id,
       language_supports.language.id,
       language_supports.language.name,
@@ -629,11 +639,13 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       similar_games.name,
       similar_games.slug,
       similar_games.cover.image_id,
+      similar_games.aggregated_rating,
+      similar_games.rating,
+      similar_games.rating_count,
       similar_games.screenshots.image_id,
-      similar_games.total_rating,
-      similar_games.total_rating_count,
       similar_games.platforms.id,
       similar_games.platforms.name,
+      similar_games.platforms.slug,
       dlcs.id,
       dlcs.name,
       dlcs.slug,

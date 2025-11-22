@@ -28,6 +28,7 @@ import { VideoCarousel } from "@/components/video/VideoCarousel";
 import ROMDownload from "@/components/ROMDownload";
 import MetadataList from "@/components/MetadataList";
 import { TimeToBeat } from "@/components/TimeToBeat";
+import { GameCard, type SearchGameResult } from "@/components/GameCard";
 import {
   type GameDetailsPayload,
   type GameParentPlatform,
@@ -37,6 +38,7 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
+import { buildIgdbImageUrl } from "@/lib/igdb";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
@@ -248,6 +250,39 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .map((tag) => tag.name)
     .filter((name): name is string => Boolean(name))
     .slice(0, 10);
+  const similarCards: SearchGameResult[] = similarGames.slice(0, 10).map((similar) => {
+    const coverId = similar.cover?.image_id ?? null;
+    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "t_1080p") : similar.background_image;
+    const screenshots = Array.isArray(similar.short_screenshots)
+      ? similar.short_screenshots.map((shot) => shot.image).filter(Boolean)
+      : [];
+    const platforms = (similar.platforms ?? []).map((platform) => ({
+      id: platform.platform.id,
+      name: platform.platform.name,
+      slug: platform.platform.slug,
+      abbreviation: platform.platform.slug,
+    }));
+    const releaseYear = similar.released ? new Date(similar.released).getFullYear() : null;
+    const ratingValue = typeof similar.rating === "number" && Number.isFinite(similar.rating) ? similar.rating : null;
+
+    return {
+      id: similar.id,
+      slug: similar.slug ?? null,
+      name: similar.name,
+      summary: "",
+      cover: similar.cover ?? null,
+      coverUrl,
+      coverImageUrl: coverUrl,
+      screenshots,
+      screenshotUrls: screenshots,
+      releaseYear,
+      rating: ratingValue,
+      ratingsCount: similar.ratings_count ?? 0,
+      platforms,
+      genres: (similar.genres ?? []).map((genre) => genre.name).filter(Boolean),
+      popularity: null,
+    } satisfies SearchGameResult;
+  });
   const engineItems = game.engines && game.engines.length ? game.engines : [{ name: "Unknown Engine" }];
   const additionEntries = uniqueRelatedGames([
     ...(game.additions ?? []),
@@ -667,57 +702,17 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
         </section>
       ) : null}
 
-      {similarGames.length ? (
-        <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      {similarCards.length ? (
+        <section className="mt-10 space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-            <h2 className="text-sm font-semibold uppercase tracking-widest">Similar games</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-widest">SIMILAR GAMES</h2>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {similarGames.slice(0, 6).map((similar) => {
-              const similarImage = normalizeImageUrl(similar.background_image ?? null);
-
-              return (
-                <Link
-                  key={similar.id}
-                  href={buildInternalHref(similar.id)}
-                  className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70"
-                >
-                  <div className="relative h-40 w-full overflow-hidden">
-                    {similarImage ? (
-                      <Image
-                        src={similarImage}
-                        alt={`${similar.name} artwork`}
-                        fill
-                        className="object-cover transition duration-300 group-hover:scale-105"
-                        sizes="320px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        No image
-                      </div>
-                    )}
-                    {typeof similar.rating === "number" && Number.isFinite(similar.rating) && similar.rating > 0 ? (
-                      <div className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2 py-1 text-xs font-semibold text-white shadow-sm">
-                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />
-                        {similar.rating.toFixed(1)}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-2 p-4">
-                    <h3 className="text-sm font-semibold text-slate-900 transition group-hover:text-emerald-600 dark:text-slate-100 dark:group-hover:text-emerald-300">
-                      {similar.name}
-                    </h3>
-                    <PlatformChips
-                      platforms={
-                        (similar.parent_platforms?.length ? similar.parent_platforms : similar.platforms) ?? []
-                      }
-                      limit={3}
-                      size="sm"
-                    />
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="grid auto-cols-[80%] grid-flow-col gap-4 overflow-x-auto pb-2 sm:auto-cols-auto sm:grid-flow-row sm:grid-cols-2 lg:grid-cols-3 sm:overflow-visible">
+            {similarCards.map((similar) => (
+              <div key={similar.id} className="min-w-[240px] sm:min-w-0">
+                <GameCard game={similar} coverOverride={similar.coverUrl ?? null} detailReturnTo={backTarget ?? undefined} />
+              </div>
+            ))}
           </div>
         </section>
       ) : null}
