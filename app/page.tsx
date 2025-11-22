@@ -168,22 +168,18 @@ export default function HomePage() {
       </div>
 
       <Suspense fallback={<SectionSkeleton count={8} />}>
-        {/* @ts-expect-error Async Server Component */}
         <Top100Section />
       </Suspense>
 
       <Suspense fallback={<SectionSkeleton count={6} />}>
-        {/* @ts-expect-error Async Server Component */}
         <ComingSoonSection />
       </Suspense>
 
       <Suspense fallback={<SectionSkeleton count={6} />}>
-        {/* @ts-expect-error Async Server Component */}
         <RecentlyReleasedSection />
       </Suspense>
 
       <Suspense fallback={<SectionSkeleton count={4} />}>
-        {/* @ts-expect-error Async Server Component */}
         <EventsSection />
       </Suspense>
     </main>
