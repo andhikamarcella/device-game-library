@@ -21,6 +21,7 @@ export type IgdbEndpoint =
   | "videos"
   | "websites"
   | "time_to_beat"
+  | "companies"
   | "platforms";
 
 async function postIgdb(endpoint: IgdbEndpoint, body: string) {
