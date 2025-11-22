@@ -561,8 +561,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 }
 
 export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | null> {
-  const query = `
-    fields
+  const sharedFields = `
       id,
       name,
       slug,
@@ -613,9 +612,6 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       language_supports.language.name,
       language_supports.language,
       language_supports.language_support_type,
-      time_to_beats.hastly,
-      time_to_beats.normally,
-      time_to_beats.completely,
       websites.url,
       websites.category,
       websites.trusted,
@@ -660,19 +656,50 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       parent_game.name,
       parent_game.slug,
       parent_game.cover.image_id,
-      parent_game.screenshots.image_id;
+      parent_game.screenshots.image_id,
+      bundles.id,
+      bundles.name,
+      bundles.slug,
+      bundles.cover.image_id,
+      bundles.screenshots.image_id,
+      status,
+      category`;
+
+  const buildQuery = (timeField: "time_to_beats" | "time_to_beat") => `
+    fields
+      ${sharedFields},
+      ${timeField}.hastly,
+      ${timeField}.normally,
+      ${timeField}.completely;
     where id = ${id};
     limit 1;
   `;
 
-  try {
-    const data = await igdbRequest<IgdbGameDetails[]>("games", query);
+  const runQuery = async (timeField: "time_to_beats" | "time_to_beat") => {
+    const data = await igdbRequest<IgdbGameDetails[]>("games", buildQuery(timeField));
     return data[0] ?? null;
+  };
+
+  try {
+    return await runQuery("time_to_beats");
   } catch (error) {
     if (error instanceof IgdbRequestError && error.status === 404) {
       return null;
     }
-    throw error;
+
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (!message.includes("time_to_beat")) {
+      throw error;
+    }
+
+    try {
+      return await runQuery("time_to_beat");
+    } catch (fallbackError) {
+      if (fallbackError instanceof IgdbRequestError && fallbackError.status === 404) {
+        return null;
+      }
+      throw fallbackError;
+    }
   }
 }
 

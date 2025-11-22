@@ -99,7 +99,7 @@ export type IgdbGameDetail = {
 };
 
 export async function fetchGameDetail(id: number) {
-  const fields = [
+  const sharedFields = [
     "name",
     "slug",
     "summary",
@@ -141,13 +141,30 @@ export async function fetchGameDetail(id: number) {
     "language_supports.language",
     "language_supports.language.name",
     "language_supports.language_support_type",
-    "time_to_beats.hastly",
-    "time_to_beats.normally",
-    "time_to_beats.completely",
   ];
-  const query = [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
-  const [game] = (await igdbPost("games", query)) as IgdbGameDetail[];
-  return game;
+
+  const buildQuery = (timeField: "time_to_beats" | "time_to_beat") => {
+    const fields = [
+      ...sharedFields,
+      `${timeField}.hastly`,
+      `${timeField}.normally`,
+      `${timeField}.completely`,
+    ];
+    return [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
+  };
+
+  try {
+    const [game] = (await igdbPost("games", buildQuery("time_to_beats"))) as IgdbGameDetail[];
+    return game;
+  } catch (error) {
+    const message = (error as Error).message || "";
+    if (!message.toLowerCase().includes("time_to_beat")) {
+      throw error;
+    }
+
+    const [fallbackGame] = (await igdbPost("games", buildQuery("time_to_beat"))) as IgdbGameDetail[];
+    return fallbackGame;
+  }
 }
 
 export async function fetchCollection({
