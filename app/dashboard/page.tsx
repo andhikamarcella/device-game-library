@@ -62,7 +62,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const hasNext = currentPage * data.pageSize < data.total;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 pb-10 pt-4 sm:px-6 lg:px-8">
       <IgdbFilters
         initialQuery={q}
         initialSort={sort}
@@ -89,7 +89,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {results.length ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {results.map((game) => {
               const releaseYear = game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : null;
               const cardData: CompactGameCardData = {

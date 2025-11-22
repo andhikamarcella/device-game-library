@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { GameCard } from "@/components/GameCard";
-import type { SearchGameResult } from "@/components/GameCard";
+import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
 import { igdbHD } from "@/lib/igdb-image";
 
 type EventBucket = {
@@ -20,28 +19,23 @@ type IgdbEventGame = {
   cover?: { image_id?: string | null } | null;
 };
 
-function toGameCard(game: IgdbEventGame): SearchGameResult {
-  const coverUrl = game.cover?.image_id ? igdbHD(game.cover.image_id) : null;
+function toCompactCard(game: IgdbEventGame): CompactGameCardData {
   const releaseYear = game.first_release_date
     ? new Date(Number(game.first_release_date) * 1000).getFullYear()
     : null;
 
+  const coverImageId = game.cover?.image_id ?? null;
+  const coverUrl = coverImageId ? igdbHD(coverImageId) : null;
+
   return {
     id: game.id,
-    slug: game.slug ?? null,
     name: game.name,
-    summary: "",
-    cover: game.cover,
+    coverImageId,
     coverUrl,
-    coverImageUrl: coverUrl,
-    screenshots: [],
-    screenshotUrls: [],
-    releaseYear,
     rating: null,
     ratingsCount: 0,
+    releaseYear,
     platforms: [],
-    genres: [],
-    popularity: null,
   };
 }
 
@@ -56,13 +50,15 @@ function formatAnniversaryLabel(release: number | null | undefined): string | nu
 function EventGrid({ games, note }: { games: IgdbEventGame[]; note?: (game: IgdbEventGame) => string | null }) {
   if (!games.length) return null;
   return (
-    <div className="grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-3 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-flow-col auto-cols-[75%] gap-3 overflow-x-auto pb-3 sm:auto-cols-[55%] md:auto-cols-[45%] lg:auto-cols-[32%] xl:auto-cols-[26%]">
       {games.map((game) => {
         const label = note ? note(game) : null;
         return (
           <div key={game.id} className="space-y-2">
-            <GameCard game={toGameCard(game)} />
-            {label ? <p className="text-sm text-muted-foreground">{label}</p> : null}
+            <GameCardCompact
+              game={toCompactCard(game)}
+              footer={label ? <p className="text-xs text-muted-foreground">{label}</p> : null}
+            />
           </div>
         );
       })}
@@ -123,7 +119,7 @@ export default function EventsSection() {
       </div>
 
       {loading ? (
-        <div className="grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-3 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-flow-col auto-cols-[75%] gap-3 overflow-x-auto pb-3 sm:auto-cols-[55%] md:auto-cols-[45%] lg:auto-cols-[32%] xl:auto-cols-[26%]">
           {Array.from({ length: 4 }).map((_, idx) => (
             <div
               key={idx}
