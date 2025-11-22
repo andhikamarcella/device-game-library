@@ -12,6 +12,10 @@ const CATEGORY_SLUGS: Record<number, { slug: string; system: string }> = {
   7: { slug: "usk", system: "USK" },
 };
 
+const SLUG_TO_CATEGORY = Object.fromEntries(
+  Object.entries(CATEGORY_SLUGS).map(([category, value]) => [value.slug, Number(category)]),
+);
+
 type AgeRatingDescriptor = {
   category: number;
   label: string;
@@ -83,6 +87,39 @@ const sanitizeUrl = (url: string): string => {
   return url;
 };
 
+const parseRatingFromCoverUrl = (
+  ratingCoverUrl?: string | null,
+): { slug: string | null; code: string | null; category: number | null } => {
+  if (!ratingCoverUrl) return { slug: null, code: null, category: null };
+
+  try {
+    const url = new URL(sanitizeUrl(ratingCoverUrl));
+    const pathname = url.pathname.toLowerCase();
+    const match = pathname.match(/rating_icons\/(\w+)\/(.+?)(?:\.png|\.svg)$/);
+    if (!match) return { slug: null, code: null, category: null };
+
+    const [, slug, filename] = match;
+    const parts = filename.split("_");
+    const code = parts[parts.length - 1] || null;
+    const category = slug in SLUG_TO_CATEGORY ? SLUG_TO_CATEGORY[slug] : null;
+
+    return { slug, code, category };
+  } catch {
+    return { slug: null, code: null, category: null };
+  }
+};
+
+const resolveDescriptorFromCover = (coverUrl?: string | null): AgeRatingDescriptor | null => {
+  const parsed = parseRatingFromCoverUrl(coverUrl);
+  if (!parsed.code || !parsed.category) return null;
+
+  const descriptor = Object.values(RATING_DETAILS).find(
+    (entry) => entry.category === parsed.category && entry.code.toLowerCase() === parsed.code,
+  );
+
+  return descriptor ?? null;
+};
+
 export function mapAgeRatingsToDisplay(ageRatings?: IgdbAgeRating[] | null): MappedAgeRating[] {
   if (!ageRatings?.length) return [];
 
@@ -92,25 +129,30 @@ export function mapAgeRatingsToDisplay(ageRatings?: IgdbAgeRating[] | null): Map
   for (const entry of ageRatings) {
     if (!entry) continue;
     const ratingCode = typeof entry.rating === "number" ? entry.rating : Number.parseInt(`${entry.rating ?? ""}`, 10);
-    if (!Number.isFinite(ratingCode)) continue;
 
-    const descriptor = RATING_DETAILS[ratingCode];
+    const parsedFromCover = parseRatingFromCoverUrl(entry.rating_cover_url);
+
+    const descriptor = Number.isFinite(ratingCode)
+      ? RATING_DETAILS[ratingCode]
+      : resolveDescriptorFromCover(entry.rating_cover_url);
+
     const category = typeof entry.category === "number" && CATEGORY_SLUGS[entry.category]
       ? entry.category
-      : descriptor?.category;
+      : descriptor?.category ?? parsedFromCover.category;
+
     if (!category || !CATEGORY_SLUGS[category]) continue;
 
     const systemInfo = CATEGORY_SLUGS[category];
-    const label = descriptor?.label ?? `${systemInfo.system} ${ratingCode}`;
+    const label = descriptor?.label ?? `${systemInfo.system} ${descriptor?.code ?? parsedFromCover.code ?? ratingCode ?? ""}`.trim();
     const description = descriptor?.description ?? systemInfo.system;
-    const code = descriptor?.code ?? `${ratingCode}`;
+    const code = descriptor?.code ?? parsedFromCover.code ?? `${ratingCode || ""}`;
 
     const icon = entry.rating_cover_url
       ? sanitizeUrl(entry.rating_cover_url)
       : `${IGDB_ICON_BASE}/${systemInfo.slug}/${systemInfo.slug}_${code.toLowerCase()}.png`;
 
-    const key = entry.id ?? Number(`${category}${ratingCode}`);
-    const dedupeKey = `${systemInfo.system}-${label}`;
+    const key = typeof entry.id === "number" ? entry.id : Number(`${category}${ratingCode || ""}`.replace(/\D+/g, "")) || Math.random();
+    const dedupeKey = `${systemInfo.system}-${label}-${icon}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
