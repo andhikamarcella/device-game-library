@@ -21,6 +21,7 @@ export type IgdbEndpoint =
   | "videos"
   | "websites"
   | "time_to_beat"
+  | "time_to_beats"
   | "companies"
   | "platforms";
 
@@ -94,8 +95,8 @@ export type IgdbGameDetail = {
     language?: { id: number; name?: string | null } | null;
     language_support_type?: number | number[] | null;
   }> | null;
-  time_to_beat?: { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
-  time_to_beats?: { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
+  time_to_beat?: number | { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
+  time_to_beats?: number | { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
 };
 
 export async function fetchGameDetail(id: number) {
@@ -144,27 +145,69 @@ export async function fetchGameDetail(id: number) {
   ];
 
   const buildQuery = (timeField: "time_to_beats" | "time_to_beat") => {
-    const fields = [
-      ...sharedFields,
-      `${timeField}.hastly`,
-      `${timeField}.normally`,
-      `${timeField}.completely`,
-    ];
+    const fields = [...sharedFields, timeField];
     return [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
   };
 
-  try {
-    const [game] = (await igdbPost("games", buildQuery("time_to_beats"))) as IgdbGameDetail[];
+  const fetchTimeBlock = async (timeId: number) => {
+    const query = `fields hastly, normally, completely; where id = ${timeId}; limit 1;`;
+
+    try {
+      const [ttb] = (await igdbPost("time_to_beats", query)) as Array<{
+        hastly?: number | null;
+        normally?: number | null;
+        completely?: number | null;
+      }>;
+      return ttb ?? null;
+    } catch (error) {
+      const message = (error as Error).message || "";
+      if (!message.toLowerCase().includes("time_to_beats")) {
+        throw error;
+      }
+
+      const [ttb] = (await igdbPost("time_to_beat", query)) as Array<{
+        hastly?: number | null;
+        normally?: number | null;
+        completely?: number | null;
+      }>;
+      return ttb ?? null;
+    }
+  };
+
+  const runGameQuery = async (timeField: "time_to_beats" | "time_to_beat") => {
+    const [game] = (await igdbPost("games", buildQuery(timeField))) as IgdbGameDetail[];
     return game;
+  };
+
+  let game: IgdbGameDetail;
+  try {
+    game = await runGameQuery("time_to_beats");
   } catch (error) {
     const message = (error as Error).message || "";
-    if (!message.toLowerCase().includes("time_to_beat")) {
+    if (!message.toLowerCase().includes("time_to_beats")) {
       throw error;
     }
-
-    const [fallbackGame] = (await igdbPost("games", buildQuery("time_to_beat"))) as IgdbGameDetail[];
-    return fallbackGame;
+    game = await runGameQuery("time_to_beat");
   }
+
+  const existingTimeBlock =
+    (typeof game.time_to_beats === "object" && game.time_to_beats) ||
+    (typeof game.time_to_beat === "object" && game.time_to_beat);
+
+  const timeId =
+    typeof game.time_to_beats === "number"
+      ? game.time_to_beats
+      : typeof game.time_to_beat === "number"
+        ? game.time_to_beat
+        : null;
+
+  const resolvedTime = existingTimeBlock ?? (timeId ? await fetchTimeBlock(timeId) : null);
+
+  return {
+    ...game,
+    time_to_beats: resolvedTime,
+    time_to_beat: resolvedTime,
+  };
 }
 
 export async function fetchCollection({

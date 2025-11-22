@@ -256,8 +256,14 @@ export interface IgdbGameDetails extends IgdbGame {
   involved_companies?: IgdbCompanyRef[];
   age_ratings?: IgdbAgeRating[] | null;
   language_supports?: IgdbLanguageSupport[] | null;
-  time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
-  time_to_beats?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
+  time_to_beat?:
+    | number
+    | { hastly?: number | null; normally?: number | null; completely?: number | null }
+    | null;
+  time_to_beats?:
+    | number
+    | { hastly?: number | null; normally?: number | null; completely?: number | null }
+    | null;
 }
 
 export interface IgdbSimilarGame
@@ -668,39 +674,73 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
   const buildQuery = (timeField: "time_to_beats" | "time_to_beat") => `
     fields
       ${sharedFields},
-      ${timeField}.hastly,
-      ${timeField}.normally,
-      ${timeField}.completely;
+      ${timeField};
     where id = ${id};
     limit 1;
   `;
+
+  const fetchTimeBlock = async (timeId: number) => {
+    const query = `fields hastly, normally, completely; where id = ${timeId}; limit 1;`;
+
+    try {
+      const data = await igdbRequest<
+        Array<{ hastly?: number | null; normally?: number | null; completely?: number | null }>
+      >("time_to_beats", query);
+      return data[0] ?? null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (!message.includes("time_to_beats")) {
+        throw error;
+      }
+
+      const data = await igdbRequest<
+        Array<{ hastly?: number | null; normally?: number | null; completely?: number | null }>
+      >("time_to_beat", query);
+      return data[0] ?? null;
+    }
+  };
 
   const runQuery = async (timeField: "time_to_beats" | "time_to_beat") => {
     const data = await igdbRequest<IgdbGameDetails[]>("games", buildQuery(timeField));
     return data[0] ?? null;
   };
 
+  let game: IgdbGameDetails | null = null;
   try {
-    return await runQuery("time_to_beats");
+    game = await runQuery("time_to_beats");
   } catch (error) {
     if (error instanceof IgdbRequestError && error.status === 404) {
       return null;
     }
 
     const message = error instanceof Error ? error.message.toLowerCase() : "";
-    if (!message.includes("time_to_beat")) {
+    if (!message.includes("time_to_beats")) {
       throw error;
     }
 
-    try {
-      return await runQuery("time_to_beat");
-    } catch (fallbackError) {
-      if (fallbackError instanceof IgdbRequestError && fallbackError.status === 404) {
-        return null;
-      }
-      throw fallbackError;
-    }
+    game = await runQuery("time_to_beat");
   }
+
+  if (!game) return null;
+
+  const existingTimeBlock =
+    (typeof game.time_to_beats === "object" && game.time_to_beats) ||
+    (typeof game.time_to_beat === "object" && game.time_to_beat);
+
+  const timeId =
+    typeof game.time_to_beats === "number"
+      ? game.time_to_beats
+      : typeof game.time_to_beat === "number"
+        ? game.time_to_beat
+        : null;
+
+  const resolvedTime = existingTimeBlock ?? (timeId ? await fetchTimeBlock(timeId) : null);
+
+  return {
+    ...game,
+    time_to_beats: resolvedTime,
+    time_to_beat: resolvedTime,
+  };
 }
 
 export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise<IgdbAchievement[]> {
