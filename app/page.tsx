@@ -13,6 +13,7 @@ import EventsSection from "@/components/EventsSection";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import { igdbCoverUrl } from "@/lib/igdbImages";
+import { normalizeImageUrl } from "@/lib/images";
 import { formatDateTime } from "@/lib/utils";
 import { GameStatus, Game } from "@/lib/types";
 
@@ -39,23 +40,24 @@ type SearchResult = {
   genres: string[];
 };
 
-const getResultCover = (game: SearchResult | null | undefined): string | null => {
+const getResultCover = (game: SearchResult | null | undefined): string => {
   if (!game) {
-    return null;
+    return "/fallback/cover-placeholder.svg";
   }
-  if (game.coverUrl) {
-    return game.coverUrl;
+
+  const candidates = [
+    game.coverUrl,
+    game.coverImageUrl,
+    Array.isArray(game.screenshots) && game.screenshots.length ? game.screenshots[0] : null,
+    Array.isArray(game.screenshotUrls) && game.screenshotUrls.length ? game.screenshotUrls[0] : null,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeImageUrl(candidate);
+    if (normalized) return normalized;
   }
-  if (game.coverImageUrl) {
-    return game.coverImageUrl;
-  }
-  if (Array.isArray(game.screenshots) && game.screenshots.length) {
-    return game.screenshots[0];
-  }
-  if (Array.isArray(game.screenshotUrls) && game.screenshotUrls.length) {
-    return game.screenshotUrls[0];
-  }
-  return null;
+
+  return "/fallback/cover-placeholder.svg";
 };
 
 const getResultScreenshots = (game: SearchResult | null | undefined): string[] => {
@@ -1097,19 +1099,13 @@ function DashboardPageContent() {
                     href={detailHref}
                     className="relative block aspect-[3/4] w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]"
                   >
-                    {imageUrl ? (
-                      <Image
-                        src={imageUrl}
-                        alt={`${game.name} cover`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-widest text-slate-500">
-                        No cover available
-                      </div>
-                    )}
+                    <Image
+                      src={imageUrl}
+                      alt={`${game.name} cover`}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
                     <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-xs text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
                       <Star className="h-3 w-3 fill-current" />
                       <span>{ratingLabel}</span>
