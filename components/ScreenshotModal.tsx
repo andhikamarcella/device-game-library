@@ -132,25 +132,32 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-xl"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="relative flex h-full max-h-[90vh] w-full max-w-6xl items-center justify-center px-6 py-10"
+        className="relative flex h-full max-h-[92vh] w-full max-w-6xl items-center justify-center px-3 py-8 sm:px-6"
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute right-6 top-6 rounded-full bg-white/10 p-2 text-white shadow-lg transition hover:bg-white/20"
-          aria-label="Close"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
+
+        <div className="absolute left-4 top-4 flex items-center gap-3 sm:left-6 sm:top-6">
+          <button
+            onClick={onClose}
+            className="pointer-events-auto inline-flex items-center justify-center rounded-full bg-white/15 p-2 text-white shadow-lg transition hover:bg-white/25"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="pointer-events-none hidden rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white shadow sm:inline-flex">
+            {current + 1} / {images.length}
+          </div>
+        </div>
 
         <button
-          className="absolute left-6 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white shadow-lg transition hover:bg-white/20"
+          className="pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:left-6"
           onClick={prev}
           aria-label="Previous screenshot"
         >
@@ -158,32 +165,40 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
         </button>
 
         <button
-          className="absolute right-6 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white shadow-lg transition hover:bg-white/20"
+          className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80 sm:right-6"
           onClick={next}
           aria-label="Next screenshot"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
 
-        <div className="absolute bottom-6 right-6 flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-white shadow-lg">
-          <button
-            className="rounded-full bg-white/10 p-2 hover:bg-white/20"
-            onClick={() => setScale((value) => clamp(value - 0.2, 1, 4))}
-            aria-label="Zoom out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </button>
-          <button
-            className="rounded-full bg-white/10 p-2 hover:bg-white/20"
-            onClick={() => setScale((value) => clamp(value + 0.2, 1, 4))}
-            aria-label="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </button>
+        <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center justify-center gap-2 px-4 sm:bottom-6">
+          <div className="pointer-events-none flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow">
+            <span>Swipe / drag to pan</span>
+            <span className="hidden sm:inline-block">•</span>
+            <span className="hidden sm:inline-block">Scroll or pinch to zoom</span>
+          </div>
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-lg backdrop-blur">
+            <button
+              className="rounded-full bg-white/10 p-2 hover:bg-white/20"
+              onClick={() => setScale((value) => clamp(value - 0.2, 1, 4))}
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <span className="text-xs font-semibold text-white/80">{Math.round(scale * 100)}%</span>
+            <button
+              className="rounded-full bg-white/10 p-2 hover:bg-white/20"
+              onClick={() => setScale((value) => clamp(value + 0.2, 1, 4))}
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div
-          className="relative h-full w-full overflow-hidden rounded-2xl bg-slate-900/80 shadow-2xl"
+          className="relative h-full w-full overflow-hidden rounded-2xl bg-slate-950 shadow-2xl ring-1 ring-white/5"
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -204,7 +219,7 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
               <HDImage
                 imageId={currentImage.image_id ?? null}
                 alt={`Screenshot ${current + 1}`}
-                className="max-h-full max-w-full"
+                className="max-h-[82vh] max-w-full"
               />
             ) : null}
           </div>
