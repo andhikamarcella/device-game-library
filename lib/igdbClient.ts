@@ -92,9 +92,7 @@ export type IgdbGameDetail = {
   language_supports?: Array<{
     id: number;
     language?: { id: number; name?: string | null } | null;
-    audio?: number | number[] | null;
-    subtitles?: number | number[] | null;
-    interface?: number | number[] | null;
+    language_support_type?: number | number[] | null;
   }> | null;
   time_to_beat?: { normally?: number | null; hastly?: number | null; completely?: number | null } | null;
 };
@@ -142,7 +140,9 @@ export async function fetchGameDetail(id: number) {
     "language_supports.language",
     "language_supports.language.name",
     "language_supports.language_support_type",
-    "time_to_beat.*",
+    "time_to_beat.hastly",
+    "time_to_beat.normally",
+    "time_to_beat.completely",
   ];
   const query = [`fields ${fields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
   const [game] = (await igdbPost("games", query)) as IgdbGameDetail[];

@@ -256,6 +256,7 @@ export interface IgdbGameDetails extends IgdbGame {
   involved_companies?: IgdbCompanyRef[];
   age_ratings?: IgdbAgeRating[] | null;
   language_supports?: IgdbLanguageSupport[] | null;
+  time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
 }
 
 export interface IgdbSimilarGame
@@ -611,6 +612,9 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       language_supports.language.name,
       language_supports.language,
       language_supports.language_support_type,
+      time_to_beat.hastly,
+      time_to_beat.normally,
+      time_to_beat.completely,
       websites.url,
       websites.category,
       websites.trusted,

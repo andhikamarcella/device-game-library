@@ -224,6 +224,7 @@ export type GameDetailsPayload = GameSummary & {
   playtime_distribution?: GamePlaytimeDistribution | null;
   age_ratings?: IgdbAgeRating[] | null;
   language_supports?: GameLanguageSupport[] | null;
+  time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
 };
 
 export type GameScreenshot = {
@@ -843,6 +844,24 @@ const mapLanguageSupports = (
   return Array.from(grouped.values());
 };
 
+const mapTimeToBeat = (
+  ttb?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null,
+): { hastly?: number | null; normally?: number | null; completely?: number | null } | null => {
+  if (!ttb) return null;
+  const toMinutes = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+
+  const hastly = toMinutes(ttb.hastly);
+  const normally = toMinutes(ttb.normally);
+  const completely = toMinutes(ttb.completely);
+
+  if (hastly === null && normally === null && completely === null) {
+    return null;
+  }
+
+  return { hastly, normally, completely };
+};
+
 const mapCompanies = (
   details: IgdbGameDetails,
   role: "developer" | "publisher",
@@ -935,6 +954,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     tags: mapKeywords(details.keywords),
     age_ratings: mapAgeRatings(details.age_ratings),
     language_supports: mapLanguageSupports(details.language_supports),
+    time_to_beat: mapTimeToBeat(details.time_to_beat),
     game_modes: mapModes(details.game_modes),
     player_perspectives: mapModes(details.player_perspectives),
     franchises: mapNamedEntities(details.franchises),

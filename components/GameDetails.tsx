@@ -27,6 +27,7 @@ import { SystemRequirements } from "@/components/game/SystemRequirements";
 import { VideoCarousel } from "@/components/video/VideoCarousel";
 import ROMDownload from "@/components/ROMDownload";
 import MetadataList from "@/components/MetadataList";
+import { TimeToBeat } from "@/components/TimeToBeat";
 import {
   type GameDetailsPayload,
   type GameParentPlatform,
@@ -428,6 +429,8 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
 
         <MetadataList title="Game Engine" items={engineItems} />
       </div>
+
+      <TimeToBeat ttb={game.time_to_beat} />
 
       <LanguageTable supports={game.language_supports} />
 
