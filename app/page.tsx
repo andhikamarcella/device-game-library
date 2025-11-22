@@ -18,6 +18,9 @@ type IgdbGame = {
   first_release_date?: number | null;
 };
 
+const GRID_CLASSES =
+  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5";
+
 const toCard = (game: IgdbGame): SearchGameResult => {
   const coverUrl = game.cover?.image_id ? igdbHD(game.cover.image_id) : null;
   const platforms = Array.isArray(game.platforms)
@@ -74,7 +77,7 @@ async function fetchIgdb(endpoint: string, revalidateSeconds = 3600): Promise<Ig
 
 function SectionSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={GRID_CLASSES}>
       {Array.from({ length: count }).map((_, idx) => (
         <div
           key={idx}
@@ -96,7 +99,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function GameGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={GRID_CLASSES}>
       {children}
     </div>
   );
