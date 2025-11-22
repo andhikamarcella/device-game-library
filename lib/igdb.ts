@@ -95,7 +95,10 @@ export function buildIgdbQuery(opts: {
       "  first_release_date,",
       "  cover.image_id,",
       "  screenshots.image_id,",
-      "  platforms.name;",
+      "  platforms.name,",
+      "  platforms.slug,",
+      "  platforms.abbreviation,",
+      "  genres.name;",
     ].join("\n"),
   );
 
