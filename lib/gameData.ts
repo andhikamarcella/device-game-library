@@ -954,7 +954,11 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     tags: mapKeywords(details.keywords),
     age_ratings: mapAgeRatings(details.age_ratings),
     language_supports: mapLanguageSupports(details.language_supports),
-    time_to_beat: mapTimeToBeat(details.time_to_beats ?? details.time_to_beat ?? null),
+    time_to_beat: mapTimeToBeat(
+      (typeof details.time_to_beats === "object" && details.time_to_beats) ||
+        (typeof details.time_to_beat === "object" && details.time_to_beat) ||
+        null,
+    ),
     game_modes: mapModes(details.game_modes),
     player_perspectives: mapModes(details.player_perspectives),
     franchises: mapNamedEntities(details.franchises),
