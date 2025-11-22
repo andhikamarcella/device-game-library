@@ -621,7 +621,7 @@ function DashboardPageContent() {
   }, [platforms]);
 
   const totalGames = trackedGames.length || 1;
-  const recentGames = [...trackedGames]
+  const recentLibraryGames = [...trackedGames]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
@@ -1332,10 +1332,10 @@ function DashboardPageContent() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Recently added" description="Latest games added to your collection">
           <div className="space-y-3">
-            {recentGames.length === 0 ? (
+            {recentLibraryGames.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">No games added yet.</p>
             ) : (
-              recentGames.map((game) => (
+              recentLibraryGames.map((game) => (
                 <div
                   key={game.id}
                   className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/70"
