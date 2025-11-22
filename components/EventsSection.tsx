@@ -27,7 +27,6 @@ function toGameCard(game: IgdbEventGame): SearchGameResult {
     cover: game.cover,
     coverUrl,
     coverImageUrl: coverUrl,
-    coverImageId: game.cover?.image_id ?? null,
     screenshots: [],
     screenshotUrls: [],
     releaseYear,
