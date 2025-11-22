@@ -170,6 +170,13 @@ export interface IgdbVideo {
   video_id: string;
 }
 
+export interface IgdbAgeRating {
+  id: number;
+  category?: number | null;
+  rating?: number | null;
+  synopsis?: string | null;
+}
+
 export interface IgdbAchievementIcon {
   id?: number;
   image_id?: string | null;
@@ -229,6 +236,7 @@ export interface IgdbGameDetails extends IgdbGame {
   remasters?: IgdbSimilarGame[];
   parent_game?: IgdbSimilarGame;
   involved_companies?: IgdbCompanyRef[];
+  age_ratings?: IgdbAgeRating[] | null;
 }
 
 export interface IgdbSimilarGame
@@ -561,6 +569,10 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       involved_companies.company.name,
       involved_companies.developer,
       involved_companies.publisher,
+      age_ratings.id,
+      age_ratings.category,
+      age_ratings.rating,
+      age_ratings.synopsis,
       websites.url,
       websites.category,
       videos.name,

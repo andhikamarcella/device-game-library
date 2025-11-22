@@ -13,6 +13,7 @@ import {
   type IgdbPlatformRef,
   type IgdbSearchParams,
   type IgdbSimilarGame,
+  type IgdbAgeRating,
   type IgdbVideo,
 } from "@/lib/igdb";
 import { igdbScreenshotUrl } from "@/lib/igdbImages";
@@ -203,6 +204,7 @@ export type GameDetailsPayload = GameSummary & {
   expansions?: GameRelatedGame[] | null;
   reactions?: GameReactionSummary | null;
   playtime_distribution?: GamePlaytimeDistribution | null;
+  age_ratings?: IgdbAgeRating[] | null;
 };
 
 export type GameScreenshot = {
@@ -604,6 +606,18 @@ const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
   };
 };
 
+const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
+  if (!entries?.length) return [];
+  return entries
+    .filter((entry): entry is IgdbAgeRating => Boolean(entry) && typeof entry.id === "number")
+    .map((entry) => ({
+      id: entry.id,
+      category: typeof entry.category === "number" ? entry.category : null,
+      rating: typeof entry.rating === "number" ? entry.rating : null,
+      synopsis: entry.synopsis ?? null,
+    }));
+};
+
 const mapCompanies = (
   details: IgdbGameDetails,
   role: "developer" | "publisher",
@@ -691,5 +705,6 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     reactions: {},
     playtime_distribution: {},
     tags: mapKeywords(details.keywords),
+    age_ratings: mapAgeRatings(details.age_ratings),
   };
 };
