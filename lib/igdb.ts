@@ -669,8 +669,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
 
   const query = `
     fields
-      ${sharedFields},
-      time_to_beat;
+      ${sharedFields};
     where id = ${id};
     limit 1;
   `;
@@ -680,13 +679,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
 
   if (!game) return null;
 
-  const resolvedTime =
-    typeof game.time_to_beat === "object" && game.time_to_beat !== null ? game.time_to_beat : null;
-
-  return {
-    ...game,
-    time_to_beat: resolvedTime,
-  };
+  return game;
 }
 
 export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise<IgdbAchievement[]> {

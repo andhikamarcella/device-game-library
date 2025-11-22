@@ -20,7 +20,6 @@ export type IgdbEndpoint =
   | "release_dates"
   | "videos"
   | "websites"
-  | "time_to_beat"
   | "companies"
   | "platforms";
 
@@ -94,7 +93,6 @@ export type IgdbGameDetail = {
     language?: { id: number; name?: string | null } | null;
     language_support_type?: number | number[] | null;
   }> | null;
-  time_to_beat?: { normally?: number | null; hastly?: number | null; completely?: number | null } | number | null;
 };
 
 export async function fetchGameDetail(id: number) {
@@ -140,19 +138,13 @@ export async function fetchGameDetail(id: number) {
     "language_supports.language",
     "language_supports.language.name",
     "language_supports.language_support_type",
-    "time_to_beat",
   ];
 
   const query = [`fields ${sharedFields.join(", ")};`, `where id = ${id};`, "limit 1;"].join("\n");
 
   const [game] = (await igdbPost("games", query)) as IgdbGameDetail[];
 
-  const resolvedTime = typeof game.time_to_beat === "object" && game.time_to_beat ? game.time_to_beat : null;
-
-  return {
-    ...game,
-    time_to_beat: resolvedTime,
-  };
+  return game;
 }
 
 export async function fetchCollection({
