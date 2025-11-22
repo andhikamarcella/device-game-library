@@ -13,9 +13,6 @@ import {
   type GameScreenshot,
   type GameSimilarEntry,
 } from "@/lib/gameData";
-import DevPubList from "@/components/DevPubList";
-import MetadataList from "@/components/MetadataList";
-import { extractDevelopers, extractPublishers } from "@/lib/metadata";
 import type { IgdbVideo } from "@/lib/igdb";
 
 export const revalidate = 300;
@@ -147,35 +144,6 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
         additions={additions}
         series={seriesEntries}
       />
-
-      <div className="mt-10 space-y-6">
-        <DevPubList
-          title="Main Developers"
-          items={extractDevelopers(game.involved_companies)}
-        />
-
-        <DevPubList
-          title="Publishers"
-          items={extractPublishers(game.involved_companies)}
-        />
-
-        <MetadataList title="Genres" items={game.genres} />
-
-        <MetadataList title="Themes" items={game.themes} />
-
-        <MetadataList title="Game Modes" items={game.game_modes} />
-
-        <MetadataList title="Player Perspectives" items={game.player_perspectives} />
-
-        <MetadataList title="Franchise" items={game.franchises} />
-
-        <MetadataList title="Series / Collection" items={game.collections} />
-
-        <MetadataList
-          title="Game Engine"
-          items={game.engines && game.engines.length ? game.engines : [{ name: "Unknown Engine" }]}
-        />
-      </div>
     </div>
   );
 }

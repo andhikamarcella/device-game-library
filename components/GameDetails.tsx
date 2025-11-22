@@ -21,11 +21,13 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
 import AgeRating from "@/components/AgeRating";
+import DevPubList from "@/components/DevPubList";
 import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSection";
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
 import { VideoCarousel } from "@/components/video/VideoCarousel";
 import ROMDownload from "@/components/ROMDownload";
+import MetadataList from "@/components/MetadataList";
 import {
   type GameDetailsPayload,
   type GameParentPlatform,
@@ -37,6 +39,7 @@ import {
 import { getBestCover } from "@/lib/getCoverArt";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
+import { extractDevelopers, extractPublishers } from "@/lib/metadata";
 import { getStoreIcon } from "@/lib/storeIcons";
 import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/lib/platformIcons";
@@ -244,6 +247,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .map((tag) => tag.name)
     .filter((name): name is string => Boolean(name))
     .slice(0, 10);
+  const engineItems = game.engines && game.engines.length ? game.engines : [{ name: "Unknown Engine" }];
   const additionEntries = uniqueRelatedGames([
     ...(game.additions ?? []),
     ...(game.expansions ?? []),
@@ -423,6 +427,32 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="space-y-6 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <DevPubList
+          title="Main Developers"
+          items={extractDevelopers(game.involved_companies)}
+        />
+
+        <DevPubList
+          title="Publishers"
+          items={extractPublishers(game.involved_companies)}
+        />
+
+        <MetadataList title="Genres" items={game.genres} />
+
+        <MetadataList title="Themes" items={game.themes} />
+
+        <MetadataList title="Game Modes" items={game.game_modes} />
+
+        <MetadataList title="Player Perspectives" items={game.player_perspectives} />
+
+        <MetadataList title="Franchise" items={game.franchises} />
+
+        <MetadataList title="Series / Collection" items={game.collections} />
+
+        <MetadataList title="Game Engine" items={engineItems} />
       </div>
 
       <section className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
