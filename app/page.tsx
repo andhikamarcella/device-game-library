@@ -7,6 +7,7 @@ import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react
 import { ArrowRight, Loader2, Search, Star } from "lucide-react";
 import { Card } from "@/components/Card";
 import { GameCard, type SearchGameResult as CardResult } from "@/components/GameCard";
+import { GameCardCompact } from "@/components/GameCardCompact";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
 import EventsSection from "@/components/EventsSection";
@@ -1071,10 +1072,6 @@ function DashboardPageContent() {
               const isWishlisted = Boolean(existing?.wishlist);
               const isProcessing = wishlistProcessingId === game.id;
               const normalizedPlatforms = game.platforms ?? [];
-              const platformLabels = normalizedPlatforms.map((platform) => platform.name).filter(Boolean);
-              const imageUrl = getResultCover(game);
-              const screenshotPreviews = getResultScreenshots(game).slice(0, 4);
-              const ratingLabel = game.rating?.toFixed(1) ?? "—";
               const detailQuery: Record<string, string> = {};
               if (debouncedQuery) {
                 detailQuery.q = debouncedQuery;
@@ -1090,72 +1087,31 @@ function DashboardPageContent() {
                 query: detailQuery,
               } as const;
 
+              const coverImageId = (game as { cover?: { image_id?: string | null } | null })?.cover?.image_id ?? null;
+              const compactData = {
+                id: game.id,
+                name: game.name,
+                coverImageId: coverImageId ?? undefined,
+                coverUrl: getResultCover(game) ?? undefined,
+                rating: game.rating,
+                ratingsCount: game.ratingsCount,
+                releaseYear: game.releaseYear ?? undefined,
+                platforms: normalizedPlatforms.map((platform) => ({
+                  id: platform.id,
+                  name: platform.name,
+                  abbreviation: platform.abbreviation ?? platform.slug ?? platform.name,
+                })),
+              } satisfies Parameters<typeof GameCardCompact>[0]["game"];
+
               return (
-                <div key={game.id} className="space-y-3">
-                  <article
-                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-md shadow-slate-900/10 transition-colors duration-300 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100 dark:focus-within:ring-offset-slate-900"
-                  >
-                  <Link
-                    href={detailHref}
-                    className="relative block aspect-[3/4] w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800 sm:aspect-[2/3] lg:aspect-[5/8]"
-                  >
-                    <Image
-                      src={imageUrl}
-                      alt={`${game.name} cover`}
-                      fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                    />
-                    <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-xs text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
-                      <Star className="h-3 w-3 fill-current" />
-                      <span>{ratingLabel}</span>
-                    </div>
-                  </Link>
-                  <div className="flex flex-1 flex-col justify-between gap-3 p-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-slate-900 dark:text-slate-100 sm:text-lg">{game.name}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {game.releaseYear ?? "Tahun rilis tidak diketahui"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          <Star className="h-3 w-3" />
-                          <span>{ratingLabel}</span>
-                        </div>
-                      </div>
-                      {platformLabels.length ? (
-                        <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-                          {platformLabels.map((platform) => (
-                            <span
-                              key={platform}
-                              className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                            >
-                              {platform}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Platform tidak tersedia</p>
-                      )}
-                      {screenshotPreviews.length ? (
-                        <div className="flex gap-2 overflow-x-auto pb-1">
-                          {screenshotPreviews.map((url, index) => (
-                            <Image
-                              key={`${game.id}-shot-${index}`}
-                              src={url}
-                              alt={`${game.name} screenshot ${index + 1}`}
-                              width={160}
-                              height={90}
-                              className="h-24 w-40 flex-shrink-0 rounded-xl object-cover"
-                              sizes="160px"
-                            />
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pt-1">
+                <div key={game.id} className="space-y-2">
+                  <GameCardCompact
+                    game={compactData}
+                    actionLabel={isWishlisted ? "Sudah di wishlist" : "Tambah ke wishlist"}
+                    actionDisabled={isWishlisted}
+                    actionBusy={isProcessing}
+                    onAction={() => handleAddToWishlist(game)}
+                    footer={
                       <Link
                         href={detailHref}
                         className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 transition hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:text-emerald-300 dark:hover:text-emerald-200 dark:focus-visible:ring-offset-slate-900"
@@ -1163,32 +1119,8 @@ function DashboardPageContent() {
                         Lihat detail & trailer
                         <ArrowRight className="h-4 w-4" />
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleAddToWishlist(game)}
-                        disabled={isWishlisted || isProcessing}
-                        aria-pressed={isWishlisted}
-                        aria-busy={isProcessing}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
-                          isWishlisted || isProcessing
-                            ? "cursor-not-allowed border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
-                            : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100"
-                        }`}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Star className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
-                        )}
-                        {isProcessing
-                          ? "Memproses..."
-                          : isWishlisted
-                            ? "Sudah di wishlist"
-                            : "Tambah ke wishlist"}
-                      </button>
-                    </div>
-                  </div>
-                  </article>
+                    }
+                  />
                 </div>
               );
             })}
