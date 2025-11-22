@@ -724,8 +724,11 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
   if (!game) return null;
 
   const existingTimeBlock =
-    (typeof game.time_to_beats === "object" && game.time_to_beats) ||
-    (typeof game.time_to_beat === "object" && game.time_to_beat);
+    typeof game.time_to_beats === "object" && game.time_to_beats !== null
+      ? game.time_to_beats
+      : typeof game.time_to_beat === "object" && game.time_to_beat !== null
+        ? game.time_to_beat
+        : null;
 
   const timeId =
     typeof game.time_to_beats === "number"
