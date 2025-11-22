@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GameDetails, type GameReview } from "@/components/GameDetails";
+import ROMDownload from "@/components/ROMDownload";
 import {
   getGameAdditions,
   getGameDetails,
@@ -133,15 +134,19 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const backLabel = sanitizedReturnTo?.startsWith("/library") ? "Back to library" : "Back to search";
 
   return (
-    <GameDetails
-      game={game}
-      backLink={{ href: backHref, label: backLabel }}
-      screenshots={gallery}
-      reviews={cleanedReviews}
-      videos={videos}
-      similarGames={similarGames}
-      additions={additions}
-      series={seriesEntries}
-    />
+    <div className="space-y-6">
+      <GameDetails
+        game={game}
+        backLink={{ href: backHref, label: backLabel }}
+        screenshots={gallery}
+        reviews={cleanedReviews}
+        videos={videos}
+        similarGames={similarGames}
+        additions={additions}
+        series={seriesEntries}
+      />
+
+      <ROMDownload game={game} />
+    </div>
   );
 }
