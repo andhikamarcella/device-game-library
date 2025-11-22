@@ -1,4 +1,4 @@
-type TimeToBeatResponse = {
+export type TimeToBeatResponse = {
   main: number | null;
   extra: number | null;
   complete: number | null;
@@ -35,7 +35,14 @@ async function fetchTimeToBeat(title: string): Promise<TimeToBeatResponse | null
     }
 
     const data = (await response.json()) as TimeToBeatResponse | { error?: string };
-    if ("error" in data) return null;
+
+    if ("error" in data) {
+      return {
+        main: null,
+        extra: null,
+        complete: null,
+      };
+    }
 
     return {
       main: data.main ?? null,
