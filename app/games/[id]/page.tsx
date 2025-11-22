@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { GameDetails, type GameReview } from "@/components/GameDetails";
-import ROMDownload from "@/components/ROMDownload";
 import {
   getGameAdditions,
   getGameDetails,
@@ -145,8 +144,6 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
         additions={additions}
         series={seriesEntries}
       />
-
-      <ROMDownload game={game} />
     </div>
   );
 }

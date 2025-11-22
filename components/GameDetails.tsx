@@ -25,6 +25,7 @@ import { RawgAchievementsSection } from "@/components/game/RawgAchievementsSecti
 import { ExpandableText } from "@/components/game/ExpandableText";
 import { SystemRequirements } from "@/components/game/SystemRequirements";
 import { VideoCarousel } from "@/components/video/VideoCarousel";
+import ROMDownload from "@/components/ROMDownload";
 import {
   type GameDetailsPayload,
   type GameParentPlatform,
@@ -612,6 +613,8 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
       </section>
 
       <RawgAchievementsSection rawgId={rawgIdentifier} gameTitle={game.name} />
+
+      <ROMDownload game={game} />
 
       {additionEntries.length ? (
         <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
