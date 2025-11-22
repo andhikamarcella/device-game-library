@@ -173,10 +173,7 @@ async function executeSearch({
     .json()
     .catch(() => [] as IgdbGameSearch[]);
 
-  const [countRes, gamesRaw] = await Promise.all<[
-    Response | null,
-    IgdbGameSearch[],
-  ]>([countPromise, gamesPromise]);
+  const [countRes, gamesRaw] = await Promise.all([countPromise, gamesPromise] as const);
 
   const gamesRawTyped = gamesRaw as IgdbGameSearch[] | null;
   const games: IgdbGameSearch[] = Array.isArray(gamesRawTyped) ? gamesRawTyped : [];
