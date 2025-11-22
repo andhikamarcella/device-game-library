@@ -147,19 +147,7 @@ export async function fetchGameDetail(id: number) {
 
   const [game] = (await igdbPost("games", query)) as IgdbGameDetail[];
 
-  const existingTimeBlock = typeof game.time_to_beat === "object" ? game.time_to_beat : null;
-
-  const timeId = typeof game.time_to_beat === "number" ? game.time_to_beat : null;
-
-  const resolvedTime =
-    existingTimeBlock ??
-    (timeId
-      ? ((await igdbPost("time_to_beat", `fields hastly, normally, completely; where id = ${timeId}; limit 1;`)) as Array<{
-          hastly?: number | null;
-          normally?: number | null;
-          completely?: number | null;
-        }>)[0] ?? null
-      : null);
+  const resolvedTime = typeof game.time_to_beat === "object" && game.time_to_beat ? game.time_to_beat : null;
 
   return {
     ...game,

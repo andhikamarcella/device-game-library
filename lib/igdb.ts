@@ -680,17 +680,8 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
 
   if (!game) return null;
 
-  const existingTimeBlock =
+  const resolvedTime =
     typeof game.time_to_beat === "object" && game.time_to_beat !== null ? game.time_to_beat : null;
-
-  const timeId = typeof game.time_to_beat === "number" ? game.time_to_beat : null;
-
-  const resolvedTime = existingTimeBlock ??
-    (timeId
-      ? ((await igdbRequest<
-          Array<{ hastly?: number | null; normally?: number | null; completely?: number | null }>
-        >("time_to_beat", `fields hastly, normally, completely; where id = ${timeId}; limit 1;`))[0] ?? null)
-      : null);
 
   return {
     ...game,
