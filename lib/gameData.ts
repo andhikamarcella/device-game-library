@@ -13,6 +13,7 @@ import {
   type IgdbPlatformRef,
   type IgdbSearchParams,
   type IgdbSimilarGame,
+  type IgdbAgeRating,
   type IgdbVideo,
 } from "@/lib/igdb";
 import { igdbScreenshotUrl } from "@/lib/igdbImages";
@@ -38,6 +39,8 @@ export type GamePlatformSummary = {
   year_start: number | null;
   image_background: string | null;
 };
+
+export type GameTrailer = IgdbVideo;
 
 export type GameEsrbRating = {
   id: number;
@@ -201,13 +204,7 @@ export type GameDetailsPayload = GameSummary & {
   expansions?: GameRelatedGame[] | null;
   reactions?: GameReactionSummary | null;
   playtime_distribution?: GamePlaytimeDistribution | null;
-};
-
-export type GameTrailer = {
-  id: number;
-  name: string;
-  preview: string | null;
-  data: Record<string, string | undefined> & { 480?: string; max?: string };
+  age_ratings?: IgdbAgeRating[] | null;
 };
 
 export type GameScreenshot = {
@@ -296,9 +293,15 @@ export async function getGameReviews(_id: number, _page = 1, _pageSize = 6): Pro
   return [];
 }
 
-export async function getGameTrailers(id: number): Promise<GameTrailer[]> {
+export async function getGameVideos(id: number): Promise<IgdbVideo[]> {
   const details = await loadIgdbDetails(id);
-  return mapVideos(details.videos, details.name);
+  const videos = (details.videos ?? []).filter((video) => Boolean(video?.video_id));
+  return videos.map((video, index) => ({
+    ...video!,
+    id: typeof video?.id === "number" ? video.id : index + 1,
+    name: video?.name?.trim() || `${details.name ?? "Trailer"} ${index + 1}`,
+    video_id: video!.video_id.trim(),
+  }));
 }
 
 function mapAchievements(entries: IgdbAchievement[]): GameAchievement[] {
@@ -589,28 +592,6 @@ const relatedToSeriesEntry = (entry?: GameRelatedGame | null): GameSeriesEntry |
   };
 };
 
-const mapVideos = (videos?: IgdbVideo[], gameName?: string): GameTrailer[] => {
-  if (!videos?.length) {
-    return [];
-  }
-  let index = 1;
-  return videos
-    .filter((video) => Boolean(video?.video_id))
-    .map((video) => {
-      const videoId = video!.video_id.trim();
-      const name = video!.name ?? `${gameName ?? "Trailer"} ${index}`;
-      const url = buildYoutubeUrl(videoId);
-      const movie: GameTrailer = {
-        id: index,
-        name,
-        preview: buildYoutubeThumb(videoId),
-        data: { 480: url, max: url },
-      };
-      index += 1;
-      return movie;
-    });
-};
-
 const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
   const source = videos?.find((video) => video?.video_id);
   if (!source?.video_id) {
@@ -623,6 +604,23 @@ const mapClip = (videos?: IgdbVideo[], gameName?: string): GameClip | null => {
     preview: buildYoutubeThumb(source.video_id),
     clips: { full: url, featured: url },
   };
+};
+
+const mapAgeRatings = (entries?: IgdbAgeRating[] | null): IgdbAgeRating[] => {
+  if (!entries?.length) return [];
+  return entries
+    .filter((entry): entry is IgdbAgeRating => Boolean(entry) && typeof entry.id === "number")
+    .map((entry) => ({
+      id: entry.id,
+      category: typeof entry.category === "number" ? entry.category : null,
+      rating:
+        typeof entry.rating === "number"
+          ? entry.rating
+          : typeof entry.rating === "string"
+            ? Number.parseInt(entry.rating, 10)
+            : null,
+      synopsis: typeof entry.synopsis === "string" ? entry.synopsis.trim() : null,
+    }));
 };
 
 const mapCompanies = (
@@ -687,7 +685,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
       base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
     short_screenshots: screenshots,
     clip: mapClip(details.videos, details.name),
-    movies: mapVideos(details.videos, details.name),
+    movies: [],
     genres: mapGenres(details.genres),
     description: descriptionRaw || null,
     description_raw: descriptionRaw || null,
@@ -712,5 +710,6 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     reactions: {},
     playtime_distribution: {},
     tags: mapKeywords(details.keywords),
+    age_ratings: mapAgeRatings(details.age_ratings),
   };
 };

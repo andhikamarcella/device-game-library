@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getGameTrailers } from "@/lib/gameData";
+import { getGameVideos } from "@/lib/gameData";
 
 type Params = { params: { id: string } };
 
@@ -10,11 +10,11 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   try {
-    const data = await getGameTrailers(id);
+    const data = await getGameVideos(id);
     return NextResponse.json({ results: data });
   } catch (error) {
     console.error("IGDB movies error", error);
-    const message = error instanceof Error ? error.message : "Unable to load IGDB trailers.";
+    const message = error instanceof Error ? error.message : "Unable to load IGDB videos.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

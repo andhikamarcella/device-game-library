@@ -105,18 +105,15 @@ function collectMovieSources(movies: GameTrailer[] | null | undefined, title: st
   }
   for (const movie of movies) {
     const clipTitle = movie.name || title;
-    const dataValues = Object.values(movie.data ?? {});
-    const urlCandidates = [movie.preview, ...dataValues];
-    for (const url of urlCandidates) {
-      const youtubeId = extractYoutubeId(url);
-      if (youtubeId) {
-        return {
+    const preview = (movie as { preview?: string | null }).preview;
+    const youtubeId = extractYoutubeId(movie.video_id) ?? movie.video_id;
+    if (youtubeId) {
+      return {
         type: "igdb-movie",
         title: clipTitle,
         youtubeId,
-        thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
+        thumbnailUrl: buildThumbnailUrl(youtubeId, preview ?? undefined),
       } satisfies GameTrailerSource;
-      }
     }
   }
   return null;
@@ -133,19 +130,15 @@ function collectAllMovieSources(
   const sources: GameTrailerSource[] = [];
   movies.forEach((movie, index) => {
     const clipTitle = movie.name || `${title || "Trailer"} ${index + 1}`;
-    const dataValues = Object.values(movie.data ?? {});
-    const urlCandidates = [movie.preview, ...dataValues];
-    for (const url of urlCandidates) {
-      const youtubeId = extractYoutubeId(url);
-      if (youtubeId) {
-        sources.push({
-          type: "igdb-movie",
-          title: clipTitle,
-          youtubeId,
-          thumbnailUrl: buildThumbnailUrl(youtubeId, movie.preview ?? undefined),
-        });
-        break;
-      }
+    const preview = (movie as { preview?: string | null }).preview;
+    const youtubeId = extractYoutubeId(movie.video_id) ?? movie.video_id;
+    if (youtubeId) {
+      sources.push({
+        type: "igdb-movie",
+        title: clipTitle,
+        youtubeId,
+        thumbnailUrl: buildThumbnailUrl(youtubeId, preview ?? undefined),
+      });
     }
   });
 
