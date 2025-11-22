@@ -83,6 +83,7 @@ export type GameSummary = {
   background_image: string | null;
   background_image_additional?: string | null;
   short_screenshots?: GameScreenshot[];
+  artworks?: GameArtwork[] | null;
   clip?: GameClip | null;
   released: string | null;
   rating: number | null;
@@ -210,6 +211,14 @@ export type GameDetailsPayload = GameSummary & {
 export type GameScreenshot = {
   id: number;
   image_id?: string | null;
+  image: string;
+  width?: number;
+  height?: number;
+};
+
+export type GameArtwork = {
+  id: number;
+  image_id: string;
   image: string;
   width?: number;
   height?: number;
@@ -539,6 +548,32 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
   return screenshots;
 };
 
+const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
+  if (!assets?.length) {
+    return [];
+  }
+
+  const artworks: GameArtwork[] = [];
+  assets.forEach((asset, index) => {
+    if (!asset?.image_id) {
+      return;
+    }
+    const image = igdbScreenshotUrl(asset.image_id);
+    if (!image) {
+      return;
+    }
+    artworks.push({
+      id: typeof asset.id === "number" ? asset.id : index,
+      image_id: asset.image_id,
+      image,
+      width: asset.width,
+      height: asset.height,
+    });
+  });
+
+  return artworks;
+};
+
 const mapSimilar = (similar?: IgdbSimilarGame[]): GameSimilarEntry[] => {
   if (!similar?.length) {
     return [];
@@ -701,6 +736,7 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     background_image_additional:
       base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
     short_screenshots: screenshots,
+    artworks: mapArtworks(details.artworks),
     clip: mapClip(details.videos, details.name),
     movies: [],
     genres: mapGenres(details.genres),

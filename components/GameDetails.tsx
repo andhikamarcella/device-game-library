@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { CoverImage } from "@/components/CoverImage";
+import ArtworkGallery from "@/components/ArtworkGallery";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
 import { FeatureBadges } from "@/components/game/FeatureBadges";
@@ -603,6 +604,8 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
       ) : null}
 
       {screenshots.length ? <ScreenshotGallery screenshots={screenshots} /> : null}
+
+      {game.artworks?.length ? <ArtworkGallery artworks={game.artworks} /> : null}
 
       <section className="space-y-3 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
         <VideoCarousel videos={videos} />
