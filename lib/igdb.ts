@@ -11,6 +11,14 @@ type TokenCache = {
 
 let tokenCache: TokenCache | null = null;
 
+export function getIgdbVideoUrls(videoId: string) {
+  return {
+    480: `https://video.igdb.com/igdb/video/upload/igdb/${videoId}.mp4`,
+    720: `https://video.igdb.com/igdb/video/upload/t_720p/${videoId}.mp4`,
+    1080: `https://video.igdb.com/igdb/video/upload/t_1080p/${videoId}.mp4`,
+  };
+}
+
 const resolveTokenUrl = (): string => {
   const fallbackUrl = "https://id.twitch.tv/oauth2/token";
   const rawUrl =

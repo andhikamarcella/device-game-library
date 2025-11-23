@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clapperboard } from "lucide-react";
 import type { IgdbVideo } from "@/lib/igdb";
+import { getIgdbVideoUrls } from "@/lib/igdb";
 import { cn } from "@/lib/utils";
 import { VideoPlayer, type VideoQuality } from "@/components/VideoPlayer";
 import { useMiniPlayer } from "@/hooks/useMiniPlayer";
@@ -12,12 +13,6 @@ const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}
 const normalizeId = (value: string) => value.trim();
 
 const qualityOrder: VideoQuality[] = ["480p", "720p", "1080p"];
-
-const getIgdbVideoUrls = (videoId: string) => ({
-  480: `https://videos.igdb.com/igdb/video/upload/igdb/${videoId}.mp4`,
-  720: `https://videos.igdb.com/igdb/video/upload/t_720p/${videoId}.mp4`,
-  1080: `https://videos.igdb.com/igdb/video/upload/t_1080p/${videoId}.mp4`,
-});
 
 type VideoRole = "trailer" | "gameplay" | "teaser" | "interview" | "dev-diary" | "other";
 
