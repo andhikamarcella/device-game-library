@@ -298,7 +298,14 @@ async function executeSearch({
   if (!igdbRes.ok) {
     const text = await igdbRes.text().catch(() => "");
     console.error("IGDB games search error", igdbRes.status, text);
-    return NextResponse.json({ error: "IGDB search failed", games: [] }, { status: 200 });
+    return NextResponse.json(
+      {
+        error: "IGDB search failed",
+        results: [],
+        pagination: { total: 0, page, pageSize: limit, hasNextPage: false, hasPreviousPage: false },
+      },
+      { status: 502 },
+    );
   }
 
   const gamesPromise: Promise<IgdbGameSearch[]> = igdbRes
@@ -451,7 +458,10 @@ export async function GET(req: NextRequest) {
     return await executeSearch(resolved);
   } catch (error) {
     console.error("IGDB games search error", error);
-    return NextResponse.json({ error: "IGDB search failed", games: [] }, { status: 200 });
+    return NextResponse.json(
+      { error: "IGDB search failed", results: [], pagination: { total: 0, page: 1, pageSize: 20, hasNextPage: false, hasPreviousPage: false } },
+      { status: 502 },
+    );
   }
 }
 
@@ -464,7 +474,10 @@ export async function POST(req: NextRequest) {
     return await executeSearch(resolved);
   } catch (error) {
     console.error("IGDB games search error", error);
-    return NextResponse.json({ error: "IGDB search failed", games: [] }, { status: 200 });
+    return NextResponse.json(
+      { error: "IGDB search failed", results: [], pagination: { total: 0, page: 1, pageSize: 20, hasNextPage: false, hasPreviousPage: false } },
+      { status: 502 },
+    );
   }
 }
 

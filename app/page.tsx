@@ -472,6 +472,9 @@ const formatDaysAgo = (days: number | null) => {
       })
         .then(async (response) => {
           const payload = (await response.json().catch(() => null)) as unknown;
+          if (payload && typeof payload === "object" && "error" in payload && (payload as { error?: string }).error) {
+            throw new Error((payload as { error?: string }).error || "Unable to search games.");
+          }
           if (!response.ok) {
             const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
             throw new Error(message);
