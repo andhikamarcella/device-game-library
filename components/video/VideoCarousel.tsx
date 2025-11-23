@@ -9,7 +9,7 @@ import { useMiniPlayer } from "@/hooks/useMiniPlayer";
 
 const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-const VIDEO_BASE = "https://images.igdb.com/igdb/video/upload";
+const VIDEO_BASE = "https://videos.igdb.com/igdb/video/upload";
 
 const normalizeId = (value: string) => value.trim();
 

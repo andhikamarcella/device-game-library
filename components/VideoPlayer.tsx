@@ -95,6 +95,24 @@ export function VideoPlayer({
     };
   }, [currentVariant, videoKey]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !currentVariant) return;
+
+    const handleError = () => {
+      const fallbackOrder: VideoQuality[] = ["720p", "480p", "1080p"];
+      const nextQuality = fallbackOrder.find(
+        (quality) => quality !== currentVariant.key && variants.some((variant) => variant.key === quality),
+      );
+      if (nextQuality) {
+        onQualityChange(nextQuality);
+      }
+    };
+
+    video.addEventListener("error", handleError);
+    return () => video.removeEventListener("error", handleError);
+  }, [currentVariant?.key, onQualityChange, variants]);
+
   const qualityButtons = variants.map((variant) => {
     const isActive = variant.key === currentVariant?.key;
     return (
