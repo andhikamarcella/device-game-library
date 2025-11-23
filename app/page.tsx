@@ -11,12 +11,23 @@ import { GameCardCompact } from "@/components/GameCardCompact";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
 import EventsSection from "@/components/EventsSection";
+import {
+  AgeRatingFilter,
+  FiltersResetButton,
+  GameModeFilter,
+  GenreFilter,
+  PerspectiveFilter,
+  ThemeFilter,
+  YearRangePicker,
+  type SearchFilterOption,
+} from "@/components/SearchFiltersPanel";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { formatDateTime } from "@/lib/utils";
 import { GameStatus, Game } from "@/lib/types";
+import type { IgdbAgeRating } from "@/types/igdb";
 
 type SearchPlatform = {
   id: number;
@@ -112,13 +123,13 @@ type PlatformOption = {
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
 
 const DISCOVER_SORT_OPTIONS = [
-  { value: "none", label: "No sort" },
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "alphabetical", label: "Alphabetical A–Z" },
+  { value: "alphabetical_desc", label: "Alphabetical Z–A" },
+  { value: "highest_rated", label: "Highest rating" },
+  { value: "lowest_rated", label: "Lowest rating" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
 ] as const;
 
 type DiscoverSortOption = (typeof DISCOVER_SORT_OPTIONS)[number]["value"];
@@ -130,27 +141,21 @@ type SearchSortKey =
   | "highest_rated"
   | "lowest_rated"
   | "newest"
-  | "oldest";
+  | "oldest"
+  | "alphabetical"
+  | "alphabetical_desc";
 
-const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => {
-  switch (value) {
-    case "none":
-      return "none";
-    case "popular_asc":
-      return "least_popular";
-    case "rating_desc":
-      return "highest_rated";
-    case "rating_asc":
-      return "lowest_rated";
-    case "release_desc":
-      return "newest";
-    case "release_asc":
-      return "oldest";
-    case "popular_desc":
-    default:
-      return "most_popular";
-  }
+const SORT_FALLBACKS: Record<string, DiscoverSortOption> = {
+  popular_desc: "most_popular",
+  popular_asc: "most_popular",
+  rating_desc: "highest_rated",
+  rating_asc: "lowest_rated",
+  release_desc: "newest",
+  release_asc: "oldest",
+  none: "most_popular",
 };
+
+const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => value as SearchSortKey;
 
 const parsePlatformValue = (value: string | null): string => {
   if (!value) {
@@ -168,12 +173,52 @@ const parsePageValue = (value: string | null): number => {
 };
 
 const parseSortValue = (value: string | null): DiscoverSortOption => {
-  if (!value) {
-    return "popular_desc";
+  const normalized = value?.trim();
+  if (!normalized) {
+    return "most_popular";
   }
-  return DISCOVER_SORT_OPTIONS.some((option) => option.value === value)
-    ? (value as DiscoverSortOption)
-    : "popular_desc";
+  if (SORT_FALLBACKS[normalized]) {
+    return SORT_FALLBACKS[normalized];
+  }
+  return DISCOVER_SORT_OPTIONS.some((option) => option.value === normalized)
+    ? (normalized as DiscoverSortOption)
+    : "most_popular";
+};
+
+const DEFAULT_YEAR_RANGE: [number, number] = [1980, new Date().getFullYear()];
+
+const AGE_RATING_LABELS: Record<number, string> = {
+  1: "PEGI 3",
+  2: "PEGI 7",
+  3: "PEGI 12",
+  4: "PEGI 16",
+  5: "PEGI 18",
+  6: "ESRB RP",
+  7: "ESRB EC",
+  8: "ESRB E",
+  9: "ESRB E10+",
+  10: "ESRB T",
+  11: "ESRB M",
+  12: "ESRB AO",
+};
+
+const parseNumberListParam = (raw: string | null): number[] => {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => Number.parseInt(part, 10))
+    .filter((num) => Number.isFinite(num));
+};
+
+const normalizeYearRange = (from?: number | null, to?: number | null): [number, number] => {
+  const safeFrom = typeof from === "number" ? from : DEFAULT_YEAR_RANGE[0];
+  const safeTo = typeof to === "number" ? to : DEFAULT_YEAR_RANGE[1];
+  if (safeFrom > safeTo) {
+    return [safeTo, safeFrom];
+  }
+  return [safeFrom, safeTo];
 };
 
 type IgdbListPlatform = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
@@ -261,53 +306,79 @@ const formatDaysAgo = (days: number | null) => {
   return `Released ${days} days ago`;
 };
 
-function DashboardPageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  function DashboardPageContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
 
-  const initialQueryParam = searchParams.get("q") ?? "";
-  const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
-  const initialPageParam = parsePageValue(searchParams.get("page"));
-  const initialSortParam = parseSortValue(searchParams.get("sort"));
+    const initialQueryParam = searchParams.get("q") ?? "";
+    const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
+    const initialPageParam = parsePageValue(searchParams.get("page"));
+    const initialSortParam = parseSortValue(searchParams.get("sort"));
+    const initialGenresParam = parseNumberListParam(searchParams.get("genres"));
+    const initialThemesParam = parseNumberListParam(searchParams.get("themes"));
+    const initialModesParam = parseNumberListParam(searchParams.get("gameModes"));
+    const initialPerspectivesParam = parseNumberListParam(searchParams.get("playerPerspectives"));
+    const initialAgeRatingsParam = parseNumberListParam(searchParams.get("ageRatings"));
+    const initialReleaseFromParam = searchParams.get("releaseFrom");
+    const initialReleaseToParam = searchParams.get("releaseTo");
+    const initialReleaseRange = normalizeYearRange(
+      initialReleaseFromParam ? Number.parseInt(initialReleaseFromParam, 10) : null,
+      initialReleaseToParam ? Number.parseInt(initialReleaseToParam, 10) : null,
+    );
 
-  const { devices } = useDeviceStore();
-  const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
+    const { devices } = useDeviceStore();
+    const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
 
-  const trackedGames = Array.isArray(games) ? games : [];
-  const trackedDevices = Array.isArray(devices) ? devices : [];
+    const trackedGames = Array.isArray(games) ? games : [];
+    const trackedDevices = Array.isArray(devices) ? devices : [];
 
-  const [query, setQuery] = useState(initialQueryParam);
-  const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const pageSize = 5;
-  const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
-  const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
-  const [page, setPage] = useState(initialPageParam);
-  const [pageInput, setPageInput] = useState(String(initialPageParam));
-  const lastSyncedSearchRef = useRef(searchParams.toString());
-  const skipPageResetRef = useRef(true);
-  const [pagination, setPagination] = useState(() => ({
-    total: 0,
-    page: initialPageParam,
-    pageSize,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  }));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [platforms, setPlatforms] = useState<PlatformOption[]>([]);
-  const [platformLoading, setPlatformLoading] = useState(true);
-  const [platformError, setPlatformError] = useState<string | null>(null);
-  const [platformSearch, setPlatformSearch] = useState("");
-  const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
-  const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
-  const [topGames, setTopGames] = useState<CardResult[]>([]);
-  const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
-  const [recentGames, setRecentGames] = useState<CardResult[]>([]);
-  const [headlineLoading, setHeadlineLoading] = useState(true);
-  const safeResults = Array.isArray(results) ? results : [];
+    const [query, setQuery] = useState(initialQueryParam);
+    const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
+    const [results, setResults] = useState<SearchResult[]>([]);
+    const pageSize = 5;
+    const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
+    const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
+    const [page, setPage] = useState(initialPageParam);
+    const [pageInput, setPageInput] = useState(String(initialPageParam));
+    const lastSyncedSearchRef = useRef(searchParams.toString());
+    const skipPageResetRef = useRef(true);
+    const filtersRef = useRef<HTMLDivElement | null>(null);
+    const [pagination, setPagination] = useState(() => ({
+      total: 0,
+      page: initialPageParam,
+      pageSize,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    }));
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [hasSearched, setHasSearched] = useState(false);
+    const [platforms, setPlatforms] = useState<PlatformOption[]>([]);
+    const [platformLoading, setPlatformLoading] = useState(true);
+    const [platformError, setPlatformError] = useState<string | null>(null);
+    const [platformSearch, setPlatformSearch] = useState("");
+    const [genreOptions, setGenreOptions] = useState<SearchFilterOption[]>([]);
+    const [themeOptions, setThemeOptions] = useState<SearchFilterOption[]>([]);
+    const [gameModeOptions, setGameModeOptions] = useState<SearchFilterOption[]>([]);
+    const [perspectiveOptions, setPerspectiveOptions] = useState<SearchFilterOption[]>([]);
+    const [ageRatingOptions, setAgeRatingOptions] = useState<Array<{ rating: number; label: string; category?: number | null }>>(
+      [],
+    );
+    const [selectedGenres, setSelectedGenres] = useState<number[]>(initialGenresParam);
+    const [selectedThemes, setSelectedThemes] = useState<number[]>(initialThemesParam);
+    const [selectedGameModes, setSelectedGameModes] = useState<number[]>(initialModesParam);
+    const [selectedPerspectives, setSelectedPerspectives] = useState<number[]>(initialPerspectivesParam);
+    const [selectedAgeRatings, setSelectedAgeRatings] = useState<number[]>(initialAgeRatingsParam);
+    const [releaseYearRange, setReleaseYearRange] = useState<[number, number]>(initialReleaseRange);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
+    const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+    const [topGames, setTopGames] = useState<CardResult[]>([]);
+    const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
+    const [recentGames, setRecentGames] = useState<CardResult[]>([]);
+    const [headlineLoading, setHeadlineLoading] = useState(true);
+    const safeResults = Array.isArray(results) ? results : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -347,28 +418,43 @@ function DashboardPageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    const currentSearch = searchParams.toString();
-    if (currentSearch === lastSyncedSearchRef.current) {
-      return;
-    }
+    useEffect(() => {
+      const currentSearch = searchParams.toString();
+      if (currentSearch === lastSyncedSearchRef.current) {
+        return;
+      }
 
-    const nextQueryParam = searchParams.get("q") ?? "";
-    const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
-    const nextPageParam = parsePageValue(searchParams.get("page"));
-    const nextSortParam = parseSortValue(searchParams.get("sort"));
-    const trimmed = nextQueryParam.trim();
+      const nextQueryParam = searchParams.get("q") ?? "";
+      const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
+      const nextPageParam = parsePageValue(searchParams.get("page"));
+      const nextSortParam = parseSortValue(searchParams.get("sort"));
+      const nextGenresParam = parseNumberListParam(searchParams.get("genres"));
+      const nextThemesParam = parseNumberListParam(searchParams.get("themes"));
+      const nextModesParam = parseNumberListParam(searchParams.get("gameModes"));
+      const nextPerspectivesParam = parseNumberListParam(searchParams.get("playerPerspectives"));
+      const nextAgeRatingsParam = parseNumberListParam(searchParams.get("ageRatings"));
+      const nextReleaseRange = normalizeYearRange(
+        searchParams.get("releaseFrom") ? Number.parseInt(searchParams.get("releaseFrom") ?? "", 10) : null,
+        searchParams.get("releaseTo") ? Number.parseInt(searchParams.get("releaseTo") ?? "", 10) : null,
+      );
+      const trimmed = nextQueryParam.trim();
 
-    setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
-    setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
-    setPage((current) => (current === nextPageParam ? current : nextPageParam));
-    setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
-    setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
-    setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
+      setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
+      setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
+      setPage((current) => (current === nextPageParam ? current : nextPageParam));
+      setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
+      setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
+      setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
+      setSelectedGenres(nextGenresParam);
+      setSelectedThemes(nextThemesParam);
+      setSelectedGameModes(nextModesParam);
+      setSelectedPerspectives(nextPerspectivesParam);
+      setSelectedAgeRatings(nextAgeRatingsParam);
+      setReleaseYearRange(nextReleaseRange);
 
-    skipPageResetRef.current = true;
-    lastSyncedSearchRef.current = currentSearch;
-  }, [searchParams]);
+      skipPageResetRef.current = true;
+      lastSyncedSearchRef.current = currentSearch;
+    }, [searchParams]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -383,11 +469,11 @@ function DashboardPageContent() {
     return () => window.clearTimeout(timeout);
   }, [query]);
 
-  useEffect(() => {
-    let cancelled = false;
+    useEffect(() => {
+      let cancelled = false;
 
-    setPlatformLoading(true);
-    setPlatformError(null);
+      setPlatformLoading(true);
+      setPlatformError(null);
 
     fetch("/api/igdb/platforms")
       .then(async (response) => {
@@ -436,10 +522,64 @@ function DashboardPageContent() {
         }
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+    useEffect(() => {
+      let cancelled = false;
+
+      fetch("/api/games/search?filters=options")
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as unknown;
+          return payload as {
+            genres?: SearchFilterOption[];
+            themes?: SearchFilterOption[];
+            gameModes?: SearchFilterOption[];
+            playerPerspectives?: SearchFilterOption[];
+            ageRatings?: IgdbAgeRating[];
+          } | null;
+        })
+        .then((payload) => {
+          if (cancelled || !payload) return;
+
+          const normalize = (list?: SearchFilterOption[] | null) =>
+            Array.isArray(list)
+              ? list
+                  .map((item) => ({ id: item.id, name: item.name ?? "", slug: item.slug ?? null }))
+                  .filter((item) => Number.isFinite(item.id) && item.name)
+              : [];
+
+          setGenreOptions(normalize(payload.genres));
+          setThemeOptions(normalize(payload.themes));
+          setGameModeOptions(normalize(payload.gameModes));
+          setPerspectiveOptions(normalize(payload.playerPerspectives));
+
+          const ratings = Array.isArray(payload.ageRatings) ? payload.ageRatings : [];
+          const uniqueRatings = Array.from(
+            new Set(
+              ratings
+                .map((rating) => rating?.rating)
+                .filter((rating): rating is number => typeof rating === "number"),
+            ),
+          );
+          const mappedRatings = uniqueRatings.map((rating) => ({
+            rating,
+            label: AGE_RATING_LABELS[rating] ?? `Rating ${rating}`,
+            category: (ratings.find((item) => item?.rating === rating) ?? {}).category ?? null,
+          }));
+          setAgeRatingOptions(mappedRatings);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.warn("Failed to load filter options", error);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
   useEffect(() => {
     if (!wishlistStatus) return;
@@ -447,14 +587,24 @@ function DashboardPageContent() {
     return () => window.clearTimeout(timeout);
   }, [wishlistStatus]);
 
-  useEffect(() => {
-    const shouldFetch = Boolean(debouncedQuery) || selectedPlatform !== "all";
-    if (!shouldFetch) {
-      setResults([]);
-      setError(null);
-      setLoading(false);
-      setHasSearched(false);
-      setPagination({
+    useEffect(() => {
+      const hasFilterSelection =
+        selectedPlatform !== "all" ||
+        selectedGenres.length > 0 ||
+        selectedThemes.length > 0 ||
+        selectedGameModes.length > 0 ||
+        selectedPerspectives.length > 0 ||
+        selectedAgeRatings.length > 0 ||
+        releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
+        releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1];
+
+      const shouldFetch = Boolean(debouncedQuery) || hasFilterSelection;
+      if (!shouldFetch) {
+        setResults([]);
+        setError(null);
+        setLoading(false);
+        setHasSearched(false);
+        setPagination({
         total: 0,
         page: 1,
         pageSize,
@@ -472,18 +622,39 @@ function DashboardPageContent() {
     setError(null);
     setHasSearched(true);
 
-    const apiParams = new URLSearchParams();
-    if (debouncedQuery) {
-      apiParams.set("q", debouncedQuery);
-    }
-    if (selectedPlatform !== "all") {
-      apiParams.set("platformId", selectedPlatform);
-    }
-    const apiSortParam = mapSortOrderToApiParam(sortOrder);
-    apiParams.set("sort", apiSortParam);
-    apiParams.set("page", String(page));
-    apiParams.set("pageSize", String(pageSize));
-    const searchPath = apiParams.toString();
+      const apiParams = new URLSearchParams();
+      if (debouncedQuery) {
+        apiParams.set("q", debouncedQuery);
+      }
+      if (selectedPlatform !== "all") {
+        apiParams.set("platformId", selectedPlatform);
+      }
+      if (selectedGenres.length) {
+        apiParams.set("genres", selectedGenres.join(","));
+      }
+      if (selectedThemes.length) {
+        apiParams.set("themes", selectedThemes.join(","));
+      }
+      if (selectedGameModes.length) {
+        apiParams.set("gameModes", selectedGameModes.join(","));
+      }
+      if (selectedPerspectives.length) {
+        apiParams.set("playerPerspectives", selectedPerspectives.join(","));
+      }
+      if (selectedAgeRatings.length) {
+        apiParams.set("ageRatings", selectedAgeRatings.join(","));
+      }
+      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
+        apiParams.set("releaseFrom", String(releaseYearRange[0]));
+      }
+      if (releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
+        apiParams.set("releaseTo", String(releaseYearRange[1]));
+      }
+      const apiSortParam = mapSortOrderToApiParam(sortOrder);
+      apiParams.set("sort", apiSortParam);
+      apiParams.set("page", String(page));
+      apiParams.set("pageSize", String(pageSize));
+      const searchPath = apiParams.toString();
 
     fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
       signal: controller.signal,
@@ -535,15 +706,15 @@ function DashboardPageContent() {
       });
 
     return () => controller.abort();
-  }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder]);
+    }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
 
-  useEffect(() => {
-    if (skipPageResetRef.current) {
-      skipPageResetRef.current = false;
-      return;
-    }
-    setPage(1);
-  }, [debouncedQuery, selectedPlatform, sortOrder]);
+    useEffect(() => {
+      if (skipPageResetRef.current) {
+        skipPageResetRef.current = false;
+        return;
+      }
+      setPage(1);
+    }, [debouncedQuery, selectedPlatform, sortOrder, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
 
   useEffect(() => {
     const nextValue = String(pagination.page > 0 ? pagination.page : page);
@@ -555,15 +726,50 @@ function DashboardPageContent() {
     if (debouncedQuery) {
       params.set("q", debouncedQuery);
     }
-    if (selectedPlatform !== "all") {
-      params.set("platform", selectedPlatform);
-    }
-    if (page > 1) {
-      params.set("page", String(page));
-    }
-    if (sortOrder !== "popular_desc") {
-      params.set("sort", sortOrder);
-    }
+      if (selectedPlatform !== "all") {
+        params.set("platform", selectedPlatform);
+      }
+      if (selectedGenres.length) {
+        params.set("genres", selectedGenres.join(","));
+      } else {
+        params.delete("genres");
+      }
+      if (selectedThemes.length) {
+        params.set("themes", selectedThemes.join(","));
+      } else {
+        params.delete("themes");
+      }
+      if (selectedGameModes.length) {
+        params.set("gameModes", selectedGameModes.join(","));
+      } else {
+        params.delete("gameModes");
+      }
+      if (selectedPerspectives.length) {
+        params.set("playerPerspectives", selectedPerspectives.join(","));
+      } else {
+        params.delete("playerPerspectives");
+      }
+      if (selectedAgeRatings.length) {
+        params.set("ageRatings", selectedAgeRatings.join(","));
+      } else {
+        params.delete("ageRatings");
+      }
+      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
+        params.set("releaseFrom", String(releaseYearRange[0]));
+      } else {
+        params.delete("releaseFrom");
+      }
+      if (releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
+        params.set("releaseTo", String(releaseYearRange[1]));
+      } else {
+        params.delete("releaseTo");
+      }
+      if (page > 1) {
+        params.set("page", String(page));
+      }
+      if (sortOrder !== "most_popular") {
+        params.set("sort", sortOrder);
+      }
 
     const nextSearch = params.toString();
     if (nextSearch === lastSyncedSearchRef.current) {
@@ -572,18 +778,32 @@ function DashboardPageContent() {
 
     lastSyncedSearchRef.current = nextSearch;
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false });
-  }, [debouncedQuery, selectedPlatform, sortOrder, page, pathname, router]);
+    }, [debouncedQuery, selectedPlatform, sortOrder, page, pathname, router, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setPage(1);
-    setDebouncedQuery(query.trim());
-  };
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setPage(1);
+      setDebouncedQuery(query.trim());
+    };
 
-  const handlePlatformChange = (value: string) => {
-    setPage(1);
-    setSelectedPlatform(value);
-  };
+    const handlePlatformChange = (value: string) => {
+      setPage(1);
+      setSelectedPlatform(value);
+    };
+
+    const handleResetFilters = () => {
+      setSelectedPlatform("all");
+      setSortOrder("most_popular");
+      setSelectedGenres([]);
+      setSelectedThemes([]);
+      setSelectedGameModes([]);
+      setSelectedPerspectives([]);
+      setSelectedAgeRatings([]);
+      setReleaseYearRange([...DEFAULT_YEAR_RANGE]);
+      setPage(1);
+      setPageInput("1");
+      setFiltersOpen(false);
+    };
 
   const statusCounts = statusLabels.map((status) => ({
     status,
@@ -606,7 +826,28 @@ function DashboardPageContent() {
     return [...normalized].sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredPlatforms]);
 
-  const platformButtons = sortedPlatforms;
+    const platformButtons = sortedPlatforms;
+
+    const sortedGenreOptions = useMemo(
+      () => [...genreOptions].sort((a, b) => a.name.localeCompare(b.name)),
+      [genreOptions],
+    );
+    const sortedThemeOptions = useMemo(
+      () => [...themeOptions].sort((a, b) => a.name.localeCompare(b.name)),
+      [themeOptions],
+    );
+    const sortedGameModeOptions = useMemo(
+      () => [...gameModeOptions].sort((a, b) => a.name.localeCompare(b.name)),
+      [gameModeOptions],
+    );
+    const sortedPerspectiveOptions = useMemo(
+      () => [...perspectiveOptions].sort((a, b) => a.name.localeCompare(b.name)),
+      [perspectiveOptions],
+    );
+    const sortedAgeRatingOptions = useMemo(
+      () => [...ageRatingOptions].sort((a, b) => a.label.localeCompare(b.label)),
+      [ageRatingOptions],
+    );
 
   const retroPrioritySlugs = [
     "nes",
@@ -1009,6 +1250,58 @@ function DashboardPageContent() {
                 ))}
               </select>
             </label>
+          </div>
+
+          <div
+            ref={filtersRef}
+            className={`${filtersOpen ? "block" : "hidden"} space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70 md:block`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refine search</p>
+              <div className="hidden md:block">
+                <FiltersResetButton onReset={handleResetFilters} />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <GenreFilter options={sortedGenreOptions} value={selectedGenres} onChange={setSelectedGenres} defaultOpen />
+              <ThemeFilter options={sortedThemeOptions} value={selectedThemes} onChange={setSelectedThemes} />
+              <GameModeFilter options={sortedGameModeOptions} value={selectedGameModes} onChange={setSelectedGameModes} />
+              <PerspectiveFilter
+                options={sortedPerspectiveOptions}
+                value={selectedPerspectives}
+                onChange={setSelectedPerspectives}
+              />
+              <AgeRatingFilter options={sortedAgeRatingOptions} value={selectedAgeRatings} onChange={setSelectedAgeRatings} />
+              <YearRangePicker
+                value={releaseYearRange}
+                onChange={setReleaseYearRange}
+                minYear={DEFAULT_YEAR_RANGE[0]}
+                maxYear={DEFAULT_YEAR_RANGE[1]}
+                defaultOpen
+              />
+            </div>
+          </div>
+
+          <div className="fixed inset-x-4 bottom-4 z-30 md:hidden">
+            <div className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg ring-1 ring-slate-200 backdrop-blur dark:bg-slate-900/90 dark:text-slate-100 dark:ring-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltersOpen((prev) => !prev);
+                  filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="flex items-center gap-2"
+              >
+                {filtersOpen ? "Hide filters" : "Filters"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-100/60 p-2 dark:bg-slate-800/60">

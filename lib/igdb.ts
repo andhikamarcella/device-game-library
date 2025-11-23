@@ -72,12 +72,20 @@ export type SortKey =
   | "lowest_rated"
   | "newest"
   | "oldest"
-  | "alphabetical";
+  | "alphabetical"
+  | "alphabetical_desc";
 
 export function buildIgdbQuery(opts: {
   searchText?: string;
   sort?: SortKey;
   platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
   limit?: number;
   offset?: number;
 }): string {
@@ -94,13 +102,18 @@ export function buildIgdbQuery(opts: {
       "  rating_count,",
       "  total_rating,",
       "  total_rating_count,",
+      "  popularity,",
       "  first_release_date,",
       "  cover.image_id,",
       "  screenshots.image_id,",
       "  platforms.name,",
       "  platforms.slug,",
       "  platforms.abbreviation,",
-      "  genres.name;",
+      "  genres.name,",
+      "  themes.name,",
+      "  game_modes.name,",
+      "  player_perspectives.name,",
+      "  age_ratings.rating;",
     ].join("\n"),
   );
 
@@ -110,18 +123,56 @@ export function buildIgdbQuery(opts: {
     lines.push(`search "${escaped}";`);
   }
 
+  const whereClauses: string[] = [];
+
   if (typeof opts.platformId === "number") {
-    lines.push(`where platforms = (${opts.platformId});`);
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
   }
 
   const sortMapping: Record<Exclude<SortKey, "none">, string> = {
-    most_popular: "total_rating_count desc",
-    least_popular: "total_rating_count asc",
+    most_popular: "popularity desc",
+    least_popular: "popularity asc",
     highest_rated: "total_rating desc",
     lowest_rated: "total_rating asc",
     newest: "first_release_date desc",
     oldest: "first_release_date asc",
     alphabetical: "name asc",
+    alphabetical_desc: "name desc",
   };
 
   const sortKey = opts.sort ?? "none";
@@ -141,7 +192,17 @@ export function buildIgdbQuery(opts: {
   return lines.join("\n");
 }
 
-export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: number | null }): string {
+export function buildIgdbCountQuery(opts: {
+  searchText?: string;
+  platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
+}): string {
   const lines: string[] = ["fields count;"];
 
   const trimmedSearch = opts.searchText?.trim();
@@ -150,8 +211,45 @@ export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: nu
     lines.push(`search "${escaped}";`);
   }
 
+  const whereClauses: string[] = [];
+
   if (typeof opts.platformId === "number") {
-    lines.push(`where platforms = (${opts.platformId});`);
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
   }
 
   return lines.join("\n");
