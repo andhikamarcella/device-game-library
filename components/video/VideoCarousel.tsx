@@ -4,14 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clapperboard } from "lucide-react";
 import type { IgdbVideo } from "@/lib/igdb";
 import { cn } from "@/lib/utils";
-import { VideoPlayer, type VideoQuality, type VideoSourceVariant } from "@/components/VideoPlayer";
+import { VideoPlayer, type VideoQuality } from "@/components/VideoPlayer";
 import { useMiniPlayer } from "@/hooks/useMiniPlayer";
 
 const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-const VIDEO_BASE = "https://videos.igdb.com/igdb/video/upload";
-
 const normalizeId = (value: string) => value.trim();
+
+const qualityOrder: VideoQuality[] = ["480p", "720p", "1080p"];
+
+const getIgdbVideoUrls = (videoId: string) => ({
+  480: `https://videos.igdb.com/igdb/video/upload/igdb/${videoId}.mp4`,
+  720: `https://videos.igdb.com/igdb/video/upload/t_720p/${videoId}.mp4`,
+  1080: `https://videos.igdb.com/igdb/video/upload/t_1080p/${videoId}.mp4`,
+});
 
 type VideoRole = "trailer" | "gameplay" | "teaser" | "interview" | "dev-diary" | "other";
 
@@ -34,23 +40,12 @@ const detectRole = (name?: string): VideoRole => {
   return "other";
 };
 
-type PreparedVideo = IgdbVideo & { role: VideoRole; priority: number; thumbnail: string; video_id: string };
-
-const buildVariants = (videoId: string): VideoSourceVariant[] => {
-  const qualities: Array<{ label: string; key: VideoQuality }> = [
-    { label: "480p", key: "480p" },
-    { label: "720p", key: "720p" },
-    { label: "1080p", key: "1080p" },
-  ];
-
-  return qualities.map((quality) => ({
-    label: quality.label,
-    key: quality.key,
-    sources: [
-      { src: `${VIDEO_BASE}/t_${quality.key}/${videoId}.mp4`, type: "video/mp4" },
-      { src: `${VIDEO_BASE}/t_${quality.key}/${videoId}.webm`, type: "video/webm" },
-    ],
-  }));
+type PreparedVideo = IgdbVideo & {
+  role: VideoRole;
+  priority: number;
+  thumbnail: string;
+  video_id: string;
+  sources: Partial<Record<VideoQuality, string>>;
 };
 
 const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
@@ -59,6 +54,7 @@ const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
     .map((video, index) => {
       const video_id = normalizeId(video.video_id);
       const role = detectRole(video.name);
+      const urls = getIgdbVideoUrls(video_id);
       return {
         ...video,
         id: typeof video.id === "number" ? video.id : index + 1,
@@ -67,6 +63,11 @@ const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
         priority: rolePriority[role] ?? rolePriority.other,
         thumbnail: thumbnailFor(video_id),
         video_id,
+        sources: {
+          "480p": urls[480],
+          "720p": urls[720],
+          "1080p": urls[1080],
+        },
       } satisfies PreparedVideo;
     })
     .sort((a, b) => {
@@ -82,9 +83,10 @@ interface VideoCarouselProps {
 export function VideoCarousel({ videos }: VideoCarouselProps) {
   const prepared = useMemo(() => prepareVideos(videos), [videos]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [activeQuality, setActiveQuality] = useState<VideoQuality>("720p");
+  const [activeQuality, setActiveQuality] = useState<VideoQuality>("480p");
   const [isTheater, setIsTheater] = useState(false);
   const { containerRef, isMini, closeMini } = useMiniPlayer();
+  const [qualityBlocklist, setQualityBlocklist] = useState<Record<string, Set<VideoQuality>>>(() => ({}));
 
   useEffect(() => {
     setActiveIndex(0);
@@ -92,6 +94,28 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
   const hasVideos = prepared.length > 0;
   const activeVideo = hasVideos ? prepared[Math.abs(activeIndex) % prepared.length] : null;
+
+  const availableQualities = useMemo((): VideoQuality[] => {
+    if (!activeVideo) return [] as VideoQuality[];
+    const blocked = qualityBlocklist[activeVideo.video_id];
+    return qualityOrder.filter((quality) => Boolean(activeVideo.sources[quality]) && !(blocked?.has(quality)));
+  }, [activeVideo, qualityBlocklist]);
+
+  const qualitiesForPlayer: VideoQuality[] = availableQualities.length
+    ? availableQualities
+    : activeVideo
+      ? qualityOrder.filter((quality) => Boolean(activeVideo.sources[quality]))
+      : ["480p"];
+
+  const ensureQuality = useCallback(
+    (preferred: VideoQuality) => {
+      if (!availableQualities.length) return preferred;
+      if (availableQualities.includes(preferred)) return preferred;
+      if (availableQualities.includes("480p")) return "480p";
+      return availableQualities[0];
+    },
+    [availableQualities],
+  );
 
   const goPrev = useCallback(() => {
     setActiveIndex((current) => (current - 1 + prepared.length) % prepared.length);
@@ -115,7 +139,25 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [goNext, goPrev, hasVideos]);
 
-  const variants = activeVideo ? buildVariants(activeVideo.video_id) : [];
+  useEffect(() => {
+    if (!activeVideo) return;
+    setActiveQuality((current) => ensureQuality(current));
+  }, [activeVideo, ensureQuality]);
+
+  const variants = activeVideo ? activeVideo.sources : {};
+
+  const handleQualityError = (quality: VideoQuality) => {
+    if (!activeVideo) return;
+    setQualityBlocklist((prev) => {
+      const current = new Set(prev[activeVideo.video_id] ?? []);
+      current.add(quality);
+      return { ...prev, [activeVideo.video_id]: current };
+    });
+    const fallback = availableQualities.find((q) => q !== quality);
+    if (fallback) {
+      setActiveQuality(fallback);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -133,9 +175,11 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                   videoKey={activeVideo.video_id}
                   title={activeVideo.name ?? "IGDB video"}
                   poster={activeVideo.thumbnail}
+                  sources={variants}
+                  availableQualities={qualitiesForPlayer}
                   activeQuality={activeQuality}
-                  variants={variants}
                   onQualityChange={setActiveQuality}
+                  onQualityError={handleQualityError}
                   onEnded={goNext}
                   onSwipeLeft={goNext}
                   onSwipeRight={goPrev}
@@ -145,6 +189,9 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                   onCloseMini={closeMini}
                 />
               ) : null}
+
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-16 rounded-l-2xl bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+              <div className="pointer-events-none absolute right-0 top-0 h-full w-16 rounded-r-2xl bg-gradient-to-l from-black/60 via-black/30 to-transparent" />
 
               <button
                 type="button"
@@ -211,3 +258,5 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     </div>
   );
 }
+
+export const IGDBTrailerPlayer = VideoCarousel;

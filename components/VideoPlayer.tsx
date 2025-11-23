@@ -1,26 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Expand, Minimize2, MonitorPlay } from "lucide-react";
+import { Expand, Loader2, Minimize2, MonitorPlay } from "lucide-react";
 import { useVideoAutoSwitch } from "@/hooks/useVideoAutoSwitch";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { cn } from "@/lib/utils";
 
 export type VideoQuality = "480p" | "720p" | "1080p";
 
-export interface VideoSourceVariant {
-  label: string;
-  key: VideoQuality;
-  sources: Array<{ src: string; type: string }>;
-}
-
 interface VideoPlayerProps {
   videoKey: string;
   title: string;
   poster?: string | null;
+  sources: Partial<Record<VideoQuality, string | undefined>>;
+  availableQualities: VideoQuality[];
   activeQuality: VideoQuality;
-  variants: VideoSourceVariant[];
   onQualityChange: (quality: VideoQuality) => void;
+  onQualityError: (quality: VideoQuality) => void;
   onEnded: () => void;
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
@@ -34,9 +30,11 @@ export function VideoPlayer({
   title,
   videoKey,
   poster,
+  sources,
+  availableQualities,
   activeQuality,
-  variants,
   onQualityChange,
+  onQualityError,
   onEnded,
   onSwipeLeft,
   onSwipeRight,
@@ -48,13 +46,16 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [isFading, setIsFading] = useState(false);
-  const previousQualityRef = useRef<VideoQuality | null>(null);
+  const [isBuffering, setIsBuffering] = useState(true);
+  const resumeTimeRef = useRef(0);
   const previousVideoKeyRef = useRef<string | null>(null);
 
-  const currentVariant = useMemo(
-    () => variants.find((variant) => variant.key === activeQuality) ?? variants[0],
-    [activeQuality, variants],
-  );
+  const currentQuality = useMemo(() => {
+    if (availableQualities.includes(activeQuality)) return activeQuality;
+    return availableQualities[0];
+  }, [activeQuality, availableQualities]);
+
+  const currentSource = sources[currentQuality];
 
   useVideoAutoSwitch(videoRef, onEnded);
   useSwipeNavigation(wrapperRef, { onSwipeLeft, onSwipeRight });
@@ -63,63 +64,64 @@ export function VideoPlayer({
     setIsFading(true);
     const id = window.setTimeout(() => setIsFading(false), 180);
     return () => window.clearTimeout(id);
-  }, [currentVariant?.key, videoKey]);
+  }, [currentQuality, videoKey]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !currentVariant) return;
+    if (!video || !currentSource) return;
 
-    const sameQuality = previousQualityRef.current === currentVariant.key;
-    const sameVideo = previousVideoKeyRef.current === videoKey;
-    const resumeTime = sameVideo && sameQuality ? video.currentTime : 0;
-    const wasPlaying = !video.paused && !video.ended;
-    const shouldAutoPlay = wasPlaying || !sameQuality || !sameVideo;
+    const isSameVideo = previousVideoKeyRef.current === videoKey;
+    const resumeTime = isSameVideo ? resumeTimeRef.current : 0;
+    const shouldAutoplay = !video.paused || !isSameVideo;
 
+    setIsBuffering(true);
     video.load();
 
     const handleLoaded = () => {
-      if (resumeTime > 0 && resumeTime < video.duration) {
+      if (resumeTime > 0 && resumeTime < (video.duration || Infinity)) {
         video.currentTime = resumeTime;
       }
-      if (shouldAutoPlay) {
+      setIsBuffering(false);
+      if (shouldAutoplay) {
         video.play().catch(() => {});
       }
+      resumeTimeRef.current = 0;
+      previousVideoKeyRef.current = videoKey;
     };
 
-    video.addEventListener("loadedmetadata", handleLoaded, { once: true });
-    previousQualityRef.current = currentVariant.key;
-    previousVideoKeyRef.current = videoKey;
+    const handleWaiting = () => setIsBuffering(true);
+    const handleCanPlay = () => setIsBuffering(false);
+    const handleError = () => {
+      onQualityError(currentQuality);
+    };
+
+    video.addEventListener("loadeddata", handleLoaded);
+    video.addEventListener("waiting", handleWaiting);
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("error", handleError);
 
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoaded);
+      video.removeEventListener("loadeddata", handleLoaded);
+      video.removeEventListener("waiting", handleWaiting);
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("error", handleError);
     };
-  }, [currentVariant, videoKey]);
+  }, [currentQuality, currentSource, onQualityError, videoKey]);
 
-  useEffect(() => {
+  const handleQualityClick = (quality: VideoQuality) => {
+    if (quality === currentQuality) return;
     const video = videoRef.current;
-    if (!video || !currentVariant) return;
+    resumeTimeRef.current = video?.currentTime ?? 0;
+    onQualityChange(quality);
+  };
 
-    const handleError = () => {
-      const fallbackOrder: VideoQuality[] = ["720p", "480p", "1080p"];
-      const nextQuality = fallbackOrder.find(
-        (quality) => quality !== currentVariant.key && variants.some((variant) => variant.key === quality),
-      );
-      if (nextQuality) {
-        onQualityChange(nextQuality);
-      }
-    };
-
-    video.addEventListener("error", handleError);
-    return () => video.removeEventListener("error", handleError);
-  }, [currentVariant?.key, onQualityChange, variants]);
-
-  const qualityButtons = variants.map((variant) => {
-    const isActive = variant.key === currentVariant?.key;
+  const qualityButtons = availableQualities.map((quality) => {
+    const isActive = quality === currentQuality;
     return (
       <button
-        key={variant.key}
+        key={quality}
         type="button"
-        onClick={() => onQualityChange(variant.key)}
+        onClick={() => handleQualityClick(quality)}
         className={cn(
           "rounded-lg px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition",
           isActive
@@ -128,7 +130,7 @@ export function VideoPlayer({
         )}
         aria-pressed={isActive}
       >
-        {variant.label}
+        {quality}
       </button>
     );
   });
@@ -165,17 +167,18 @@ export function VideoPlayer({
         )}
       >
         <video
+          key={`${videoKey}-${currentQuality}`}
           ref={videoRef}
           poster={poster ?? undefined}
           controls
           playsInline
+          autoPlay
+          muted
           preload="metadata"
           className="h-full w-full object-cover"
           aria-label={title}
         >
-          {currentVariant?.sources.map((source) => (
-            <source key={`${currentVariant.key}-${source.type}`} src={source.src} type={source.type} />
-          ))}
+          {currentSource ? <source src={currentSource} type="video/mp4" /> : null}
           Your browser does not support the video tag.
         </video>
 
@@ -199,6 +202,12 @@ export function VideoPlayer({
         >
           {isTheater ? <Minimize2 className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
         </button>
+
+        {isBuffering ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+            <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+          </div>
+        ) : null}
       </div>
     </div>
   );
