@@ -358,12 +358,12 @@ const formatDaysAgo = (days: number | null) => {
       const nextSortParam = parseSortValue(searchParams.get("sort"));
       const trimmed = nextQueryParam.trim();
 
-      setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
-      setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
-      setPage((current) => (current === nextPageParam ? current : nextPageParam));
-      setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
-      setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
-      setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
+        setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
+        setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
+        setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
+        setPage((current) => (current === nextPageParam ? current : nextPageParam));
+        setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
+        setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
 
       skipPageResetRef.current = true;
       lastSyncedSearchRef.current = currentSearch;
@@ -579,6 +579,14 @@ const formatDaysAgo = (days: number | null) => {
       event.preventDefault();
       setDebouncedQuery(query.trim());
     };
+
+    useEffect(() => {
+      const timeout = window.setTimeout(() => {
+        setDebouncedQuery(query.trim());
+      }, 500);
+
+      return () => window.clearTimeout(timeout);
+    }, [query]);
 
     const handlePlatformChange = (value: string) => {
       setPage(1);
