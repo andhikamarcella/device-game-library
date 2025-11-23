@@ -73,6 +73,7 @@ export function VideoPlayer({
     const sameVideo = previousVideoKeyRef.current === videoKey;
     const resumeTime = sameVideo && sameQuality ? video.currentTime : 0;
     const wasPlaying = !video.paused && !video.ended;
+    const shouldAutoPlay = wasPlaying || !sameQuality || !sameVideo;
 
     video.load();
 
@@ -80,7 +81,7 @@ export function VideoPlayer({
       if (resumeTime > 0 && resumeTime < video.duration) {
         video.currentTime = resumeTime;
       }
-      if (wasPlaying || !sameQuality) {
+      if (shouldAutoPlay) {
         video.play().catch(() => {});
       }
     };

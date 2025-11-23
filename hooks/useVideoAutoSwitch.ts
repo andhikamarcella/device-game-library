@@ -13,7 +13,6 @@ export function useVideoAutoSwitch(
 
     const handleEnded = () => {
       onAdvance();
-      video.play().catch(() => {});
     };
 
     video.addEventListener("ended", handleEnded);
