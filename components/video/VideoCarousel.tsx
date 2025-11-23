@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clapperboard } from "lucide-react";
 import type { IgdbVideo } from "@/lib/igdb";
 import { cn } from "@/lib/utils";
+import { VideoPlayer, type VideoQuality, type VideoSourceVariant } from "@/components/VideoPlayer";
+import { useMiniPlayer } from "@/hooks/useMiniPlayer";
 
 const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-const EMBED_BASE = "https://www.youtube.com/embed";
+const VIDEO_BASE = "https://images.igdb.com/igdb/video/upload";
 
 const normalizeId = (value: string) => value.trim();
 
@@ -32,7 +34,24 @@ const detectRole = (name?: string): VideoRole => {
   return "other";
 };
 
-type PreparedVideo = IgdbVideo & { role: VideoRole; priority: number; thumbnail: string };
+type PreparedVideo = IgdbVideo & { role: VideoRole; priority: number; thumbnail: string; video_id: string };
+
+const buildVariants = (videoId: string): VideoSourceVariant[] => {
+  const qualities: Array<{ label: string; key: VideoQuality }> = [
+    { label: "480p", key: "480p" },
+    { label: "720p", key: "720p" },
+    { label: "1080p", key: "1080p" },
+  ];
+
+  return qualities.map((quality) => ({
+    label: quality.label,
+    key: quality.key,
+    sources: [
+      { src: `${VIDEO_BASE}/t_${quality.key}/${videoId}.mp4`, type: "video/mp4" },
+      { src: `${VIDEO_BASE}/t_${quality.key}/${videoId}.webm`, type: "video/webm" },
+    ],
+  }));
+};
 
 const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
   return videos
@@ -63,6 +82,9 @@ interface VideoCarouselProps {
 export function VideoCarousel({ videos }: VideoCarouselProps) {
   const prepared = useMemo(() => prepareVideos(videos), [videos]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [activeQuality, setActiveQuality] = useState<VideoQuality>("720p");
+  const [isTheater, setIsTheater] = useState(false);
+  const { containerRef, isMini, closeMini } = useMiniPlayer();
 
   useEffect(() => {
     setActiveIndex(0);
@@ -93,7 +115,7 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [goNext, goPrev, hasVideos]);
 
-  const embedUrl = activeVideo ? `${EMBED_BASE}/${activeVideo.video_id}` : null;
+  const variants = activeVideo ? buildVariants(activeVideo.video_id) : [];
 
   return (
     <div className="space-y-4">
@@ -104,19 +126,25 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
       {hasVideos ? (
         <div className="space-y-4">
-          <div className="relative w-full">
+          <div className="relative w-full" ref={containerRef}>
             <div className="relative overflow-visible rounded-2xl border border-slate-200/60 bg-slate-50/80 shadow-2xl ring-1 ring-black/10 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/80 dark:ring-white/5">
-              <div className="aspect-video w-full bg-black/80">
-                {embedUrl ? (
-                  <iframe
-                    title={activeVideo?.name ?? "IGDB video"}
-                    src={embedUrl}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="h-full w-full"
-                  />
-                ) : null}
-              </div>
+              {activeVideo ? (
+                <VideoPlayer
+                  videoKey={activeVideo.video_id}
+                  title={activeVideo.name ?? "IGDB video"}
+                  poster={activeVideo.thumbnail}
+                  activeQuality={activeQuality}
+                  variants={variants}
+                  onQualityChange={setActiveQuality}
+                  onEnded={goNext}
+                  onSwipeLeft={goNext}
+                  onSwipeRight={goPrev}
+                  isTheater={isTheater}
+                  toggleTheater={() => setIsTheater((value) => !value)}
+                  isMini={isMini && !isTheater}
+                  onCloseMini={closeMini}
+                />
+              ) : null}
 
               <button
                 type="button"
