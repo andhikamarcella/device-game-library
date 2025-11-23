@@ -3,16 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clapperboard } from "lucide-react";
 import type { IgdbVideo } from "@/lib/igdb";
-import { getIgdbVideoUrls } from "@/lib/igdb";
+import { getYoutubeEmbedUrl, getYoutubeWatchUrl } from "@/lib/igdb";
 import { cn } from "@/lib/utils";
-import { VideoPlayer, type VideoQuality } from "@/components/VideoPlayer";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { useMiniPlayer } from "@/hooks/useMiniPlayer";
 
 const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
 const normalizeId = (value: string) => value.trim();
-
-const qualityOrder: VideoQuality[] = ["480p", "720p", "1080p"];
 
 type VideoRole = "trailer" | "gameplay" | "teaser" | "interview" | "dev-diary" | "other";
 
@@ -40,7 +38,8 @@ type PreparedVideo = IgdbVideo & {
   priority: number;
   thumbnail: string;
   video_id: string;
-  sources: Partial<Record<VideoQuality, string>>;
+  embedUrl: string;
+  watchUrl: string;
 };
 
 const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
@@ -49,7 +48,6 @@ const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
     .map((video, index) => {
       const video_id = normalizeId(video.video_id);
       const role = detectRole(video.name);
-      const urls = getIgdbVideoUrls(video_id);
       return {
         ...video,
         id: typeof video.id === "number" ? video.id : index + 1,
@@ -58,11 +56,8 @@ const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
         priority: rolePriority[role] ?? rolePriority.other,
         thumbnail: thumbnailFor(video_id),
         video_id,
-        sources: {
-          "480p": urls[480],
-          "720p": urls[720],
-          "1080p": urls[1080],
-        },
+        embedUrl: getYoutubeEmbedUrl(video_id),
+        watchUrl: getYoutubeWatchUrl(video_id),
       } satisfies PreparedVideo;
     })
     .sort((a, b) => {
@@ -78,10 +73,10 @@ interface VideoCarouselProps {
 export function VideoCarousel({ videos }: VideoCarouselProps) {
   const prepared = useMemo(() => prepareVideos(videos), [videos]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [activeQuality, setActiveQuality] = useState<VideoQuality>("480p");
   const [isTheater, setIsTheater] = useState(false);
   const { containerRef, isMini, closeMini } = useMiniPlayer();
-  const [qualityBlocklist, setQualityBlocklist] = useState<Record<string, Set<VideoQuality>>>(() => ({}));
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -89,28 +84,6 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
   const hasVideos = prepared.length > 0;
   const activeVideo = hasVideos ? prepared[Math.abs(activeIndex) % prepared.length] : null;
-
-  const availableQualities = useMemo((): VideoQuality[] => {
-    if (!activeVideo) return [] as VideoQuality[];
-    const blocked = qualityBlocklist[activeVideo.video_id];
-    return qualityOrder.filter((quality) => Boolean(activeVideo.sources[quality]) && !(blocked?.has(quality)));
-  }, [activeVideo, qualityBlocklist]);
-
-  const qualitiesForPlayer: VideoQuality[] = availableQualities.length
-    ? availableQualities
-    : activeVideo
-      ? qualityOrder.filter((quality) => Boolean(activeVideo.sources[quality]))
-      : ["480p"];
-
-  const ensureQuality = useCallback(
-    (preferred: VideoQuality) => {
-      if (!availableQualities.length) return preferred;
-      if (availableQualities.includes(preferred)) return preferred;
-      if (availableQualities.includes("480p")) return "480p";
-      return availableQualities[0];
-    },
-    [availableQualities],
-  );
 
   const goPrev = useCallback(() => {
     setActiveIndex((current) => (current - 1 + prepared.length) % prepared.length);
@@ -134,26 +107,6 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [goNext, goPrev, hasVideos]);
 
-  useEffect(() => {
-    if (!activeVideo) return;
-    setActiveQuality((current) => ensureQuality(current));
-  }, [activeVideo, ensureQuality]);
-
-  const variants = activeVideo ? activeVideo.sources : {};
-
-  const handleQualityError = (quality: VideoQuality) => {
-    if (!activeVideo) return;
-    setQualityBlocklist((prev) => {
-      const current = new Set(prev[activeVideo.video_id] ?? []);
-      current.add(quality);
-      return { ...prev, [activeVideo.video_id]: current };
-    });
-    const fallback = availableQualities.find((q) => q !== quality);
-    if (fallback) {
-      setActiveQuality(fallback);
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
@@ -170,11 +123,12 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
                   videoKey={activeVideo.video_id}
                   title={activeVideo.name ?? "IGDB video"}
                   poster={activeVideo.thumbnail}
-                  sources={variants}
-                  availableQualities={qualitiesForPlayer}
-                  activeQuality={activeQuality}
-                  onQualityChange={setActiveQuality}
-                  onQualityError={handleQualityError}
+                  embedUrl={activeVideo.embedUrl}
+                  watchUrl={activeVideo.watchUrl}
+                  autoPlay={autoPlay}
+                  onAutoPlayChange={setAutoPlay}
+                  playbackRate={playbackRate}
+                  onPlaybackRateChange={setPlaybackRate}
                   onEnded={goNext}
                   onSwipeLeft={goNext}
                   onSwipeRight={goPrev}

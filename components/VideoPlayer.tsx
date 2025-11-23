@@ -1,22 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Expand, Loader2, Minimize2, MonitorPlay } from "lucide-react";
-import { useVideoAutoSwitch } from "@/hooks/useVideoAutoSwitch";
+import { ExternalLink, Expand, Loader2, Minimize2, MonitorPlay, PictureInPicture2, Play } from "lucide-react";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { cn } from "@/lib/utils";
-
-export type VideoQuality = "480p" | "720p" | "1080p";
 
 interface VideoPlayerProps {
   videoKey: string;
   title: string;
   poster?: string | null;
-  sources: Partial<Record<VideoQuality, string | undefined>>;
-  availableQualities: VideoQuality[];
-  activeQuality: VideoQuality;
-  onQualityChange: (quality: VideoQuality) => void;
-  onQualityError: (quality: VideoQuality) => void;
+  embedUrl: string;
+  watchUrl: string;
+  autoPlay: boolean;
+  onAutoPlayChange: (value: boolean) => void;
+  playbackRate: number;
+  onPlaybackRateChange: (rate: number) => void;
   onEnded: () => void;
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
@@ -26,15 +24,63 @@ interface VideoPlayerProps {
   onCloseMini: () => void;
 }
 
+declare global {
+  interface Window {
+    YT?: any;
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+const YT_API_SRC = "https://www.youtube.com/iframe_api";
+let ytApiPromise: Promise<any> | null = null;
+
+function loadYoutubeApi(): Promise<any> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("YouTube API unavailable during SSR"));
+  }
+
+  if (window.YT?.Player) {
+    return Promise.resolve(window.YT);
+  }
+
+  if (!ytApiPromise) {
+    ytApiPromise = new Promise((resolve, reject) => {
+      const handleReady = () => {
+        if (window.YT?.Player) {
+          resolve(window.YT);
+        }
+      };
+
+      const existing = document.querySelector(`script[src="${YT_API_SRC}"]`) as HTMLScriptElement | null;
+      if (existing) {
+        existing.addEventListener("load", handleReady, { once: true });
+        existing.addEventListener("error", () => reject(new Error("YouTube API failed to load")), { once: true });
+      } else {
+        const script = document.createElement("script");
+        script.src = YT_API_SRC;
+        script.async = true;
+        script.onload = handleReady;
+        script.onerror = () => reject(new Error("YouTube API failed to load"));
+        document.body.appendChild(script);
+      }
+
+      window.onYouTubeIframeAPIReady = handleReady;
+    });
+  }
+
+  return ytApiPromise;
+}
+
 export function VideoPlayer({
   title,
   videoKey,
   poster,
-  sources,
-  availableQualities,
-  activeQuality,
-  onQualityChange,
-  onQualityError,
+  embedUrl,
+  watchUrl,
+  autoPlay,
+  onAutoPlayChange,
+  playbackRate,
+  onPlaybackRateChange,
   onEnded,
   onSwipeLeft,
   onSwipeRight,
@@ -43,97 +89,152 @@ export function VideoPlayer({
   isMini,
   onCloseMini,
 }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [isFading, setIsFading] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const playerRef = useRef<any>(null);
   const [isBuffering, setIsBuffering] = useState(true);
-  const resumeTimeRef = useRef(0);
-  const previousVideoKeyRef = useRef<string | null>(null);
+  const [isFading, setIsFading] = useState(false);
 
-  const currentQuality = useMemo(() => {
-    if (availableQualities.includes(activeQuality)) return activeQuality;
-    return availableQualities[0];
-  }, [activeQuality, availableQualities]);
-
-  const currentSource = sources[currentQuality];
-
-  useVideoAutoSwitch(videoRef, onEnded);
   useSwipeNavigation(wrapperRef, { onSwipeLeft, onSwipeRight });
 
   useEffect(() => {
     setIsFading(true);
     const id = window.setTimeout(() => setIsFading(false), 180);
     return () => window.clearTimeout(id);
-  }, [currentQuality, videoKey]);
+  }, [videoKey]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !currentSource) return;
-
-    const isSameVideo = previousVideoKeyRef.current === videoKey;
-    const resumeTime = isSameVideo ? resumeTimeRef.current : 0;
-    const shouldAutoplay = !video.paused || !isSameVideo;
-
+    let cancelled = false;
     setIsBuffering(true);
-    video.load();
 
-    const handleLoaded = () => {
-      if (resumeTime > 0 && resumeTime < (video.duration || Infinity)) {
-        video.currentTime = resumeTime;
-      }
-      setIsBuffering(false);
-      if (shouldAutoplay) {
-        video.play().catch(() => {});
-      }
-      resumeTimeRef.current = 0;
-      previousVideoKeyRef.current = videoKey;
-    };
+    loadYoutubeApi()
+      .then((YT) => {
+        if (cancelled || !iframeRef.current) return;
 
-    const handleWaiting = () => setIsBuffering(true);
-    const handleCanPlay = () => setIsBuffering(false);
-    const handleError = () => {
-      onQualityError(currentQuality);
-    };
+        const onPlayerReady = (event: any) => {
+          if (cancelled) return;
+          setIsBuffering(false);
+          try {
+            event.target.setPlaybackRate(playbackRate);
+            if (autoPlay) {
+              event.target.mute();
+              event.target.playVideo();
+            } else {
+              event.target.pauseVideo();
+            }
+          } catch {
+            /* ignored */
+          }
+        };
 
-    video.addEventListener("loadeddata", handleLoaded);
-    video.addEventListener("waiting", handleWaiting);
-    video.addEventListener("canplay", handleCanPlay);
-    video.addEventListener("error", handleError);
+        const onStateChange = (event: any) => {
+          const state = event.data;
+          const playerState = YT?.PlayerState;
+          if (playerState && state === playerState.ENDED) {
+            setIsBuffering(false);
+            onEnded();
+          } else if (playerState && (state === playerState.BUFFERING || state === playerState.UNSTARTED)) {
+            setIsBuffering(true);
+          } else if (playerState && (state === playerState.PLAYING || state === playerState.PAUSED)) {
+            setIsBuffering(false);
+          }
+        };
+
+        const onError = () => setIsBuffering(false);
+
+        if (playerRef.current) {
+          const currentId = playerRef.current.getVideoData?.()?.video_id;
+          if (currentId !== videoKey) {
+            playerRef.current.loadVideoById(videoKey);
+          }
+          onPlayerReady({ target: playerRef.current });
+          return;
+        }
+
+        playerRef.current = new YT.Player(iframeRef.current, {
+          videoId: videoKey,
+          playerVars: {
+            autoplay: autoPlay ? 1 : 0,
+            controls: 1,
+            modestbranding: 1,
+            rel: 0,
+            iv_load_policy: 3,
+            playsinline: 1,
+          },
+          events: {
+            onReady: onPlayerReady,
+            onStateChange,
+            onError,
+          },
+        });
+      })
+      .catch(() => setIsBuffering(false));
 
     return () => {
-      video.removeEventListener("loadeddata", handleLoaded);
-      video.removeEventListener("waiting", handleWaiting);
-      video.removeEventListener("canplay", handleCanPlay);
-      video.removeEventListener("error", handleError);
+      cancelled = true;
     };
-  }, [currentQuality, currentSource, onQualityError, videoKey]);
+  }, [autoPlay, onEnded, playbackRate, videoKey]);
 
-  const handleQualityClick = (quality: VideoQuality) => {
-    if (quality === currentQuality) return;
-    const video = videoRef.current;
-    resumeTimeRef.current = video?.currentTime ?? 0;
-    onQualityChange(quality);
+  useEffect(() => {
+    return () => {
+      playerRef.current?.destroy?.();
+      playerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      player.setPlaybackRate(playbackRate);
+    } catch {
+      /* ignored */
+    }
+  }, [playbackRate]);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      if (autoPlay) {
+        player.mute?.();
+        player.playVideo?.();
+      } else {
+        player.pauseVideo?.();
+      }
+    } catch {
+      /* ignored */
+    }
+  }, [autoPlay]);
+
+  const embedSrc = useMemo(() => {
+    const separator = embedUrl.includes("?") ? "&" : "?";
+    return `${embedUrl}${separator}autoplay=${autoPlay ? 1 : 0}`;
+  }, [autoPlay, embedUrl]);
+
+  const handleAutoPlayToggle = () => {
+    const next = !autoPlay;
+    onAutoPlayChange(next);
   };
 
-  const qualityButtons = availableQualities.map((quality) => {
-    const isActive = quality === currentQuality;
-    return (
-      <button
-        key={quality}
-        type="button"
-        onClick={() => handleQualityClick(quality)}
-        className={cn(
-          "rounded-lg px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition",
-          isActive
-            ? "bg-emerald-500/80 text-white shadow-md shadow-emerald-500/30"
-            : "bg-white/10 text-slate-200 hover:bg-white/20",
-        )}
-        aria-pressed={isActive}
-      >
-        {quality}
-      </button>
-    );
-  });
+  const handleSpeedChange = (rate: number) => {
+    onPlaybackRateChange(rate);
+  };
+
+  const handlePictureInPicture = async () => {
+    const iframe = playerRef.current?.getIframe?.() as HTMLIFrameElement | undefined;
+    if (!iframe) return;
+
+    if ("requestPictureInPicture" in iframe) {
+      try {
+        await (iframe as any).requestPictureInPicture();
+      } catch {
+        /* ignored */
+      }
+    }
+  };
+
+  const speedOptions = [0.5, 0.75, 1, 1.25, 1.5];
 
   return (
     <div
@@ -143,9 +244,7 @@ export function VideoPlayer({
         isMini
           ? "fixed bottom-4 right-4 z-40 h-[100px] w-[180px] rounded-xl backdrop-blur-xl md:bottom-6 md:right-6 md:h-[124px] md:w-[220px]"
           : "w-full",
-        isTheater
-          ? "fixed inset-0 z-50 m-4 flex max-h-[90vh] items-center justify-center bg-slate-950/70 backdrop-blur"
-          : "",
+        isTheater ? "fixed inset-0 z-50 m-4 flex max-h-[90vh] items-center justify-center bg-slate-950/70 backdrop-blur" : "",
       )}
     >
       {isMini ? (
@@ -166,31 +265,36 @@ export function VideoPlayer({
           isMini ? "h-full aspect-auto" : "",
         )}
       >
-        <video
-          key={`${videoKey}-${currentQuality}`}
-          ref={videoRef}
-          poster={poster ?? undefined}
-          controls
-          playsInline
-          autoPlay
-          muted
-          preload="metadata"
-          className="h-full w-full object-cover"
-          aria-label={title}
-        >
-          {currentSource ? <source src={currentSource} type="video/mp4" /> : null}
-          Your browser does not support the video tag.
-        </video>
+        <div className="absolute inset-0">
+          <div className="relative h-full w-full">
+            <div className="relative h-full w-full overflow-hidden rounded-2xl">
+              <iframe
+                ref={iframeRef}
+                title={title}
+                src={embedSrc}
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full"
+              />
+              {poster ? (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0 transition-opacity duration-300",
+                    isBuffering ? "opacity-40" : "opacity-0",
+                  )}
+                >
+                  <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${poster})` }} />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 transition duration-200 group-hover:opacity-100" />
 
         <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
           <MonitorPlay className="h-4 w-4" aria-hidden="true" />
           <span className="line-clamp-1 max-w-[220px]">{title}</span>
-        </div>
-
-        <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-black/50 px-2 py-1 backdrop-blur">
-          {qualityButtons}
         </div>
 
         <button
@@ -208,6 +312,55 @@ export function VideoPlayer({
             <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
           </div>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-800/80 bg-slate-900/80 px-3 py-2 text-xs text-slate-100 backdrop-blur">
+        <button
+          type="button"
+          onClick={handleAutoPlayToggle}
+          className={cn(
+            "flex items-center gap-1 rounded-lg px-2 py-1 font-semibold transition",
+            autoPlay ? "bg-emerald-500/80 text-white" : "bg-white/10 text-slate-200 hover:bg-white/20",
+          )}
+          aria-pressed={autoPlay}
+        >
+          <Play className="h-3.5 w-3.5" />
+          AutoPlay
+        </button>
+
+        <div className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-slate-100">
+          <span className="text-[11px] font-semibold uppercase">Speed</span>
+          <select
+            className="rounded bg-slate-800 px-2 py-1 text-[11px] font-semibold"
+            value={playbackRate}
+            onChange={(event) => handleSpeedChange(Number.parseFloat(event.target.value))}
+          >
+            {speedOptions.map((rate) => (
+              <option key={rate} value={rate}>
+                {rate.toFixed(2)}x
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={handlePictureInPicture}
+          className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:bg-white/20"
+        >
+          <PictureInPicture2 className="h-3.5 w-3.5" />
+          PiP
+        </button>
+
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto inline-flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:bg-white/20"
+        >
+          Open in YouTube
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
       </div>
     </div>
   );

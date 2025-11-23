@@ -11,12 +11,12 @@ type TokenCache = {
 
 let tokenCache: TokenCache | null = null;
 
-export function getIgdbVideoUrls(videoId: string) {
-  return {
-    480: `https://video.igdb.com/igdb/video/upload/igdb/${videoId}.mp4`,
-    720: `https://video.igdb.com/igdb/video/upload/t_720p/${videoId}.mp4`,
-    1080: `https://video.igdb.com/igdb/video/upload/t_1080p/${videoId}.mp4`,
-  };
+export function getYoutubeEmbedUrl(videoId: string) {
+  return `https://www.youtube.com/embed/${videoId}?rel=0&showinfo=0&modestbranding=1&iv_load_policy=3&playsinline=1&enablejsapi=1`;
+}
+
+export function getYoutubeWatchUrl(videoId: string) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
 const resolveTokenUrl = (): string => {
@@ -763,6 +763,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       websites.url,
       websites.category,
       websites.trusted,
+      videos.id,
       videos.name,
       videos.video_id,
       screenshots.image_id,
