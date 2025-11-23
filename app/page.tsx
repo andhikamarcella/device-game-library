@@ -111,6 +111,17 @@ type DetailMetadata = {
   ratingsCount?: number | null;
 };
 
+type AppliedFilters = {
+  platform: string;
+  sort: DiscoverSortOption;
+  genres: number[];
+  themes: number[];
+  gameModes: number[];
+  perspectives: number[];
+  ageRatings: number[];
+  releaseYearRange: [number, number];
+};
+
 type PlatformOption = {
   id: number;
   name: string;
@@ -372,6 +383,16 @@ const formatDaysAgo = (days: number | null) => {
     const [selectedPerspectives, setSelectedPerspectives] = useState<number[]>(initialPerspectivesParam);
     const [selectedAgeRatings, setSelectedAgeRatings] = useState<number[]>(initialAgeRatingsParam);
     const [releaseYearRange, setReleaseYearRange] = useState<[number, number]>(initialReleaseRange);
+    const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
+      platform: initialPlatformParam,
+      sort: initialSortParam,
+      genres: initialGenresParam,
+      themes: initialThemesParam,
+      gameModes: initialModesParam,
+      perspectives: initialPerspectivesParam,
+      ageRatings: initialAgeRatingsParam,
+      releaseYearRange: initialReleaseRange,
+    });
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
     const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
@@ -382,15 +403,46 @@ const formatDaysAgo = (days: number | null) => {
     const safeResults = Array.isArray(results) ? results : [];
     const hasFilterSelection = useMemo(
       () =>
-        selectedPlatform !== "all" ||
-        selectedGenres.length > 0 ||
-        selectedThemes.length > 0 ||
-        selectedGameModes.length > 0 ||
-        selectedPerspectives.length > 0 ||
-        selectedAgeRatings.length > 0 ||
-        releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
-        releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1],
+        appliedFilters.platform !== "all" ||
+        appliedFilters.genres.length > 0 ||
+        appliedFilters.themes.length > 0 ||
+        appliedFilters.gameModes.length > 0 ||
+        appliedFilters.perspectives.length > 0 ||
+        appliedFilters.ageRatings.length > 0 ||
+        appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
+        appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1],
+      [appliedFilters],
+    );
+    const activeFilterCount = useMemo(() => {
+      let count = 0;
+      if (appliedFilters.platform !== "all") count += 1;
+      count +=
+        appliedFilters.genres.length +
+        appliedFilters.themes.length +
+        appliedFilters.gameModes.length +
+        appliedFilters.perspectives.length;
+      count += appliedFilters.ageRatings.length;
+      if (
+        appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
+        appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]
+      ) {
+        count += 1;
+      }
+      return count;
+    }, [appliedFilters]);
+    const filtersDirty = useMemo(
+      () =>
+        selectedPlatform !== appliedFilters.platform ||
+        sortOrder !== appliedFilters.sort ||
+        selectedGenres.join(",") !== appliedFilters.genres.join(",") ||
+        selectedThemes.join(",") !== appliedFilters.themes.join(",") ||
+        selectedGameModes.join(",") !== appliedFilters.gameModes.join(",") ||
+        selectedPerspectives.join(",") !== appliedFilters.perspectives.join(",") ||
+        selectedAgeRatings.join(",") !== appliedFilters.ageRatings.join(",") ||
+        releaseYearRange[0] !== appliedFilters.releaseYearRange[0] ||
+        releaseYearRange[1] !== appliedFilters.releaseYearRange[1],
       [
+        appliedFilters,
         releaseYearRange,
         selectedAgeRatings,
         selectedGameModes,
@@ -398,26 +450,9 @@ const formatDaysAgo = (days: number | null) => {
         selectedPerspectives,
         selectedPlatform,
         selectedThemes,
+        sortOrder,
       ],
     );
-    const activeFilterCount = useMemo(() => {
-      let count = 0;
-      if (selectedPlatform !== "all") count += 1;
-      count += selectedGenres.length + selectedThemes.length + selectedGameModes.length + selectedPerspectives.length;
-      count += selectedAgeRatings.length;
-      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] || releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
-        count += 1;
-      }
-      return count;
-    }, [
-      releaseYearRange,
-      selectedAgeRatings,
-      selectedGameModes,
-      selectedGenres,
-      selectedPerspectives,
-      selectedPlatform,
-      selectedThemes,
-    ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -490,6 +525,16 @@ const formatDaysAgo = (days: number | null) => {
       setSelectedPerspectives(nextPerspectivesParam);
       setSelectedAgeRatings(nextAgeRatingsParam);
       setReleaseYearRange(nextReleaseRange);
+      setAppliedFilters({
+        platform: nextPlatformParam,
+        sort: nextSortParam,
+        genres: nextGenresParam,
+        themes: nextThemesParam,
+        gameModes: nextModesParam,
+        perspectives: nextPerspectivesParam,
+        ageRatings: nextAgeRatingsParam,
+        releaseYearRange: nextReleaseRange,
+      });
 
       skipPageResetRef.current = true;
       lastSyncedSearchRef.current = currentSearch;
@@ -634,16 +679,16 @@ const formatDaysAgo = (days: number | null) => {
         setLoading(false);
         setHasSearched(false);
         setPagination({
-        total: 0,
-        page: 1,
-        pageSize,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      });
-      if (page !== 1) {
-        setPage(1);
-      }
-      return;
+          total: 0,
+          page: 1,
+          pageSize,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        });
+        if (page !== 1) {
+          setPage(1);
+        }
+        return;
       }
 
       const controller = new AbortController();
@@ -655,89 +700,89 @@ const formatDaysAgo = (days: number | null) => {
       if (debouncedQuery) {
         apiParams.set("q", debouncedQuery);
       }
-      if (selectedPlatform !== "all") {
-        apiParams.set("platformId", selectedPlatform);
+      if (appliedFilters.platform !== "all") {
+        apiParams.set("platformId", appliedFilters.platform);
       }
-      if (selectedGenres.length) {
-        apiParams.set("genres", selectedGenres.join(","));
+      if (appliedFilters.genres.length) {
+        apiParams.set("genres", appliedFilters.genres.join(","));
       }
-      if (selectedThemes.length) {
-        apiParams.set("themes", selectedThemes.join(","));
+      if (appliedFilters.themes.length) {
+        apiParams.set("themes", appliedFilters.themes.join(","));
       }
-      if (selectedGameModes.length) {
-        apiParams.set("gameModes", selectedGameModes.join(","));
+      if (appliedFilters.gameModes.length) {
+        apiParams.set("gameModes", appliedFilters.gameModes.join(","));
       }
-      if (selectedPerspectives.length) {
-        apiParams.set("playerPerspectives", selectedPerspectives.join(","));
+      if (appliedFilters.perspectives.length) {
+        apiParams.set("playerPerspectives", appliedFilters.perspectives.join(","));
       }
-      if (selectedAgeRatings.length) {
-        apiParams.set("ageRatings", selectedAgeRatings.join(","));
+      if (appliedFilters.ageRatings.length) {
+        apiParams.set("ageRatings", appliedFilters.ageRatings.join(","));
       }
-      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
-        apiParams.set("releaseFrom", String(releaseYearRange[0]));
+      if (appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
+        apiParams.set("releaseFrom", String(appliedFilters.releaseYearRange[0]));
       }
-      if (releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
-        apiParams.set("releaseTo", String(releaseYearRange[1]));
+      if (appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
+        apiParams.set("releaseTo", String(appliedFilters.releaseYearRange[1]));
       }
-      if (sortOrder !== "none") {
-        const apiSortParam = mapSortOrderToApiParam(sortOrder);
+      if (appliedFilters.sort !== "none") {
+        const apiSortParam = mapSortOrderToApiParam(appliedFilters.sort);
         apiParams.set("sort", apiSortParam);
       }
       apiParams.set("page", String(page));
       apiParams.set("pageSize", String(pageSize));
       const searchPath = apiParams.toString();
 
-    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const payload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
-          throw new Error(message);
-        }
-        return payload;
+      fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
+        signal: controller.signal,
       })
-      .then((payload) => {
-        const data = payload as Partial<SearchResponse> | null;
-        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
-        setResults(normalizedResults);
-        const nextPagination = {
-          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
-          page:
-            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
-          pageSize:
-            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
-              ? data.pagination.pageSize
-              : pageSize,
-          hasNextPage: Boolean(data?.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
-        };
-        setPagination(nextPagination);
-      })
-      .catch((fetchError) => {
-        if (fetchError.name === "AbortError") {
-          return;
-        }
-        setError(fetchError instanceof Error ? fetchError.message : "Unexpected error searching games.");
-        setResults([]);
-        setPagination({
-          total: 0,
-          page: 1,
-          pageSize,
-          hasNextPage: false,
-          hasPreviousPage: false,
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as unknown;
+          if (!response.ok) {
+            const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+            throw new Error(message);
+          }
+          return payload;
+        })
+        .then((payload) => {
+          const data = payload as Partial<SearchResponse> | null;
+          const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
+          setResults(normalizedResults);
+          const nextPagination = {
+            total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+            page:
+              typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
+            pageSize:
+              typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+                ? data.pagination.pageSize
+                : pageSize,
+            hasNextPage: Boolean(data?.pagination?.hasNextPage),
+            hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+          };
+          setPagination(nextPagination);
+        })
+        .catch((fetchError) => {
+          if (fetchError.name === "AbortError") {
+            return;
+          }
+          setError(fetchError instanceof Error ? fetchError.message : "Unexpected error searching games.");
+          setResults([]);
+          setPagination({
+            total: 0,
+            page: 1,
+            pageSize,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          });
+          if (page !== 1) {
+            setPage(1);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
         });
-        if (page !== 1) {
-          setPage(1);
-        }
-      })
-      .finally(() => {
-        setLoading(false);
-      });
 
-    return () => controller.abort();
-    }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
+      return () => controller.abort();
+    }, [appliedFilters, debouncedQuery, page, pageSize, hasFilterSelection]);
 
     useEffect(() => {
       if (skipPageResetRef.current) {
@@ -745,7 +790,7 @@ const formatDaysAgo = (days: number | null) => {
         return;
       }
       setPage(1);
-    }, [debouncedQuery, selectedPlatform, sortOrder, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
+    }, [debouncedQuery, appliedFilters]);
 
   useEffect(() => {
     const nextValue = String(pagination.page > 0 ? pagination.page : page);
@@ -757,50 +802,50 @@ const formatDaysAgo = (days: number | null) => {
     if (debouncedQuery) {
       params.set("q", debouncedQuery);
     }
-      if (selectedPlatform !== "all") {
-        params.set("platform", selectedPlatform);
-      }
-      if (selectedGenres.length) {
-        params.set("genres", selectedGenres.join(","));
-      } else {
-        params.delete("genres");
-      }
-      if (selectedThemes.length) {
-        params.set("themes", selectedThemes.join(","));
-      } else {
-        params.delete("themes");
-      }
-      if (selectedGameModes.length) {
-        params.set("gameModes", selectedGameModes.join(","));
-      } else {
-        params.delete("gameModes");
-      }
-      if (selectedPerspectives.length) {
-        params.set("playerPerspectives", selectedPerspectives.join(","));
-      } else {
-        params.delete("playerPerspectives");
-      }
-      if (selectedAgeRatings.length) {
-        params.set("ageRatings", selectedAgeRatings.join(","));
-      } else {
-        params.delete("ageRatings");
-      }
-      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
-        params.set("releaseFrom", String(releaseYearRange[0]));
-      } else {
-        params.delete("releaseFrom");
-      }
-      if (releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
-        params.set("releaseTo", String(releaseYearRange[1]));
-      } else {
-        params.delete("releaseTo");
-      }
-      if (page > 1) {
-        params.set("page", String(page));
-      }
-      if (sortOrder !== "none") {
-        params.set("sort", sortOrder);
-      }
+    if (appliedFilters.platform !== "all") {
+      params.set("platform", appliedFilters.platform);
+    }
+    if (appliedFilters.genres.length) {
+      params.set("genres", appliedFilters.genres.join(","));
+    } else {
+      params.delete("genres");
+    }
+    if (appliedFilters.themes.length) {
+      params.set("themes", appliedFilters.themes.join(","));
+    } else {
+      params.delete("themes");
+    }
+    if (appliedFilters.gameModes.length) {
+      params.set("gameModes", appliedFilters.gameModes.join(","));
+    } else {
+      params.delete("gameModes");
+    }
+    if (appliedFilters.perspectives.length) {
+      params.set("playerPerspectives", appliedFilters.perspectives.join(","));
+    } else {
+      params.delete("playerPerspectives");
+    }
+    if (appliedFilters.ageRatings.length) {
+      params.set("ageRatings", appliedFilters.ageRatings.join(","));
+    } else {
+      params.delete("ageRatings");
+    }
+    if (appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
+      params.set("releaseFrom", String(appliedFilters.releaseYearRange[0]));
+    } else {
+      params.delete("releaseFrom");
+    }
+    if (appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
+      params.set("releaseTo", String(appliedFilters.releaseYearRange[1]));
+    } else {
+      params.delete("releaseTo");
+    }
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+    if (appliedFilters.sort !== "none") {
+      params.set("sort", appliedFilters.sort);
+    }
 
     const nextSearch = params.toString();
     if (nextSearch === lastSyncedSearchRef.current) {
@@ -809,11 +854,26 @@ const formatDaysAgo = (days: number | null) => {
 
     lastSyncedSearchRef.current = nextSearch;
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false });
-    }, [debouncedQuery, selectedPlatform, sortOrder, page, pathname, router, selectedGenres, selectedThemes, selectedGameModes, selectedPerspectives, selectedAgeRatings, releaseYearRange]);
+  }, [debouncedQuery, appliedFilters, page, pathname, router]);
+
+    const applyFilters = () => {
+      setAppliedFilters({
+        platform: selectedPlatform,
+        sort: sortOrder,
+        genres: [...selectedGenres],
+        themes: [...selectedThemes],
+        gameModes: [...selectedGameModes],
+        perspectives: [...selectedPerspectives],
+        ageRatings: [...selectedAgeRatings],
+        releaseYearRange: [...releaseYearRange],
+      });
+      setPage(1);
+      setPageInput("1");
+    };
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      setPage(1);
+      applyFilters();
       setDebouncedQuery(query.trim());
     };
 
@@ -831,6 +891,16 @@ const formatDaysAgo = (days: number | null) => {
       setSelectedPerspectives([]);
       setSelectedAgeRatings([]);
       setReleaseYearRange([...DEFAULT_YEAR_RANGE]);
+      setAppliedFilters({
+        platform: "all",
+        sort: "none",
+        genres: [],
+        themes: [],
+        gameModes: [],
+        perspectives: [],
+        ageRatings: [],
+        releaseYearRange: [...DEFAULT_YEAR_RANGE],
+      });
       setPage(1);
       setPageInput("1");
       setFiltersOpen(false);
@@ -1281,7 +1351,16 @@ const formatDaysAgo = (days: number | null) => {
                 ))}
               </select>
             </label>
-            <div className="hidden items-center gap-3 sm:flex">
+            <div className="hidden flex-wrap items-center gap-3 sm:flex sm:justify-end">
+              {filtersDirty ? (
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+                >
+                  Terapkan filter
+                </button>
+              ) : null}
               {hasFilterSelection ? (
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
                   {activeFilterCount} filter aktif
@@ -1308,6 +1387,15 @@ const formatDaysAgo = (days: number | null) => {
                   </span>
                 ) : null}
               </button>
+              {filtersDirty ? (
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                >
+                  Terapkan
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -1330,8 +1418,22 @@ const formatDaysAgo = (days: number | null) => {
                     {activeFilterCount} aktif
                   </span>
                 ) : null}
+                {filtersDirty ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                    perubahan belum diterapkan
+                  </span>
+                ) : null}
               </div>
-              <div className="hidden md:block">
+              <div className="hidden items-center gap-2 md:flex">
+                {filtersDirty ? (
+                  <button
+                    type="button"
+                    onClick={applyFilters}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+                  >
+                    Terapkan filter
+                  </button>
+                ) : null}
                 <FiltersResetButton onReset={handleResetFilters} />
               </div>
             </div>
