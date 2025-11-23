@@ -123,6 +123,7 @@ type PlatformOption = {
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
 
 const DISCOVER_SORT_OPTIONS = [
+  { value: "none", label: "No sort (default)" },
   { value: "most_popular", label: "Most popular" },
   { value: "alphabetical", label: "Alphabetical A–Z" },
   { value: "alphabetical_desc", label: "Alphabetical Z–A" },
@@ -152,7 +153,7 @@ const SORT_FALLBACKS: Record<string, DiscoverSortOption> = {
   rating_asc: "lowest_rated",
   release_desc: "newest",
   release_asc: "oldest",
-  none: "most_popular",
+  none: "none",
 };
 
 const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => value as SearchSortKey;
@@ -175,14 +176,14 @@ const parsePageValue = (value: string | null): number => {
 const parseSortValue = (value: string | null): DiscoverSortOption => {
   const normalized = value?.trim();
   if (!normalized) {
-    return "most_popular";
+    return "none";
   }
   if (SORT_FALLBACKS[normalized]) {
     return SORT_FALLBACKS[normalized];
   }
   return DISCOVER_SORT_OPTIONS.some((option) => option.value === normalized)
     ? (normalized as DiscoverSortOption)
-    : "most_popular";
+    : "none";
 };
 
 const DEFAULT_YEAR_RANGE: [number, number] = [1980, new Date().getFullYear()];
@@ -650,8 +651,10 @@ const formatDaysAgo = (days: number | null) => {
       if (releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
         apiParams.set("releaseTo", String(releaseYearRange[1]));
       }
-      const apiSortParam = mapSortOrderToApiParam(sortOrder);
-      apiParams.set("sort", apiSortParam);
+      if (sortOrder !== "none") {
+        const apiSortParam = mapSortOrderToApiParam(sortOrder);
+        apiParams.set("sort", apiSortParam);
+      }
       apiParams.set("page", String(page));
       apiParams.set("pageSize", String(pageSize));
       const searchPath = apiParams.toString();
@@ -767,7 +770,7 @@ const formatDaysAgo = (days: number | null) => {
       if (page > 1) {
         params.set("page", String(page));
       }
-      if (sortOrder !== "most_popular") {
+      if (sortOrder !== "none") {
         params.set("sort", sortOrder);
       }
 
@@ -793,7 +796,7 @@ const formatDaysAgo = (days: number | null) => {
 
     const handleResetFilters = () => {
       setSelectedPlatform("all");
-      setSortOrder("most_popular");
+      setSortOrder("none");
       setSelectedGenres([]);
       setSelectedThemes([]);
       setSelectedGameModes([]);
