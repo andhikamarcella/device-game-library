@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { buildIgdbCountQuery, buildIgdbQuery, getIgdbToken, type SortKey } from "@/lib/igdb";
+import { IgdbRequestError, buildIgdbCountQuery, buildIgdbQuery, getIgdbToken, type SortKey } from "@/lib/igdb";
 import {
   type IgdbAgeRating,
   type IgdbGameMode,
@@ -67,6 +67,21 @@ type SearchResult = {
 };
 
 export const dynamic = "force-dynamic";
+
+const FILTER_OPTIONS_TTL = 1000 * 60 * 60; // 1 hour
+
+type FilterOptionsCache = {
+  data: {
+    genres: Array<{ id: number; name?: string | null; slug?: string | null }>;
+    themes: Array<{ id: number; name?: string | null; slug?: string | null }>;
+    gameModes: Array<{ id: number; name?: string | null; slug?: string | null }>;
+    playerPerspectives: Array<{ id: number; name?: string | null; slug?: string | null }>;
+    ageRatings: IgdbAgeRating[];
+  };
+  timestamp: number;
+};
+
+let filterOptionsCache: FilterOptionsCache | null = null;
 
 const parseSortKey = (value: unknown): SortKey => {
   const normalized = typeof value === "string" ? value.trim() : "";
@@ -464,50 +479,82 @@ const fetchList = async <T extends { id?: number; name?: string | null; slug?: s
     body: [fields, "sort name asc;", "limit 200;"].join("\n"),
   });
 
+  const text = await res.text().catch(() => "");
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
     console.error(`IGDB filter fetch failed for ${endpoint}`, res.status, text);
+    if (res.status === 429) {
+      throw new IgdbRequestError(`IGDB ${endpoint} rate limited`, res.status, text);
+    }
     return [];
   }
 
-  const data = ((await res.json().catch(() => [])) || []) as T[];
+  const data = (text ? (JSON.parse(text) as T[]) : []) || [];
   return data
     .map((item) => ({ id: item.id ?? 0, name: item.name ?? null, slug: item.slug ?? null }))
     .filter((item) => Number.isFinite(item.id) && item.name);
 };
 
 async function loadFilterOptions() {
-  const [genres, themes, gameModes, playerPerspectives, ageRatings] = await Promise.all([
-    fetchList<IgdbGenre>("genres", "fields id,name,slug;"),
-    fetchList<IgdbTheme>("themes", "fields id,name,slug;"),
-    fetchList<IgdbGameMode>("game_modes", "fields id,name,slug;"),
-    fetchList<IgdbPlayerPerspective>("player_perspectives", "fields id,name,slug;"),
-    (async () => {
-      const { accessToken, clientId } = await getIgdbToken();
-      const res = await fetch("https://api.igdb.com/v4/age_ratings", {
-        method: "POST",
-        headers: {
-          "Client-ID": clientId,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "text/plain",
-        },
-        body: ["fields id,rating,category;", "limit 100;"].join("\n"),
-      });
+  if (filterOptionsCache && Date.now() - filterOptionsCache.timestamp < FILTER_OPTIONS_TTL) {
+    return filterOptionsCache.data;
+  }
 
-      if (!res.ok) {
+  try {
+    const [genres, themes, gameModes, playerPerspectives, ageRatings] = await Promise.all([
+      fetchList<IgdbGenre>("genres", "fields id,name,slug;"),
+      fetchList<IgdbTheme>("themes", "fields id,name,slug;"),
+      fetchList<IgdbGameMode>("game_modes", "fields id,name,slug;"),
+      fetchList<IgdbPlayerPerspective>("player_perspectives", "fields id,name,slug;"),
+      (async () => {
+        const { accessToken, clientId } = await getIgdbToken();
+        const res = await fetch("https://api.igdb.com/v4/age_ratings", {
+          method: "POST",
+          headers: {
+            "Client-ID": clientId,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "text/plain",
+          },
+          body: ["fields id,rating,category;", "limit 100;"].join("\n"),
+        });
+
         const text = await res.text().catch(() => "");
-        console.error("IGDB age ratings fetch failed", res.status, text);
-        return [] as IgdbAgeRating[];
-      }
-      return ((await res.json().catch(() => [])) || []) as IgdbAgeRating[];
-    })(),
-  ]);
 
-  return {
-    genres,
-    themes,
-    gameModes,
-    playerPerspectives,
-    ageRatings: Array.isArray(ageRatings) ? ageRatings : [],
-  };
+        if (!res.ok) {
+          console.error("IGDB age ratings fetch failed", res.status, text);
+          if (res.status === 429) {
+            throw new IgdbRequestError("IGDB age ratings rate limited", res.status, text);
+          }
+          return [] as IgdbAgeRating[];
+        }
+        return (text ? (JSON.parse(text) as IgdbAgeRating[]) : []) || [];
+      })(),
+    ]);
+
+    const data = {
+      genres,
+      themes,
+      gameModes,
+      playerPerspectives,
+      ageRatings: Array.isArray(ageRatings) ? ageRatings : [],
+    } as const;
+
+    filterOptionsCache = { data, timestamp: Date.now() };
+
+    return data;
+  } catch (error) {
+    if (error instanceof IgdbRequestError && error.status === 429 && filterOptionsCache) {
+      console.warn("IGDB filter options rate limited, serving cached filters");
+      return filterOptionsCache.data;
+    }
+
+    console.error("IGDB filter options failed", error);
+    return filterOptionsCache?.data ?? {
+      genres: [],
+      themes: [],
+      gameModes: [],
+      playerPerspectives: [],
+      ageRatings: [],
+    };
+  }
 }

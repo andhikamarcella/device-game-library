@@ -380,6 +380,44 @@ const formatDaysAgo = (days: number | null) => {
     const [recentGames, setRecentGames] = useState<CardResult[]>([]);
     const [headlineLoading, setHeadlineLoading] = useState(true);
     const safeResults = Array.isArray(results) ? results : [];
+    const hasFilterSelection = useMemo(
+      () =>
+        selectedPlatform !== "all" ||
+        selectedGenres.length > 0 ||
+        selectedThemes.length > 0 ||
+        selectedGameModes.length > 0 ||
+        selectedPerspectives.length > 0 ||
+        selectedAgeRatings.length > 0 ||
+        releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
+        releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1],
+      [
+        releaseYearRange,
+        selectedAgeRatings,
+        selectedGameModes,
+        selectedGenres,
+        selectedPerspectives,
+        selectedPlatform,
+        selectedThemes,
+      ],
+    );
+    const activeFilterCount = useMemo(() => {
+      let count = 0;
+      if (selectedPlatform !== "all") count += 1;
+      count += selectedGenres.length + selectedThemes.length + selectedGameModes.length + selectedPerspectives.length;
+      count += selectedAgeRatings.length;
+      if (releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] || releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
+        count += 1;
+      }
+      return count;
+    }, [
+      releaseYearRange,
+      selectedAgeRatings,
+      selectedGameModes,
+      selectedGenres,
+      selectedPerspectives,
+      selectedPlatform,
+      selectedThemes,
+    ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -589,16 +627,6 @@ const formatDaysAgo = (days: number | null) => {
   }, [wishlistStatus]);
 
     useEffect(() => {
-      const hasFilterSelection =
-        selectedPlatform !== "all" ||
-        selectedGenres.length > 0 ||
-        selectedThemes.length > 0 ||
-        selectedGameModes.length > 0 ||
-        selectedPerspectives.length > 0 ||
-        selectedAgeRatings.length > 0 ||
-        releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
-        releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1];
-
       const shouldFetch = Boolean(debouncedQuery) || hasFilterSelection;
       if (!shouldFetch) {
         setResults([]);
@@ -616,12 +644,12 @@ const formatDaysAgo = (days: number | null) => {
         setPage(1);
       }
       return;
-    }
+      }
 
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    setHasSearched(true);
+      const controller = new AbortController();
+      setLoading(true);
+      setError(null);
+      setHasSearched(true);
 
       const apiParams = new URLSearchParams();
       if (debouncedQuery) {
@@ -1238,7 +1266,7 @@ const formatDaysAgo = (days: number | null) => {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="flex w-full flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 sm:w-64">
               Sort results
               <select
@@ -1253,14 +1281,56 @@ const formatDaysAgo = (days: number | null) => {
                 ))}
               </select>
             </label>
+            <div className="hidden items-center gap-3 sm:flex">
+              {hasFilterSelection ? (
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                  {activeFilterCount} filter aktif
+                </span>
+              ) : null}
+              <FiltersResetButton onReset={handleResetFilters} />
+            </div>
+          </div>
+
+          <div className="sticky top-2 z-20 md:hidden">
+            <div className="flex items-center justify-between gap-3 rounded-full border border-slate-200/80 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-100 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltersOpen((prev) => !prev);
+                  filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="flex items-center gap-2"
+              >
+                {filtersOpen ? "Sembunyikan filter" : "Filter pencarian"}
+                {hasFilterSelection ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           <div
             ref={filtersRef}
-            className={`${filtersOpen ? "block" : "hidden"} space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70 md:block`}
+            className={`${filtersOpen ? "block" : "hidden"} md:block space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70`}
           >
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refine search</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refine search</p>
+                {hasFilterSelection ? (
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                    {activeFilterCount} aktif
+                  </span>
+                ) : null}
+              </div>
               <div className="hidden md:block">
                 <FiltersResetButton onReset={handleResetFilters} />
               </div>
@@ -1282,28 +1352,6 @@ const formatDaysAgo = (days: number | null) => {
                 maxYear={DEFAULT_YEAR_RANGE[1]}
                 defaultOpen
               />
-            </div>
-          </div>
-
-          <div className="fixed inset-x-4 bottom-4 z-30 md:hidden">
-            <div className="flex items-center justify-between gap-3 rounded-full bg-white/95 px-4 py-3 text-sm font-semibold text-slate-800 shadow-lg ring-1 ring-slate-200 backdrop-blur dark:bg-slate-900/90 dark:text-slate-100 dark:ring-slate-700">
-              <button
-                type="button"
-                onClick={() => {
-                  setFiltersOpen((prev) => !prev);
-                  filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
-                className="flex items-center gap-2"
-              >
-                {filtersOpen ? "Hide filters" : "Filters"}
-              </button>
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-              >
-                Reset
-              </button>
             </div>
           </div>
 
