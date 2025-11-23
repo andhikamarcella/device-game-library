@@ -69,6 +69,7 @@ type SearchResult = {
 export const dynamic = "force-dynamic";
 
 const FILTER_OPTIONS_TTL = 1000 * 60 * 60; // 1 hour
+const DEFAULT_RELEASE_YEAR_RANGE: [number, number] = [1980, 2025];
 
 type FilterOptionsCache = {
   data: {
@@ -184,14 +185,17 @@ const resolveSearchParams = (params: SearchParams) => {
       ? releaseYearFromRaw
       : releaseYearToRaw;
 
+  const isDefaultReleaseRange =
+    releaseYearFrom === DEFAULT_RELEASE_YEAR_RANGE[0] && releaseYearTo === DEFAULT_RELEASE_YEAR_RANGE[1];
+
   const filters = {
     genres: parseIds(params.genres),
     themes: parseIds(params.themes),
     gameModes: parseIds(params.gameModes),
     playerPerspectives: parseIds(params.playerPerspectives),
     ageRatings: parseIds(params.ageRatings),
-    releaseYearFrom,
-    releaseYearTo,
+    releaseYearFrom: isDefaultReleaseRange ? null : releaseYearFrom,
+    releaseYearTo: isDefaultReleaseRange ? null : releaseYearTo,
   };
 
   return { query, sort, platformId, page, pageSize, filters };
