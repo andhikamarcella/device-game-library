@@ -102,7 +102,6 @@ export function buildIgdbQuery(opts: {
       "  rating_count,",
       "  total_rating,",
       "  total_rating_count,",
-      "  popularity,",
       "  first_release_date,",
       "  cover.image_id,",
       "  screenshots.image_id,",
@@ -165,8 +164,8 @@ export function buildIgdbQuery(opts: {
   }
 
   const sortMapping: Record<Exclude<SortKey, "none">, string> = {
-    most_popular: "popularity desc",
-    least_popular: "popularity asc",
+    most_popular: "total_rating_count desc",
+    least_popular: "total_rating_count asc",
     highest_rated: "total_rating desc",
     lowest_rated: "total_rating asc",
     newest: "first_release_date desc",
@@ -600,8 +599,8 @@ const parseRatingRange = (range?: string): { min?: number; max?: number } => {
 };
 
 const ORDERING_FIELDS: Record<string, { field: string; direction: "asc" | "desc" }> = {
-  "": { field: "popularity", direction: "desc" },
-  "-added": { field: "popularity", direction: "desc" },
+  "": { field: "total_rating_count", direction: "desc" },
+  "-added": { field: "total_rating_count", direction: "desc" },
   "-rating": { field: "total_rating", direction: "desc" },
   "-metacritic": { field: "total_rating", direction: "desc" },
   "-released": { field: "first_release_date", direction: "desc" },
