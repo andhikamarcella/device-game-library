@@ -11,23 +11,12 @@ import { GameCardCompact } from "@/components/GameCardCompact";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
 import EventsSection from "@/components/EventsSection";
-import {
-  AgeRatingFilter,
-  FiltersResetButton,
-  GameModeFilter,
-  GenreFilter,
-  PerspectiveFilter,
-  ThemeFilter,
-  YearRangePicker,
-  type SearchFilterOption,
-} from "@/components/SearchFiltersPanel";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { formatDateTime } from "@/lib/utils";
 import { GameStatus, Game } from "@/lib/types";
-import type { IgdbAgeRating } from "@/types/igdb";
 
 type SearchPlatform = {
   id: number;
@@ -111,17 +100,6 @@ type DetailMetadata = {
   ratingsCount?: number | null;
 };
 
-type AppliedFilters = {
-  platform: string;
-  sort: DiscoverSortOption;
-  genres: number[];
-  themes: number[];
-  gameModes: number[];
-  perspectives: number[];
-  ageRatings: number[];
-  releaseYearRange: [number, number];
-};
-
 type PlatformOption = {
   id: number;
   name: string;
@@ -195,42 +173,6 @@ const parseSortValue = (value: string | null): DiscoverSortOption => {
   return DISCOVER_SORT_OPTIONS.some((option) => option.value === normalized)
     ? (normalized as DiscoverSortOption)
     : "none";
-};
-
-const DEFAULT_YEAR_RANGE: [number, number] = [1980, new Date().getFullYear()];
-
-const AGE_RATING_LABELS: Record<number, string> = {
-  1: "PEGI 3",
-  2: "PEGI 7",
-  3: "PEGI 12",
-  4: "PEGI 16",
-  5: "PEGI 18",
-  6: "ESRB RP",
-  7: "ESRB EC",
-  8: "ESRB E",
-  9: "ESRB E10+",
-  10: "ESRB T",
-  11: "ESRB M",
-  12: "ESRB AO",
-};
-
-const parseNumberListParam = (raw: string | null): number[] => {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map((part) => Number.parseInt(part, 10))
-    .filter((num) => Number.isFinite(num));
-};
-
-const normalizeYearRange = (from?: number | null, to?: number | null): [number, number] => {
-  const safeFrom = typeof from === "number" ? from : DEFAULT_YEAR_RANGE[0];
-  const safeTo = typeof to === "number" ? to : DEFAULT_YEAR_RANGE[1];
-  if (safeFrom > safeTo) {
-    return [safeTo, safeFrom];
-  }
-  return [safeFrom, safeTo];
 };
 
 type IgdbListPlatform = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
@@ -327,17 +269,6 @@ const formatDaysAgo = (days: number | null) => {
     const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
     const initialPageParam = parsePageValue(searchParams.get("page"));
     const initialSortParam = parseSortValue(searchParams.get("sort"));
-    const initialGenresParam = parseNumberListParam(searchParams.get("genres"));
-    const initialThemesParam = parseNumberListParam(searchParams.get("themes"));
-    const initialModesParam = parseNumberListParam(searchParams.get("gameModes"));
-    const initialPerspectivesParam = parseNumberListParam(searchParams.get("playerPerspectives"));
-    const initialAgeRatingsParam = parseNumberListParam(searchParams.get("ageRatings"));
-    const initialReleaseFromParam = searchParams.get("releaseFrom");
-    const initialReleaseToParam = searchParams.get("releaseTo");
-    const initialReleaseRange = normalizeYearRange(
-      initialReleaseFromParam ? Number.parseInt(initialReleaseFromParam, 10) : null,
-      initialReleaseToParam ? Number.parseInt(initialReleaseToParam, 10) : null,
-    );
 
     const { devices } = useDeviceStore();
     const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
@@ -355,7 +286,6 @@ const formatDaysAgo = (days: number | null) => {
     const [pageInput, setPageInput] = useState(String(initialPageParam));
     const lastSyncedSearchRef = useRef(searchParams.toString());
     const skipPageResetRef = useRef(true);
-    const filtersRef = useRef<HTMLDivElement | null>(null);
     const [pagination, setPagination] = useState(() => ({
       total: 0,
       page: initialPageParam,
@@ -370,30 +300,6 @@ const formatDaysAgo = (days: number | null) => {
     const [platformLoading, setPlatformLoading] = useState(true);
     const [platformError, setPlatformError] = useState<string | null>(null);
     const [platformSearch, setPlatformSearch] = useState("");
-    const [genreOptions, setGenreOptions] = useState<SearchFilterOption[]>([]);
-    const [themeOptions, setThemeOptions] = useState<SearchFilterOption[]>([]);
-    const [gameModeOptions, setGameModeOptions] = useState<SearchFilterOption[]>([]);
-    const [perspectiveOptions, setPerspectiveOptions] = useState<SearchFilterOption[]>([]);
-    const [ageRatingOptions, setAgeRatingOptions] = useState<Array<{ rating: number; label: string; category?: number | null }>>(
-      [],
-    );
-    const [selectedGenres, setSelectedGenres] = useState<number[]>(initialGenresParam);
-    const [selectedThemes, setSelectedThemes] = useState<number[]>(initialThemesParam);
-    const [selectedGameModes, setSelectedGameModes] = useState<number[]>(initialModesParam);
-    const [selectedPerspectives, setSelectedPerspectives] = useState<number[]>(initialPerspectivesParam);
-    const [selectedAgeRatings, setSelectedAgeRatings] = useState<number[]>(initialAgeRatingsParam);
-    const [releaseYearRange, setReleaseYearRange] = useState<[number, number]>(initialReleaseRange);
-    const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
-      platform: initialPlatformParam,
-      sort: initialSortParam,
-      genres: initialGenresParam,
-      themes: initialThemesParam,
-      gameModes: initialModesParam,
-      perspectives: initialPerspectivesParam,
-      ageRatings: initialAgeRatingsParam,
-      releaseYearRange: initialReleaseRange,
-    });
-    const [filtersOpen, setFiltersOpen] = useState(false);
     const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
     const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
     const [topGames, setTopGames] = useState<CardResult[]>([]);
@@ -401,58 +307,6 @@ const formatDaysAgo = (days: number | null) => {
     const [recentGames, setRecentGames] = useState<CardResult[]>([]);
     const [headlineLoading, setHeadlineLoading] = useState(true);
     const safeResults = Array.isArray(results) ? results : [];
-    const hasFilterSelection = useMemo(
-      () =>
-        appliedFilters.platform !== "all" ||
-        appliedFilters.genres.length > 0 ||
-        appliedFilters.themes.length > 0 ||
-        appliedFilters.gameModes.length > 0 ||
-        appliedFilters.perspectives.length > 0 ||
-        appliedFilters.ageRatings.length > 0 ||
-        appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
-        appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1],
-      [appliedFilters],
-    );
-    const activeFilterCount = useMemo(() => {
-      let count = 0;
-      if (appliedFilters.platform !== "all") count += 1;
-      count +=
-        appliedFilters.genres.length +
-        appliedFilters.themes.length +
-        appliedFilters.gameModes.length +
-        appliedFilters.perspectives.length;
-      count += appliedFilters.ageRatings.length;
-      if (
-        appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0] ||
-        appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]
-      ) {
-        count += 1;
-      }
-      return count;
-    }, [appliedFilters]);
-    const filtersDirty = useMemo(
-      () =>
-        selectedPlatform !== appliedFilters.platform ||
-        sortOrder !== appliedFilters.sort ||
-        selectedGenres.join(",") !== appliedFilters.genres.join(",") ||
-        selectedThemes.join(",") !== appliedFilters.themes.join(",") ||
-        selectedGameModes.join(",") !== appliedFilters.gameModes.join(",") ||
-        selectedPerspectives.join(",") !== appliedFilters.perspectives.join(",") ||
-        selectedAgeRatings.join(",") !== appliedFilters.ageRatings.join(",") ||
-        releaseYearRange[0] !== appliedFilters.releaseYearRange[0] ||
-        releaseYearRange[1] !== appliedFilters.releaseYearRange[1],
-      [
-        appliedFilters,
-        releaseYearRange,
-        selectedAgeRatings,
-        selectedGameModes,
-        selectedGenres,
-        selectedPerspectives,
-        selectedPlatform,
-        selectedThemes,
-        sortOrder,
-      ],
-    );
 
   useEffect(() => {
     let cancelled = false;
@@ -502,15 +356,6 @@ const formatDaysAgo = (days: number | null) => {
       const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
       const nextPageParam = parsePageValue(searchParams.get("page"));
       const nextSortParam = parseSortValue(searchParams.get("sort"));
-      const nextGenresParam = parseNumberListParam(searchParams.get("genres"));
-      const nextThemesParam = parseNumberListParam(searchParams.get("themes"));
-      const nextModesParam = parseNumberListParam(searchParams.get("gameModes"));
-      const nextPerspectivesParam = parseNumberListParam(searchParams.get("playerPerspectives"));
-      const nextAgeRatingsParam = parseNumberListParam(searchParams.get("ageRatings"));
-      const nextReleaseRange = normalizeYearRange(
-        searchParams.get("releaseFrom") ? Number.parseInt(searchParams.get("releaseFrom") ?? "", 10) : null,
-        searchParams.get("releaseTo") ? Number.parseInt(searchParams.get("releaseTo") ?? "", 10) : null,
-      );
       const trimmed = nextQueryParam.trim();
 
       setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
@@ -519,22 +364,6 @@ const formatDaysAgo = (days: number | null) => {
       setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
       setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
       setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
-      setSelectedGenres(nextGenresParam);
-      setSelectedThemes(nextThemesParam);
-      setSelectedGameModes(nextModesParam);
-      setSelectedPerspectives(nextPerspectivesParam);
-      setSelectedAgeRatings(nextAgeRatingsParam);
-      setReleaseYearRange(nextReleaseRange);
-      setAppliedFilters({
-        platform: nextPlatformParam,
-        sort: nextSortParam,
-        genres: nextGenresParam,
-        themes: nextThemesParam,
-        gameModes: nextModesParam,
-        perspectives: nextPerspectivesParam,
-        ageRatings: nextAgeRatingsParam,
-        releaseYearRange: nextReleaseRange,
-      });
 
       skipPageResetRef.current = true;
       lastSyncedSearchRef.current = currentSearch;
@@ -611,60 +440,6 @@ const formatDaysAgo = (days: number | null) => {
       };
     }, []);
 
-    useEffect(() => {
-      let cancelled = false;
-
-      fetch("/api/games/search?filters=options")
-        .then(async (response) => {
-          const payload = (await response.json().catch(() => null)) as unknown;
-          return payload as {
-            genres?: SearchFilterOption[];
-            themes?: SearchFilterOption[];
-            gameModes?: SearchFilterOption[];
-            playerPerspectives?: SearchFilterOption[];
-            ageRatings?: IgdbAgeRating[];
-          } | null;
-        })
-        .then((payload) => {
-          if (cancelled || !payload) return;
-
-          const normalize = (list?: SearchFilterOption[] | null) =>
-            Array.isArray(list)
-              ? list
-                  .map((item) => ({ id: item.id, name: item.name ?? "", slug: item.slug ?? null }))
-                  .filter((item) => Number.isFinite(item.id) && item.name)
-              : [];
-
-          setGenreOptions(normalize(payload.genres));
-          setThemeOptions(normalize(payload.themes));
-          setGameModeOptions(normalize(payload.gameModes));
-          setPerspectiveOptions(normalize(payload.playerPerspectives));
-
-          const ratings = Array.isArray(payload.ageRatings) ? payload.ageRatings : [];
-          const uniqueRatings = Array.from(
-            new Set(
-              ratings
-                .map((rating) => rating?.rating)
-                .filter((rating): rating is number => typeof rating === "number"),
-            ),
-          );
-          const mappedRatings = uniqueRatings.map((rating) => ({
-            rating,
-            label: AGE_RATING_LABELS[rating] ?? `Rating ${rating}`,
-            category: (ratings.find((item) => item?.rating === rating) ?? {}).category ?? null,
-          }));
-          setAgeRatingOptions(mappedRatings);
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          console.warn("Failed to load filter options", error);
-        });
-
-      return () => {
-        cancelled = true;
-      };
-    }, []);
-
   useEffect(() => {
     if (!wishlistStatus) return;
     const timeout = window.setTimeout(() => setWishlistStatus(null), 4000);
@@ -672,7 +447,7 @@ const formatDaysAgo = (days: number | null) => {
   }, [wishlistStatus]);
 
     useEffect(() => {
-      const shouldFetch = Boolean(debouncedQuery) || hasFilterSelection;
+      const shouldFetch = Boolean(debouncedQuery);
       if (!shouldFetch) {
         setResults([]);
         setError(null);
@@ -700,32 +475,11 @@ const formatDaysAgo = (days: number | null) => {
       if (debouncedQuery) {
         apiParams.set("q", debouncedQuery);
       }
-      if (appliedFilters.platform !== "all") {
-        apiParams.set("platformId", appliedFilters.platform);
+      if (selectedPlatform !== "all") {
+        apiParams.set("platformId", selectedPlatform);
       }
-      if (appliedFilters.genres.length) {
-        apiParams.set("genres", appliedFilters.genres.join(","));
-      }
-      if (appliedFilters.themes.length) {
-        apiParams.set("themes", appliedFilters.themes.join(","));
-      }
-      if (appliedFilters.gameModes.length) {
-        apiParams.set("gameModes", appliedFilters.gameModes.join(","));
-      }
-      if (appliedFilters.perspectives.length) {
-        apiParams.set("playerPerspectives", appliedFilters.perspectives.join(","));
-      }
-      if (appliedFilters.ageRatings.length) {
-        apiParams.set("ageRatings", appliedFilters.ageRatings.join(","));
-      }
-      if (appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
-        apiParams.set("releaseFrom", String(appliedFilters.releaseYearRange[0]));
-      }
-      if (appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
-        apiParams.set("releaseTo", String(appliedFilters.releaseYearRange[1]));
-      }
-      if (appliedFilters.sort !== "none") {
-        const apiSortParam = mapSortOrderToApiParam(appliedFilters.sort);
+      if (sortOrder !== "none") {
+        const apiSortParam = mapSortOrderToApiParam(sortOrder);
         apiParams.set("sort", apiSortParam);
       }
       apiParams.set("page", String(page));
@@ -782,7 +536,7 @@ const formatDaysAgo = (days: number | null) => {
         });
 
       return () => controller.abort();
-    }, [appliedFilters, debouncedQuery, page, pageSize, hasFilterSelection]);
+    }, [debouncedQuery, page, pageSize, selectedPlatform, sortOrder]);
 
     useEffect(() => {
       if (skipPageResetRef.current) {
@@ -790,7 +544,7 @@ const formatDaysAgo = (days: number | null) => {
         return;
       }
       setPage(1);
-    }, [debouncedQuery, appliedFilters]);
+    }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
     const nextValue = String(pagination.page > 0 ? pagination.page : page);
@@ -802,49 +556,14 @@ const formatDaysAgo = (days: number | null) => {
     if (debouncedQuery) {
       params.set("q", debouncedQuery);
     }
-    if (appliedFilters.platform !== "all") {
-      params.set("platform", appliedFilters.platform);
-    }
-    if (appliedFilters.genres.length) {
-      params.set("genres", appliedFilters.genres.join(","));
-    } else {
-      params.delete("genres");
-    }
-    if (appliedFilters.themes.length) {
-      params.set("themes", appliedFilters.themes.join(","));
-    } else {
-      params.delete("themes");
-    }
-    if (appliedFilters.gameModes.length) {
-      params.set("gameModes", appliedFilters.gameModes.join(","));
-    } else {
-      params.delete("gameModes");
-    }
-    if (appliedFilters.perspectives.length) {
-      params.set("playerPerspectives", appliedFilters.perspectives.join(","));
-    } else {
-      params.delete("playerPerspectives");
-    }
-    if (appliedFilters.ageRatings.length) {
-      params.set("ageRatings", appliedFilters.ageRatings.join(","));
-    } else {
-      params.delete("ageRatings");
-    }
-    if (appliedFilters.releaseYearRange[0] !== DEFAULT_YEAR_RANGE[0]) {
-      params.set("releaseFrom", String(appliedFilters.releaseYearRange[0]));
-    } else {
-      params.delete("releaseFrom");
-    }
-    if (appliedFilters.releaseYearRange[1] !== DEFAULT_YEAR_RANGE[1]) {
-      params.set("releaseTo", String(appliedFilters.releaseYearRange[1]));
-    } else {
-      params.delete("releaseTo");
+    if (selectedPlatform !== "all") {
+      params.set("platform", selectedPlatform);
     }
     if (page > 1) {
       params.set("page", String(page));
     }
-    if (appliedFilters.sort !== "none") {
-      params.set("sort", appliedFilters.sort);
+    if (sortOrder !== "none") {
+      params.set("sort", sortOrder);
     }
 
     const nextSearch = params.toString();
@@ -854,56 +573,16 @@ const formatDaysAgo = (days: number | null) => {
 
     lastSyncedSearchRef.current = nextSearch;
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false });
-  }, [debouncedQuery, appliedFilters, page, pathname, router]);
-
-    const applyFilters = () => {
-      setAppliedFilters({
-        platform: selectedPlatform,
-        sort: sortOrder,
-        genres: [...selectedGenres],
-        themes: [...selectedThemes],
-        gameModes: [...selectedGameModes],
-        perspectives: [...selectedPerspectives],
-        ageRatings: [...selectedAgeRatings],
-        releaseYearRange: [...releaseYearRange],
-      });
-      setPage(1);
-      setPageInput("1");
-    };
+  }, [debouncedQuery, page, pathname, router, selectedPlatform, sortOrder]);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      applyFilters();
       setDebouncedQuery(query.trim());
     };
 
     const handlePlatformChange = (value: string) => {
       setPage(1);
       setSelectedPlatform(value);
-    };
-
-    const handleResetFilters = () => {
-      setSelectedPlatform("all");
-      setSortOrder("none");
-      setSelectedGenres([]);
-      setSelectedThemes([]);
-      setSelectedGameModes([]);
-      setSelectedPerspectives([]);
-      setSelectedAgeRatings([]);
-      setReleaseYearRange([...DEFAULT_YEAR_RANGE]);
-      setAppliedFilters({
-        platform: "all",
-        sort: "none",
-        genres: [],
-        themes: [],
-        gameModes: [],
-        perspectives: [],
-        ageRatings: [],
-        releaseYearRange: [...DEFAULT_YEAR_RANGE],
-      });
-      setPage(1);
-      setPageInput("1");
-      setFiltersOpen(false);
     };
 
   const statusCounts = statusLabels.map((status) => ({
@@ -928,27 +607,6 @@ const formatDaysAgo = (days: number | null) => {
   }, [filteredPlatforms]);
 
     const platformButtons = sortedPlatforms;
-
-    const sortedGenreOptions = useMemo(
-      () => [...genreOptions].sort((a, b) => a.name.localeCompare(b.name)),
-      [genreOptions],
-    );
-    const sortedThemeOptions = useMemo(
-      () => [...themeOptions].sort((a, b) => a.name.localeCompare(b.name)),
-      [themeOptions],
-    );
-    const sortedGameModeOptions = useMemo(
-      () => [...gameModeOptions].sort((a, b) => a.name.localeCompare(b.name)),
-      [gameModeOptions],
-    );
-    const sortedPerspectiveOptions = useMemo(
-      () => [...perspectiveOptions].sort((a, b) => a.name.localeCompare(b.name)),
-      [perspectiveOptions],
-    );
-    const sortedAgeRatingOptions = useMemo(
-      () => [...ageRatingOptions].sort((a, b) => a.label.localeCompare(b.label)),
-      [ageRatingOptions],
-    );
 
   const retroPrioritySlugs = [
     "nes",
@@ -1351,110 +1009,6 @@ const formatDaysAgo = (days: number | null) => {
                 ))}
               </select>
             </label>
-            <div className="hidden flex-wrap items-center gap-3 sm:flex sm:justify-end">
-              {filtersDirty ? (
-                <button
-                  type="button"
-                  onClick={applyFilters}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
-                >
-                  Terapkan filter
-                </button>
-              ) : null}
-              {hasFilterSelection ? (
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                  {activeFilterCount} filter aktif
-                </span>
-              ) : null}
-              <FiltersResetButton onReset={handleResetFilters} />
-            </div>
-          </div>
-
-          <div className="sticky top-2 z-20 md:hidden">
-            <div className="flex items-center justify-between gap-3 rounded-full border border-slate-200/80 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm ring-1 ring-slate-100 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-slate-700">
-              <button
-                type="button"
-                onClick={() => {
-                  setFiltersOpen((prev) => !prev);
-                  filtersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
-                className="flex items-center gap-2"
-              >
-                {filtersOpen ? "Sembunyikan filter" : "Filter pencarian"}
-                {hasFilterSelection ? (
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200">
-                    {activeFilterCount}
-                  </span>
-                ) : null}
-              </button>
-              {filtersDirty ? (
-                <button
-                  type="button"
-                  onClick={applyFilters}
-                  className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-                >
-                  Terapkan
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-
-          <div
-            ref={filtersRef}
-            className={`${filtersOpen ? "block" : "hidden"} md:block space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Refine search</p>
-                {hasFilterSelection ? (
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                    {activeFilterCount} aktif
-                  </span>
-                ) : null}
-                {filtersDirty ? (
-                  <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
-                    perubahan belum diterapkan
-                  </span>
-                ) : null}
-              </div>
-              <div className="hidden items-center gap-2 md:flex">
-                {filtersDirty ? (
-                  <button
-                    type="button"
-                    onClick={applyFilters}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
-                  >
-                    Terapkan filter
-                  </button>
-                ) : null}
-                <FiltersResetButton onReset={handleResetFilters} />
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              <GenreFilter options={sortedGenreOptions} value={selectedGenres} onChange={setSelectedGenres} defaultOpen />
-              <ThemeFilter options={sortedThemeOptions} value={selectedThemes} onChange={setSelectedThemes} />
-              <GameModeFilter options={sortedGameModeOptions} value={selectedGameModes} onChange={setSelectedGameModes} />
-              <PerspectiveFilter
-                options={sortedPerspectiveOptions}
-                value={selectedPerspectives}
-                onChange={setSelectedPerspectives}
-              />
-              <AgeRatingFilter options={sortedAgeRatingOptions} value={selectedAgeRatings} onChange={setSelectedAgeRatings} />
-              <YearRangePicker
-                value={releaseYearRange}
-                onChange={setReleaseYearRange}
-                minYear={DEFAULT_YEAR_RANGE[0]}
-                maxYear={DEFAULT_YEAR_RANGE[1]}
-                defaultOpen
-              />
-            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 overflow-x-auto rounded-xl bg-slate-100/60 p-2 dark:bg-slate-800/60">
