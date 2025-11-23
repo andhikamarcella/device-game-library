@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Expand, Loader2, Minimize2, MonitorPlay, PictureInPicture2, Play } from "lucide-react";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { cn } from "@/lib/utils";
@@ -91,6 +91,7 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const initialEmbedUrlRef = useRef(embedUrl);
   const playerRef = useRef<any>(null);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isFading, setIsFading] = useState(false);
@@ -207,11 +208,6 @@ export function VideoPlayer({
     }
   }, [autoPlay]);
 
-  const embedSrc = useMemo(() => {
-    const separator = embedUrl.includes("?") ? "&" : "?";
-    return `${embedUrl}${separator}autoplay=${autoPlay ? 1 : 0}`;
-  }, [autoPlay, embedUrl]);
-
   const handleAutoPlayToggle = () => {
     const next = !autoPlay;
     onAutoPlayChange(next);
@@ -271,7 +267,7 @@ export function VideoPlayer({
               <iframe
                 ref={iframeRef}
                 title={title}
-                src={embedSrc}
+                src={initialEmbedUrlRef.current}
                 allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 className="h-full w-full"
