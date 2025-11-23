@@ -447,25 +447,6 @@ const formatDaysAgo = (days: number | null) => {
   }, [wishlistStatus]);
 
     useEffect(() => {
-      const shouldFetch = Boolean(debouncedQuery);
-      if (!shouldFetch) {
-        setResults([]);
-        setError(null);
-        setLoading(false);
-        setHasSearched(false);
-        setPagination({
-          total: 0,
-          page: 1,
-          pageSize,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        });
-        if (page !== 1) {
-          setPage(1);
-        }
-        return;
-      }
-
       const controller = new AbortController();
       setLoading(true);
       setError(null);
