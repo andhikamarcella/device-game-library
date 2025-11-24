@@ -259,26 +259,25 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
   const rawgReviews: RawgReview[] = (game.rawgReviews ?? [])
     .map((review) => {
       if (!review || typeof review.id !== "number") return null;
+
       const text = (review.text ?? "").replace(/<[^>]+>/g, "").trim();
-      const rating = typeof review.rating === "number" && Number.isFinite(review.rating) ? review.rating : null;
-      const created = review.created ?? null;
+
       return {
-        ...review,
-        text: text || null,
-        rating,
-        created,
+        id: review.id,
+        text,
+        rating: review.rating ?? null,
+        created: review.created ?? null,
+        likes_count: review.likes_count ?? null,
+        comments_count: review.comments_count ?? null,
+        positive: review.positive ?? null,
+        negative: review.negative ?? null,
         user: {
-          username: review.user?.username ?? "RAWG user",
+          username: review.user?.username ?? "Unknown",
           avatar: review.user?.avatar ?? null,
         },
-      } satisfies RawgReview;
+      };
     })
-    .filter((review): review is RawgReview => Boolean(review && (review.text || review.rating !== null)))
-    .sort((a, b) => {
-      const aDate = a.created ? new Date(a.created).getTime() : 0;
-      const bDate = b.created ? new Date(b.created).getTime() : 0;
-      return bDate - aDate;
-    });
+    .filter(Boolean) as RawgReview[];
   const bestCover = getBestCover(game);
   const igdbCoverImage = normalizeImageUrl(bestCover);
   const description = game.description_raw ?? game.description ?? "No description available.";
