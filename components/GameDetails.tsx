@@ -125,17 +125,29 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   return "Add-on";
 };
 
-const pickHeroBackground = (
-  artworks: GameDetailsPayload["artworks"] | null | undefined,
-  coverFallback: string | null,
-) => {
-  const candidates = (artworks ?? [])
-    .map((art) => art?.image)
+const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
+  const artworkCandidates = (game.artworks ?? [])
+    .map((art) => {
+      if (art?.image_id) {
+        return buildIgdbImageUrl(art.image_id, "t_screenshot_huge");
+      }
+      return art?.image ?? null;
+    })
+    .filter((src): src is string => Boolean(src));
+
+  const extraCandidates = [
+    game.background_image_additional,
+    game.short_screenshots?.[0]?.image,
+    game.background_image,
+  ];
+
+  const candidates = [...artworkCandidates, ...extraCandidates]
+    .map((src) => normalizeImageUrl(src))
     .filter((src): src is string => Boolean(src));
 
   if (candidates.length) {
     const randomIndex = Math.floor(Math.random() * candidates.length);
-    return candidates[randomIndex] ?? null;
+    return candidates[randomIndex] ?? coverFallback;
   }
 
   return coverFallback;
@@ -337,7 +349,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
-  const heroBackground = pickHeroBackground(game.artworks, coverUrl);
+  const heroBackground = pickHeroBackground(game, igdbCoverImage);
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 

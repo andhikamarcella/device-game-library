@@ -882,10 +882,10 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const cover = resolveIgdbImage(game.cover) ?? screenshots[0]?.image ?? null;
   const secondaryImage = screenshots[1]?.image ?? cover;
   const slug = game.slug ?? slugify(game.name);
-  const aggregated = typeof game.aggregated_rating === "number" ? game.aggregated_rating : null;
-  const critics = typeof game.total_rating === "number" ? game.total_rating : null;
   const userRating = typeof game.rating === "number" ? game.rating : null;
-  const ratingValue = aggregated ?? critics ?? userRating;
+  const critics = typeof game.total_rating === "number" ? game.total_rating : null;
+  const aggregated = typeof game.aggregated_rating === "number" ? game.aggregated_rating : null;
+  const ratingValue = userRating ?? critics ?? aggregated;
   const ratingCount =
     typeof game.rating_count === "number"
       ? game.rating_count
