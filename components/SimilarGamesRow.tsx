@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
 import { getBestCover } from "@/lib/getCoverArt";
+import type { GameScreenshot } from "@/lib/gameData";
 import { normalizeImageUrl } from "@/lib/images";
 
 export interface SimilarGame {
@@ -14,7 +15,13 @@ export interface SimilarGame {
   cover?: { image_id?: string | null } | null;
   rating: number | null;
   released: string | null;
-  short_screenshots?: Array<{ image: string | null }>;
+  short_screenshots?: Array<{
+    id?: number;
+    image: string | null;
+    image_id?: string | null;
+    width?: number;
+    height?: number;
+  }>;
   parent_platforms?: Array<{ id: number; name: string; slug: string }>;
 }
 
@@ -35,10 +42,23 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
       abbreviation: platform.slug,
     }));
 
+    const shortScreenshots: GameScreenshot[] | undefined = game.short_screenshots
+      ?.map((shot, idx) => {
+        if (!shot?.image) return null;
+        return {
+          id: shot.id ?? idx,
+          image: shot.image,
+          image_id: shot.image_id,
+          width: shot.width,
+          height: shot.height,
+        } satisfies GameScreenshot;
+      })
+      .filter(Boolean) as GameScreenshot[] | undefined;
+
     const bestCover = getBestCover({
       background_image: game.background_image,
       background_image_additional: game.background_image_additional ?? null,
-      short_screenshots: game.short_screenshots,
+      short_screenshots: shortScreenshots,
       artworks: [],
       clip: null,
       cover: game.cover,
