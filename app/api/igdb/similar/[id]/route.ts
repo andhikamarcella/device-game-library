@@ -17,6 +17,13 @@ export async function GET(_request: Request, { params }: Params) {
       slug: game.slug,
       name: game.name,
       background_image: normalizeImageUrl(game.background_image),
+      background_image_additional: normalizeImageUrl(game.background_image_additional),
+      cover: game.cover ? { image_id: game.cover.image_id ?? null } : null,
+      short_screenshots:
+        game.short_screenshots?.map((shot) => ({
+          ...shot,
+          image: normalizeImageUrl(shot.image),
+        })) ?? [],
       rating: game.rating ?? null,
       released: game.released ?? null,
       parent_platforms:

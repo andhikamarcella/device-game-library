@@ -10,6 +10,7 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { SimilarGamesRow } from "@/components/SimilarGamesRow";
 import { VideoCarousel } from "@/components/video/VideoCarousel";
 import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
+import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeImageUrl } from "@/lib/images";
 import { truncateText } from "@/lib/text";
 import type { IgdbVideo } from "@/lib/igdb";
@@ -26,8 +27,10 @@ interface GameDetailsResponse {
   slug: string;
   name: string;
   description_raw: string | null;
+  cover: { image_id?: string | null } | null;
   background_image: string | null;
   background_image_additional: string | null;
+  artworks: Array<{ id: number; image: string | null }>;
   released: string | null;
   playtime: number | null;
   metacritic: number | null;
@@ -171,7 +174,14 @@ export default function GameDetailsPage() {
     }
     const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
     const coverCandidate =
-      normalizeImageUrl(details.background_image ?? details.background_image_additional ?? null);
+      getBestCover({
+        background_image: details.background_image,
+        background_image_additional: details.background_image_additional,
+        short_screenshots: details.short_screenshots,
+        artworks: details.artworks,
+        clip: null,
+        cover: details.cover,
+      }) ?? null;
     const patch: Partial<UserGame> = {};
     if (!userGame.coverImage && coverCandidate) {
       patch.coverImage = coverCandidate;
@@ -218,8 +228,24 @@ export default function GameDetailsPage() {
   }
 
   const releaseYear = details.released ? new Date(details.released).getFullYear() : null;
-  const heroImage = normalizeImageUrl(details.background_image_additional ?? details.background_image ?? null);
-  const coverImage = normalizeImageUrl(details.background_image ?? details.background_image_additional ?? null);
+  const coverCandidate = getBestCover({
+    background_image: details.background_image,
+    background_image_additional: details.background_image_additional,
+    short_screenshots: details.short_screenshots,
+    artworks: details.artworks,
+    clip: null,
+    cover: details.cover,
+  });
+  const artworkHero = details.artworks?.find((art) => art.image)?.image ?? null;
+  const heroImage = normalizeImageUrl(
+    artworkHero ??
+      details.background_image_additional ??
+      details.short_screenshots?.[0]?.image ??
+      details.background_image ??
+      coverCandidate ??
+      null,
+  );
+  const coverImage = normalizeImageUrl(coverCandidate ?? details.background_image ?? details.background_image_additional ?? null);
   const platformNames = details.parent_platforms?.map((platform) => platform.name) ?? [];
   const genres = details.genres?.map((genre) => genre.name) ?? [];
   const tags = details.tags?.slice(0, 8).map((tag) => tag.name) ?? [];

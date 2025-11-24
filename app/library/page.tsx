@@ -10,7 +10,8 @@ import { GameStatusControls } from "@/components/GameStatusControls";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
 import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
-import { normalizeImageUrl, pickBestImage } from "@/lib/images";
+import { getBestCover } from "@/lib/getCoverArt";
+import { normalizeImageUrl } from "@/lib/images";
 
 interface SearchResponse {
   results: SearchGameResult[];
@@ -462,6 +463,8 @@ export default function DashboardPage() {
       released: string | null;
       background_image: string | null;
       background_image_additional: string | null;
+      cover: { image_id?: string | null } | null;
+      artworks?: Array<{ image: string | null }>;
       short_screenshots?: Array<{ image: string | null }>;
     };
 
@@ -475,11 +478,14 @@ export default function DashboardPage() {
           const data = (await response.json()) as DetailsHydrationResponse;
           if (cancelled) return;
           const coverCandidate =
-            pickBestImage([
-              data.background_image,
-              data.background_image_additional,
-              ...(data.short_screenshots?.map((shot) => shot.image) ?? []),
-            ]) ?? null;
+            getBestCover({
+              background_image: data.background_image,
+              background_image_additional: data.background_image_additional,
+              short_screenshots: data.short_screenshots,
+              artworks: data.artworks ?? [],
+              clip: null,
+              cover: data.cover,
+            }) ?? null;
           setMetadataById((prev) => {
             const current = prev[game.igdbId];
             const parsedYear =

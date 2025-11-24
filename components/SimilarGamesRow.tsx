@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
+import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeImageUrl } from "@/lib/images";
 
 export interface SimilarGame {
@@ -9,9 +10,11 @@ export interface SimilarGame {
   name: string;
   slug?: string | null;
   background_image: string | null;
+  background_image_additional?: string | null;
   cover?: { image_id?: string | null } | null;
   rating: number | null;
   released: string | null;
+  short_screenshots?: Array<{ image: string | null }>;
   parent_platforms?: Array<{ id: number; name: string; slug: string }>;
 }
 
@@ -32,11 +35,20 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
       abbreviation: platform.slug,
     }));
 
+    const bestCover = getBestCover({
+      background_image: game.background_image,
+      background_image_additional: game.background_image_additional ?? null,
+      short_screenshots: game.short_screenshots,
+      artworks: [],
+      clip: null,
+      cover: game.cover,
+    });
+
     return {
       id: game.id,
       name: game.name,
       coverImageId: game.cover?.image_id ?? null,
-      coverUrl: normalizeImageUrl(game.background_image) ?? null,
+      coverUrl: normalizeImageUrl(bestCover) ?? null,
       rating: typeof game.rating === "number" ? game.rating : null,
       releaseYear,
       platforms,
