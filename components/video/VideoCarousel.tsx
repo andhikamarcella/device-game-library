@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clapperboard } from "lucide-react";
 import type { IgdbVideo } from "@/lib/igdb";
+import { getYoutubeEmbedUrl, getYoutubeWatchUrl } from "@/lib/igdb";
 import { cn } from "@/lib/utils";
+import { VideoPlayer } from "@/components/VideoPlayer";
+import { useMiniPlayer } from "@/hooks/useMiniPlayer";
 
 const thumbnailFor = (videoId: string) => `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-
-const EMBED_BASE = "https://www.youtube.com/embed";
 
 const normalizeId = (value: string) => value.trim();
 
@@ -32,7 +33,14 @@ const detectRole = (name?: string): VideoRole => {
   return "other";
 };
 
-type PreparedVideo = IgdbVideo & { role: VideoRole; priority: number; thumbnail: string };
+type PreparedVideo = IgdbVideo & {
+  role: VideoRole;
+  priority: number;
+  thumbnail: string;
+  video_id: string;
+  embedUrl: string;
+  watchUrl: string;
+};
 
 const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
   return videos
@@ -48,6 +56,8 @@ const prepareVideos = (videos: IgdbVideo[]): PreparedVideo[] => {
         priority: rolePriority[role] ?? rolePriority.other,
         thumbnail: thumbnailFor(video_id),
         video_id,
+        embedUrl: getYoutubeEmbedUrl(video_id),
+        watchUrl: getYoutubeWatchUrl(video_id),
       } satisfies PreparedVideo;
     })
     .sort((a, b) => {
@@ -63,6 +73,10 @@ interface VideoCarouselProps {
 export function VideoCarousel({ videos }: VideoCarouselProps) {
   const prepared = useMemo(() => prepareVideos(videos), [videos]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isTheater, setIsTheater] = useState(false);
+  const { containerRef, isMini, closeMini } = useMiniPlayer();
+  const [autoPlay, setAutoPlay] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -93,8 +107,6 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [goNext, goPrev, hasVideos]);
 
-  const embedUrl = activeVideo ? `${EMBED_BASE}/${activeVideo.video_id}` : null;
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
@@ -104,19 +116,31 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
 
       {hasVideos ? (
         <div className="space-y-4">
-          <div className="relative w-full">
+          <div className="relative w-full" ref={containerRef}>
             <div className="relative overflow-visible rounded-2xl border border-slate-200/60 bg-slate-50/80 shadow-2xl ring-1 ring-black/10 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/80 dark:ring-white/5">
-              <div className="aspect-video w-full bg-black/80">
-                {embedUrl ? (
-                  <iframe
-                    title={activeVideo?.name ?? "IGDB video"}
-                    src={embedUrl}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="h-full w-full"
-                  />
-                ) : null}
-              </div>
+              {activeVideo ? (
+                <VideoPlayer
+                  videoKey={activeVideo.video_id}
+                  title={activeVideo.name ?? "IGDB video"}
+                  poster={activeVideo.thumbnail}
+                  embedUrl={activeVideo.embedUrl}
+                  watchUrl={activeVideo.watchUrl}
+                  autoPlay={autoPlay}
+                  onAutoPlayChange={setAutoPlay}
+                  playbackRate={playbackRate}
+                  onPlaybackRateChange={setPlaybackRate}
+                  onEnded={goNext}
+                  onSwipeLeft={goNext}
+                  onSwipeRight={goPrev}
+                  isTheater={isTheater}
+                  toggleTheater={() => setIsTheater((value) => !value)}
+                  isMini={isMini && !isTheater}
+                  onCloseMini={closeMini}
+                />
+              ) : null}
+
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-16 rounded-l-2xl bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+              <div className="pointer-events-none absolute right-0 top-0 h-full w-16 rounded-r-2xl bg-gradient-to-l from-black/60 via-black/30 to-transparent" />
 
               <button
                 type="button"
@@ -183,3 +207,5 @@ export function VideoCarousel({ videos }: VideoCarouselProps) {
     </div>
   );
 }
+
+export const IGDBTrailerPlayer = VideoCarousel;

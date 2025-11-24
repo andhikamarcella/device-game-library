@@ -13,7 +13,6 @@ import {
   Tag,
   Users,
 } from "lucide-react";
-import { CoverImage } from "@/components/CoverImage";
 import ArtworkGallery from "@/components/ArtworkGallery";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
@@ -124,6 +123,37 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
+};
+
+const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
+  const artworkCandidates = (game.artworks ?? [])
+    .map((art) => {
+      if (art?.image_id) {
+        return buildIgdbImageUrl(art.image_id, "t_screenshot_huge");
+      }
+      return art?.image ?? null;
+    })
+    .filter((src): src is string => Boolean(src));
+
+  const screenshotCandidates = (game.short_screenshots ?? [])
+    .map((shot) => shot?.image ?? null)
+    .filter((src): src is string => Boolean(src));
+
+  const extraCandidates = [
+    game.background_image_additional,
+    game.background_image,
+    igdbCoverUrl(game.cover?.image_id ?? null),
+  ];
+
+  const candidates = [...artworkCandidates, ...screenshotCandidates, ...extraCandidates]
+    .map((src) => normalizeImageUrl(src))
+    .filter((src): src is string => Boolean(src));
+
+  if (candidates.length) {
+    return candidates[0] ?? coverFallback;
+  }
+
+  return coverFallback;
 };
 
 type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
@@ -252,7 +282,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .slice(0, 10);
   const similarCards: SearchGameResult[] = similarGames.slice(0, 10).map((similar) => {
     const coverId = similar.cover?.image_id ?? null;
-    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "t_1080p") : similar.background_image;
+    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "cover_big") : similar.background_image;
     const screenshots = Array.isArray(similar.short_screenshots)
       ? similar.short_screenshots.map((shot) => shot.image).filter(Boolean)
       : [];
@@ -322,6 +352,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
+  const heroBackground = pickHeroBackground(game, igdbCoverImage);
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -337,12 +368,16 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
         <div className="relative h-72 w-full overflow-hidden">
-          <CoverImage
-            gameName={game.name}
-            fallbackImage={igdbCoverImage}
-            initialImage={igdbCoverImage}
-            className="absolute inset-0 h-full w-full"
-          />
+          {heroBackground ? (
+            <Image
+              src={heroBackground}
+              alt={`${game.name} artwork background`}
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority
+            />
+          ) : null}
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
         </div>
         <div className="space-y-8 p-6">

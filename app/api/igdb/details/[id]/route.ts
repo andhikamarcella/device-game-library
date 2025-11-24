@@ -17,8 +17,14 @@ export async function GET(_request: Request, { params }: Params) {
       slug: data.slug ?? data.id.toString(),
       name: data.name,
       description_raw: data.description_raw,
+      cover: data.cover ? { image_id: data.cover.image_id ?? null } : null,
       background_image: normalizeImageUrl(data.background_image),
       background_image_additional: normalizeImageUrl(data.background_image_additional),
+      artworks:
+        data.artworks?.map((art) => ({
+          ...art,
+          image: normalizeImageUrl(art.image),
+        })) ?? [],
       released: data.released,
       playtime: data.playtime,
       metacritic: data.metacritic,

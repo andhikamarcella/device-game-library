@@ -11,6 +11,14 @@ type TokenCache = {
 
 let tokenCache: TokenCache | null = null;
 
+export function getYoutubeEmbedUrl(videoId: string) {
+  return `https://www.youtube.com/embed/${videoId}?rel=0&showinfo=0&modestbranding=1&iv_load_policy=3&playsinline=1&enablejsapi=1`;
+}
+
+export function getYoutubeWatchUrl(videoId: string) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
 const resolveTokenUrl = (): string => {
   const fallbackUrl = "https://id.twitch.tv/oauth2/token";
   const rawUrl =
@@ -72,12 +80,20 @@ export type SortKey =
   | "lowest_rated"
   | "newest"
   | "oldest"
-  | "alphabetical";
+  | "alphabetical"
+  | "alphabetical_desc";
 
 export function buildIgdbQuery(opts: {
   searchText?: string;
   sort?: SortKey;
   platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
   limit?: number;
   offset?: number;
 }): string {
@@ -100,7 +116,11 @@ export function buildIgdbQuery(opts: {
       "  platforms.name,",
       "  platforms.slug,",
       "  platforms.abbreviation,",
-      "  genres.name;",
+      "  genres.name,",
+      "  themes.name,",
+      "  game_modes.name,",
+      "  player_perspectives.name,",
+      "  age_ratings.rating;",
     ].join("\n"),
   );
 
@@ -110,8 +130,45 @@ export function buildIgdbQuery(opts: {
     lines.push(`search "${escaped}";`);
   }
 
+  const whereClauses: string[] = [];
+
   if (typeof opts.platformId === "number") {
-    lines.push(`where platforms = (${opts.platformId});`);
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
   }
 
   const sortMapping: Record<Exclude<SortKey, "none">, string> = {
@@ -122,6 +179,7 @@ export function buildIgdbQuery(opts: {
     newest: "first_release_date desc",
     oldest: "first_release_date asc",
     alphabetical: "name asc",
+    alphabetical_desc: "name desc",
   };
 
   const sortKey = opts.sort ?? "none";
@@ -141,7 +199,17 @@ export function buildIgdbQuery(opts: {
   return lines.join("\n");
 }
 
-export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: number | null }): string {
+export function buildIgdbCountQuery(opts: {
+  searchText?: string;
+  platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
+}): string {
   const lines: string[] = ["fields count;"];
 
   const trimmedSearch = opts.searchText?.trim();
@@ -150,8 +218,45 @@ export function buildIgdbCountQuery(opts: { searchText?: string; platformId?: nu
     lines.push(`search "${escaped}";`);
   }
 
+  const whereClauses: string[] = [];
+
   if (typeof opts.platformId === "number") {
-    lines.push(`where platforms = (${opts.platformId});`);
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
   }
 
   return lines.join("\n");
@@ -267,6 +372,7 @@ export interface IgdbGame {
   platforms?: IgdbPlatformRef[];
   genres?: IgdbGenreRef[];
   screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
 }
 
 export interface IgdbGameDetails extends IgdbGame {
@@ -305,6 +411,7 @@ export interface IgdbSimilarGame
   cover?: IgdbCover;
   platforms?: IgdbPlatformRef[];
   screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
 }
 
 export interface IgdbSearchParams {
@@ -502,8 +609,8 @@ const parseRatingRange = (range?: string): { min?: number; max?: number } => {
 };
 
 const ORDERING_FIELDS: Record<string, { field: string; direction: "asc" | "desc" }> = {
-  "": { field: "popularity", direction: "desc" },
-  "-added": { field: "popularity", direction: "desc" },
+  "": { field: "total_rating_count", direction: "desc" },
+  "-added": { field: "total_rating_count", direction: "desc" },
   "-rating": { field: "total_rating", direction: "desc" },
   "-metacritic": { field: "total_rating", direction: "desc" },
   "-released": { field: "first_release_date", direction: "desc" },
@@ -566,7 +673,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 
   const queryParts: string[] = [];
   queryParts.push(
-    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name;",
+    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height;",
   );
 
   if (searchTerm) {
@@ -658,6 +765,7 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       websites.url,
       websites.category,
       websites.trusted,
+      videos.id,
       videos.name,
       videos.video_id,
       screenshots.image_id,
@@ -674,6 +782,9 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       similar_games.rating,
       similar_games.rating_count,
       similar_games.screenshots.image_id,
+      similar_games.artworks.image_id,
+      similar_games.artworks.width,
+      similar_games.artworks.height,
       similar_games.platforms.id,
       similar_games.platforms.name,
       similar_games.platforms.slug,

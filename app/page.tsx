@@ -112,13 +112,14 @@ type PlatformOption = {
 const statusLabels: GameStatus[] = ["backlog", "playing", "completed", "dropped"];
 
 const DISCOVER_SORT_OPTIONS = [
-  { value: "none", label: "No sort" },
-  { value: "popular_desc", label: "Most popular" },
-  { value: "popular_asc", label: "Least popular" },
-  { value: "rating_desc", label: "Highest rated" },
-  { value: "rating_asc", label: "Lowest rated" },
-  { value: "release_desc", label: "Newest releases" },
-  { value: "release_asc", label: "Oldest releases" },
+  { value: "none", label: "No sort (default)" },
+  { value: "most_popular", label: "Most popular" },
+  { value: "alphabetical", label: "Alphabetical A–Z" },
+  { value: "alphabetical_desc", label: "Alphabetical Z–A" },
+  { value: "highest_rated", label: "Highest rating" },
+  { value: "lowest_rated", label: "Lowest rating" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
 ] as const;
 
 type DiscoverSortOption = (typeof DISCOVER_SORT_OPTIONS)[number]["value"];
@@ -130,27 +131,21 @@ type SearchSortKey =
   | "highest_rated"
   | "lowest_rated"
   | "newest"
-  | "oldest";
+  | "oldest"
+  | "alphabetical"
+  | "alphabetical_desc";
 
-const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => {
-  switch (value) {
-    case "none":
-      return "none";
-    case "popular_asc":
-      return "least_popular";
-    case "rating_desc":
-      return "highest_rated";
-    case "rating_asc":
-      return "lowest_rated";
-    case "release_desc":
-      return "newest";
-    case "release_asc":
-      return "oldest";
-    case "popular_desc":
-    default:
-      return "most_popular";
-  }
+const SORT_FALLBACKS: Record<string, DiscoverSortOption> = {
+  popular_desc: "most_popular",
+  popular_asc: "most_popular",
+  rating_desc: "highest_rated",
+  rating_asc: "lowest_rated",
+  release_desc: "newest",
+  release_asc: "oldest",
+  none: "none",
 };
+
+const mapSortOrderToApiParam = (value: DiscoverSortOption): SearchSortKey => value as SearchSortKey;
 
 const parsePlatformValue = (value: string | null): string => {
   if (!value) {
@@ -168,12 +163,16 @@ const parsePageValue = (value: string | null): number => {
 };
 
 const parseSortValue = (value: string | null): DiscoverSortOption => {
-  if (!value) {
-    return "popular_desc";
+  const normalized = value?.trim();
+  if (!normalized) {
+    return "none";
   }
-  return DISCOVER_SORT_OPTIONS.some((option) => option.value === value)
-    ? (value as DiscoverSortOption)
-    : "popular_desc";
+  if (SORT_FALLBACKS[normalized]) {
+    return SORT_FALLBACKS[normalized];
+  }
+  return DISCOVER_SORT_OPTIONS.some((option) => option.value === normalized)
+    ? (normalized as DiscoverSortOption)
+    : "none";
 };
 
 type IgdbListPlatform = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
@@ -190,7 +189,7 @@ type IgdbListGame = {
 };
 
 const HOMEPAGE_GRID =
-  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 md:grid-flow-row md:auto-cols-auto md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 sm:auto-cols-[45%] lg:auto-cols-[30%] xl:auto-cols-[25%]";
 
 const mapIgdbListGame = (game: IgdbListGame): CardResult => {
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
@@ -261,53 +260,53 @@ const formatDaysAgo = (days: number | null) => {
   return `Released ${days} days ago`;
 };
 
-function DashboardPageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  function DashboardPageContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
 
-  const initialQueryParam = searchParams.get("q") ?? "";
-  const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
-  const initialPageParam = parsePageValue(searchParams.get("page"));
-  const initialSortParam = parseSortValue(searchParams.get("sort"));
+    const initialQueryParam = searchParams.get("q") ?? "";
+    const initialPlatformParam = parsePlatformValue(searchParams.get("platform"));
+    const initialPageParam = parsePageValue(searchParams.get("page"));
+    const initialSortParam = parseSortValue(searchParams.get("sort"));
 
-  const { devices } = useDeviceStore();
-  const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
+    const { devices } = useDeviceStore();
+    const { games, addGame, toggleWishlistGame, updateGame } = useGameStore();
 
-  const trackedGames = Array.isArray(games) ? games : [];
-  const trackedDevices = Array.isArray(devices) ? devices : [];
+    const trackedGames = Array.isArray(games) ? games : [];
+    const trackedDevices = Array.isArray(devices) ? devices : [];
 
-  const [query, setQuery] = useState(initialQueryParam);
-  const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const pageSize = 5;
-  const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
-  const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
-  const [page, setPage] = useState(initialPageParam);
-  const [pageInput, setPageInput] = useState(String(initialPageParam));
-  const lastSyncedSearchRef = useRef(searchParams.toString());
-  const skipPageResetRef = useRef(true);
-  const [pagination, setPagination] = useState(() => ({
-    total: 0,
-    page: initialPageParam,
-    pageSize,
-    hasNextPage: false,
-    hasPreviousPage: false,
-  }));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [platforms, setPlatforms] = useState<PlatformOption[]>([]);
-  const [platformLoading, setPlatformLoading] = useState(true);
-  const [platformError, setPlatformError] = useState<string | null>(null);
-  const [platformSearch, setPlatformSearch] = useState("");
-  const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
-  const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
-  const [topGames, setTopGames] = useState<CardResult[]>([]);
-  const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
-  const [recentGames, setRecentGames] = useState<CardResult[]>([]);
-  const [headlineLoading, setHeadlineLoading] = useState(true);
-  const safeResults = Array.isArray(results) ? results : [];
+    const [query, setQuery] = useState(initialQueryParam);
+    const [debouncedQuery, setDebouncedQuery] = useState(initialQueryParam.trim());
+    const [results, setResults] = useState<SearchResult[]>([]);
+    const pageSize = 5;
+    const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatformParam);
+    const [sortOrder, setSortOrder] = useState<DiscoverSortOption>(initialSortParam);
+    const [page, setPage] = useState(initialPageParam);
+    const [pageInput, setPageInput] = useState(String(initialPageParam));
+    const lastSyncedSearchRef = useRef(searchParams.toString());
+    const skipPageResetRef = useRef(true);
+    const [pagination, setPagination] = useState(() => ({
+      total: 0,
+      page: initialPageParam,
+      pageSize,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    }));
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [hasSearched, setHasSearched] = useState(false);
+    const [platforms, setPlatforms] = useState<PlatformOption[]>([]);
+    const [platformLoading, setPlatformLoading] = useState(true);
+    const [platformError, setPlatformError] = useState<string | null>(null);
+    const [platformSearch, setPlatformSearch] = useState("");
+    const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
+    const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+    const [topGames, setTopGames] = useState<CardResult[]>([]);
+    const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
+    const [recentGames, setRecentGames] = useState<CardResult[]>([]);
+    const [headlineLoading, setHeadlineLoading] = useState(true);
+    const safeResults = Array.isArray(results) ? results : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -347,28 +346,28 @@ function DashboardPageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    const currentSearch = searchParams.toString();
-    if (currentSearch === lastSyncedSearchRef.current) {
-      return;
-    }
+    useEffect(() => {
+      const currentSearch = searchParams.toString();
+      if (currentSearch === lastSyncedSearchRef.current) {
+        return;
+      }
 
-    const nextQueryParam = searchParams.get("q") ?? "";
-    const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
-    const nextPageParam = parsePageValue(searchParams.get("page"));
-    const nextSortParam = parseSortValue(searchParams.get("sort"));
-    const trimmed = nextQueryParam.trim();
+      const nextQueryParam = searchParams.get("q") ?? "";
+      const nextPlatformParam = parsePlatformValue(searchParams.get("platform"));
+      const nextPageParam = parsePageValue(searchParams.get("page"));
+      const nextSortParam = parseSortValue(searchParams.get("sort"));
+      const trimmed = nextQueryParam.trim();
 
-    setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
-    setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
-    setPage((current) => (current === nextPageParam ? current : nextPageParam));
-    setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
-    setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
-    setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
+        setQuery((current) => (current === nextQueryParam ? current : nextQueryParam));
+        setDebouncedQuery((current) => (current === trimmed ? current : trimmed));
+        setSelectedPlatform((current) => (current === nextPlatformParam ? current : nextPlatformParam));
+        setPage((current) => (current === nextPageParam ? current : nextPageParam));
+        setPageInput((current) => (current === String(nextPageParam) ? current : String(nextPageParam)));
+        setSortOrder((current) => (current === nextSortParam ? current : nextSortParam));
 
-    skipPageResetRef.current = true;
-    lastSyncedSearchRef.current = currentSearch;
-  }, [searchParams]);
+      skipPageResetRef.current = true;
+      lastSyncedSearchRef.current = currentSearch;
+    }, [searchParams]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -383,11 +382,11 @@ function DashboardPageContent() {
     return () => window.clearTimeout(timeout);
   }, [query]);
 
-  useEffect(() => {
-    let cancelled = false;
+    useEffect(() => {
+      let cancelled = false;
 
-    setPlatformLoading(true);
-    setPlatformError(null);
+      setPlatformLoading(true);
+      setPlatformError(null);
 
     fetch("/api/igdb/platforms")
       .then(async (response) => {
@@ -436,10 +435,10 @@ function DashboardPageContent() {
         }
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
   useEffect(() => {
     if (!wishlistStatus) return;
@@ -447,103 +446,89 @@ function DashboardPageContent() {
     return () => window.clearTimeout(timeout);
   }, [wishlistStatus]);
 
-  useEffect(() => {
-    const shouldFetch = Boolean(debouncedQuery) || selectedPlatform !== "all";
-    if (!shouldFetch) {
-      setResults([]);
+    useEffect(() => {
+      const controller = new AbortController();
+      setLoading(true);
       setError(null);
-      setLoading(false);
-      setHasSearched(false);
-      setPagination({
-        total: 0,
-        page: 1,
-        pageSize,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      });
-      if (page !== 1) {
-        setPage(1);
+      setHasSearched(true);
+
+      const apiParams = new URLSearchParams();
+      if (debouncedQuery) {
+        apiParams.set("q", debouncedQuery);
       }
-      return;
-    }
+      if (selectedPlatform !== "all") {
+        apiParams.set("platformId", selectedPlatform);
+      }
+      if (sortOrder !== "none") {
+        const apiSortParam = mapSortOrderToApiParam(sortOrder);
+        apiParams.set("sort", apiSortParam);
+      }
+      apiParams.set("page", String(page));
+      apiParams.set("pageSize", String(pageSize));
+      const searchPath = apiParams.toString();
 
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    setHasSearched(true);
-
-    const apiParams = new URLSearchParams();
-    if (debouncedQuery) {
-      apiParams.set("q", debouncedQuery);
-    }
-    if (selectedPlatform !== "all") {
-      apiParams.set("platformId", selectedPlatform);
-    }
-    const apiSortParam = mapSortOrderToApiParam(sortOrder);
-    apiParams.set("sort", apiSortParam);
-    apiParams.set("page", String(page));
-    apiParams.set("pageSize", String(pageSize));
-    const searchPath = apiParams.toString();
-
-    fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const payload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
-          throw new Error(message);
-        }
-        return payload;
+      fetch(`/api/games/search${searchPath ? `?${searchPath}` : ""}`, {
+        signal: controller.signal,
       })
-      .then((payload) => {
-        const data = payload as Partial<SearchResponse> | null;
-        const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
-        setResults(normalizedResults);
-        const nextPagination = {
-          total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
-          page:
-            typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
-          pageSize:
-            typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
-              ? data.pagination.pageSize
-              : pageSize,
-          hasNextPage: Boolean(data?.pagination?.hasNextPage),
-          hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
-        };
-        setPagination(nextPagination);
-      })
-      .catch((fetchError) => {
-        if (fetchError.name === "AbortError") {
-          return;
-        }
-        setError(fetchError instanceof Error ? fetchError.message : "Unexpected error searching games.");
-        setResults([]);
-        setPagination({
-          total: 0,
-          page: 1,
-          pageSize,
-          hasNextPage: false,
-          hasPreviousPage: false,
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as unknown;
+          if (payload && typeof payload === "object" && "error" in payload && (payload as { error?: string }).error) {
+            throw new Error((payload as { error?: string }).error || "Unable to search games.");
+          }
+          if (!response.ok) {
+            const message = (payload as { error?: string } | null)?.error ?? "Unable to search games.";
+            throw new Error(message);
+          }
+          return payload;
+        })
+        .then((payload) => {
+          const data = payload as Partial<SearchResponse> | null;
+          const normalizedResults = Array.isArray(data?.results) ? (data.results as SearchResult[]) : [];
+          setResults(normalizedResults);
+          const nextPagination = {
+            total: typeof data?.pagination?.total === "number" ? data.pagination.total : normalizedResults.length,
+            page:
+              typeof data?.pagination?.page === "number" && data.pagination.page > 0 ? data.pagination.page : page,
+            pageSize:
+              typeof data?.pagination?.pageSize === "number" && data.pagination.pageSize > 0
+                ? data.pagination.pageSize
+                : pageSize,
+            hasNextPage: Boolean(data?.pagination?.hasNextPage),
+            hasPreviousPage: Boolean(data?.pagination?.hasPreviousPage),
+          };
+          setPagination(nextPagination);
+        })
+        .catch((fetchError) => {
+          if (fetchError.name === "AbortError") {
+            return;
+          }
+          setError(fetchError instanceof Error ? fetchError.message : "Unexpected error searching games.");
+          setResults([]);
+          setPagination({
+            total: 0,
+            page: 1,
+            pageSize,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          });
+          if (page !== 1) {
+            setPage(1);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
         });
-        if (page !== 1) {
-          setPage(1);
-        }
-      })
-      .finally(() => {
-        setLoading(false);
-      });
 
-    return () => controller.abort();
-  }, [debouncedQuery, selectedPlatform, page, pageSize, sortOrder]);
+      return () => controller.abort();
+    }, [debouncedQuery, page, pageSize, selectedPlatform, sortOrder]);
 
-  useEffect(() => {
-    if (skipPageResetRef.current) {
-      skipPageResetRef.current = false;
-      return;
-    }
-    setPage(1);
-  }, [debouncedQuery, selectedPlatform, sortOrder]);
+    useEffect(() => {
+      if (skipPageResetRef.current) {
+        skipPageResetRef.current = false;
+        return;
+      }
+      setPage(1);
+    }, [debouncedQuery, selectedPlatform, sortOrder]);
 
   useEffect(() => {
     const nextValue = String(pagination.page > 0 ? pagination.page : page);
@@ -561,7 +546,7 @@ function DashboardPageContent() {
     if (page > 1) {
       params.set("page", String(page));
     }
-    if (sortOrder !== "popular_desc") {
+    if (sortOrder !== "none") {
       params.set("sort", sortOrder);
     }
 
@@ -572,18 +557,25 @@ function DashboardPageContent() {
 
     lastSyncedSearchRef.current = nextSearch;
     router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, { scroll: false });
-  }, [debouncedQuery, selectedPlatform, sortOrder, page, pathname, router]);
+  }, [debouncedQuery, page, pathname, router, selectedPlatform, sortOrder]);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setPage(1);
-    setDebouncedQuery(query.trim());
-  };
+    const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setDebouncedQuery(query.trim());
+    };
 
-  const handlePlatformChange = (value: string) => {
-    setPage(1);
-    setSelectedPlatform(value);
-  };
+    useEffect(() => {
+      const timeout = window.setTimeout(() => {
+        setDebouncedQuery(query.trim());
+      }, 500);
+
+      return () => window.clearTimeout(timeout);
+    }, [query]);
+
+    const handlePlatformChange = (value: string) => {
+      setPage(1);
+      setSelectedPlatform(value);
+    };
 
   const statusCounts = statusLabels.map((status) => ({
     status,
@@ -606,7 +598,7 @@ function DashboardPageContent() {
     return [...normalized].sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredPlatforms]);
 
-  const platformButtons = sortedPlatforms;
+    const platformButtons = sortedPlatforms;
 
   const retroPrioritySlugs = [
     "nes",
@@ -994,7 +986,7 @@ function DashboardPageContent() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="flex w-full flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 sm:w-64">
               Sort results
               <select
