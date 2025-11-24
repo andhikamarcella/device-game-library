@@ -372,6 +372,7 @@ export interface IgdbGame {
   platforms?: IgdbPlatformRef[];
   genres?: IgdbGenreRef[];
   screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
 }
 
 export interface IgdbGameDetails extends IgdbGame {
@@ -672,7 +673,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 
   const queryParts: string[] = [];
   queryParts.push(
-    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name;",
+    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height;",
   );
 
   if (searchTerm) {

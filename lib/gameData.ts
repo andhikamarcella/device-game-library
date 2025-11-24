@@ -904,6 +904,7 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     background_image: primaryBackdrop,
     background_image_additional: secondaryImage,
     short_screenshots: screenshots,
+    artworks,
     clip: null,
     released: toIsoDate(game.first_release_date),
     rating: ratingValue,
