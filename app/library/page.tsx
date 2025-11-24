@@ -12,6 +12,7 @@ import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/ho
 import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeImageUrl } from "@/lib/images";
+import type { GameArtwork, GameScreenshot } from "@/lib/gameData";
 
 interface SearchResponse {
   results: SearchGameResult[];
@@ -464,8 +465,8 @@ export default function DashboardPage() {
       background_image: string | null;
       background_image_additional: string | null;
       cover: { image_id?: string | null } | null;
-      artworks?: Array<{ image: string | null }>;
-      short_screenshots?: Array<{ image: string | null }>;
+      artworks?: GameArtwork[];
+      short_screenshots?: GameScreenshot[];
     };
 
     const hydrateMetadata = async () => {
