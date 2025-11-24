@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getIgdbImageUrl, getIgdbToken } from "@/lib/igdb";
+import { getIgdbToken, igdbRequest } from "@/lib/igdb";
+import { igdbArtworkUrl, igdbCoverUrl, igdbScreenshotUrl, igdbThumbUrl } from "@/lib/igdbImages";
 
 type Params = { params: { id: string } };
 
@@ -18,6 +19,9 @@ type IgdbDetailRecord = {
   genres?: Array<{ id: number; name?: string | null }>;
   cover?: { image_id?: string | null };
   screenshots?: Array<{ id?: number; image_id?: string | null }>;
+  artworks?: Array<{ id?: number; image_id?: string | null }>;
+  videos?: Array<{ id?: number; video_id?: string | null }>;
+  similar_games?: number[];
 };
 
 const formatReleaseDate = (timestamp?: number | null): string | null => {
@@ -54,8 +58,11 @@ export async function GET(_request: Request, { params }: Params) {
       genres.id,
       genres.name,
       cover.image_id,
+      artworks.image_id,
       screenshots.id,
-      screenshots.image_id;
+      screenshots.image_id,
+      videos.video_id,
+      similar_games;
     where id = ${id};
     limit 1;
   `;
@@ -85,10 +92,11 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Game not found." }, { status: 404 });
     }
 
-    const coverImageUrl = getIgdbImageUrl(game.cover?.image_id, "cover");
+    const coverImageUrl = igdbCoverUrl(game.cover?.image_id ?? null);
+    const thumbnail = igdbThumbUrl(game.cover?.image_id ?? null) ?? coverImageUrl ?? null;
     const screenshotEntries = (game.screenshots ?? [])
       .map((shot, index) => {
-        const url = getIgdbImageUrl(shot.image_id, "screenshot");
+        const url = igdbScreenshotUrl(shot.image_id ?? null);
         if (!url) {
           return null;
         }
@@ -99,9 +107,23 @@ export async function GET(_request: Request, { params }: Params) {
       })
       .filter((entry): entry is { id: number; url: string } => Boolean(entry));
 
-    const screenshotUrls = screenshotEntries.map((entry) => entry.url);
-    const thumbnail = coverImageUrl ?? screenshotUrls[0] ?? null;
-    const backgroundImage = screenshotUrls[0] ?? coverImageUrl ?? null;
+    const artworkEntries = (game.artworks ?? [])
+      .map((art, index) => {
+        const url = igdbArtworkUrl(art.image_id ?? null);
+        if (!url) {
+          return null;
+        }
+        return {
+          id: art.id ?? index + (screenshotEntries.length || 0),
+          url,
+        };
+      })
+      .filter((entry): entry is { id: number; url: string } => Boolean(entry));
+
+    const gallery = [...screenshotEntries, ...artworkEntries];
+    const screenshotUrls = gallery.map((entry) => entry.url);
+    const backgroundId = game.artworks?.[0]?.image_id ?? game.screenshots?.[0]?.image_id ?? game.cover?.image_id ?? null;
+    const backgroundImage = backgroundId ? igdbScreenshotUrl(backgroundId) : coverImageUrl ?? null;
     const description = game.storyline ?? game.summary ?? "";
     const summary = game.summary ?? "";
     const rating =
@@ -123,6 +145,53 @@ export async function GET(_request: Request, { params }: Params) {
       .map((genre) => genre?.name?.trim())
       .filter((name): name is string => Boolean(name));
 
+    const similarIds = Array.isArray(game.similar_games)
+      ? game.similar_games.filter((value) => Number.isFinite(value))
+      : [];
+
+    const similarGames = similarIds.length
+      ? await igdbRequest<
+          Array<{
+            id: number;
+            name: string;
+            cover?: { image_id?: string | null } | null;
+            artworks?: Array<{ image_id?: string | null }>;
+            screenshots?: Array<{ image_id?: string | null }>;
+            first_release_date?: number | null;
+            platforms?: Array<{ name?: string | null }>;
+            rating?: number | null;
+          }>
+        >(
+          `/games`,
+          `
+      fields
+        name,
+        cover.image_id,
+        artworks.image_id,
+        screenshots.image_id,
+        first_release_date,
+        platforms.name,
+        rating;
+      where id = (${similarIds.join(",")});
+    `,
+        )
+      : [];
+
+    const similarGameDetails = similarGames.map((entry) => {
+      const artworkBackground = entry.artworks?.[0]?.image_id ?? entry.screenshots?.[0]?.image_id ?? null;
+      return {
+        id: entry.id,
+        name: entry.name,
+        rating: typeof entry.rating === "number" ? entry.rating : null,
+        released: formatReleaseDate(entry.first_release_date),
+        coverImage: igdbCoverUrl(entry.cover?.image_id ?? null),
+        heroImage: artworkBackground ? igdbScreenshotUrl(artworkBackground) : null,
+        platforms: (entry.platforms ?? [])
+          .map((platform) => platform?.name?.trim())
+          .filter((name): name is string => Boolean(name)),
+      };
+    });
+
     const response = {
       id: game.id,
       name: game.name,
@@ -140,7 +209,8 @@ export async function GET(_request: Request, { params }: Params) {
       publishers: [] as string[],
       coverImageUrl,
       screenshotUrls,
-      gallery: screenshotEntries,
+      gallery,
+      similarGames: similarGameDetails,
     };
 
     return NextResponse.json(response, { status: 200 });

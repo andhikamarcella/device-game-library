@@ -38,7 +38,7 @@ import {
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
 import { buildIgdbImageUrl } from "@/lib/igdb";
-import { igdbCoverUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
 import { getStoreIcon } from "@/lib/storeIcons";
@@ -126,34 +126,30 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
 };
 
 const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
-  const artworkCandidates = (game.artworks ?? [])
-    .map((art) => {
-      if (art?.image_id) {
-        return buildIgdbImageUrl(art.image_id, "t_screenshot_huge");
-      }
-      return art?.image ?? null;
-    })
-    .filter((src): src is string => Boolean(src));
+  const backgroundId =
+    game.artworks?.[0]?.image_id ??
+    game.screenshots?.[0]?.image_id ??
+    game.cover?.image_id ??
+    null;
 
-  const screenshotCandidates = (game.short_screenshots ?? [])
-    .map((shot) => shot?.image ?? null)
-    .filter((src): src is string => Boolean(src));
+  const igdbBackground = backgroundId ? igdbScreenshotUrl(backgroundId) : null;
 
-  const extraCandidates = [
+  if (igdbBackground) {
+    return igdbBackground;
+  }
+
+  const fallbackCandidates = [
+    game.artworks?.[0]?.image,
+    game.screenshots?.[0]?.image,
     game.background_image_additional,
     game.background_image,
     igdbCoverUrl(game.cover?.image_id ?? null),
-  ];
-
-  const candidates = [...artworkCandidates, ...screenshotCandidates, ...extraCandidates]
+    coverFallback,
+  ]
     .map((src) => normalizeImageUrl(src))
     .filter((src): src is string => Boolean(src));
 
-  if (candidates.length) {
-    return candidates[0] ?? coverFallback;
-  }
-
-  return coverFallback;
+  return fallbackCandidates[0] ?? null;
 };
 
 type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
