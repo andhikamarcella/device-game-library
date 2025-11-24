@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Expand, Loader2, Minimize2, MonitorPlay, PictureInPicture2, Play } from "lucide-react";
+import {
+  ExternalLink,
+  Expand,
+  Loader2,
+  Minimize2,
+  MonitorPlay,
+  PictureInPicture2,
+  Play,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { useSwipeNavigation } from "@/hooks/useSwipeNavigation";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +105,7 @@ export function VideoPlayer({
   const playerRef = useRef<any>(null);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isFading, setIsFading] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
   useSwipeNavigation(wrapperRef, { onSwipeLeft, onSwipeRight });
 
@@ -118,7 +129,7 @@ export function VideoPlayer({
           try {
             event.target.setPlaybackRate(playbackRate);
             if (autoPlay) {
-              event.target.mute();
+              event.target[isMuted ? "mute" : "unMute"]?.();
               event.target.playVideo();
             } else {
               event.target.pauseVideo();
@@ -174,7 +185,7 @@ export function VideoPlayer({
     return () => {
       cancelled = true;
     };
-  }, [autoPlay, onEnded, playbackRate, videoKey]);
+  }, [autoPlay, isMuted, onEnded, playbackRate, videoKey]);
 
   useEffect(() => {
     return () => {
@@ -198,7 +209,6 @@ export function VideoPlayer({
     if (!player) return;
     try {
       if (autoPlay) {
-        player.mute?.();
         player.playVideo?.();
       } else {
         player.pauseVideo?.();
@@ -208,9 +218,27 @@ export function VideoPlayer({
     }
   }, [autoPlay]);
 
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      if (isMuted) {
+        player.mute?.();
+      } else {
+        player.unMute?.();
+      }
+    } catch {
+      /* ignored */
+    }
+  }, [isMuted]);
+
   const handleAutoPlayToggle = () => {
     const next = !autoPlay;
     onAutoPlayChange(next);
+  };
+
+  const handleSoundToggle = () => {
+    setIsMuted((value) => !value);
   };
 
   const handleSpeedChange = (rate: number) => {
@@ -322,6 +350,19 @@ export function VideoPlayer({
         >
           <Play className="h-3.5 w-3.5" />
           AutoPlay
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSoundToggle}
+          className={cn(
+            "flex items-center gap-1 rounded-lg px-2 py-1 font-semibold transition",
+            isMuted ? "bg-white/10 text-slate-200 hover:bg-white/20" : "bg-emerald-500/80 text-white",
+          )}
+          aria-pressed={!isMuted}
+        >
+          {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+          {isMuted ? "Sound Off" : "Sound On"}
         </button>
 
         <div className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-slate-100">
