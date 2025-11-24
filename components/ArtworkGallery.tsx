@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 
 import { bestImageOriginal } from "@/lib/igdb";
@@ -28,7 +27,7 @@ export default function ArtworkGallery({ artworks }: ArtworkGalleryProps) {
             onClick={() => setActive(idx)}
             className="overflow-hidden rounded-xl group"
           >
-            <Image
+            <img
               src={bestImageOriginal(a.image_id) ?? ""}
               alt="Artwork"
               width={600}
@@ -58,7 +57,7 @@ export default function ArtworkGallery({ artworks }: ArtworkGalleryProps) {
             ←
           </button>
 
-          <Image
+          <img
             src={bestImageOriginal(items[active].image_id) ?? ""}
             alt="Artwork"
             width={1600}

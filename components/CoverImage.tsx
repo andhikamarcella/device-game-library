@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -103,13 +102,13 @@ export function CoverImage({ gameName, fallbackImage, initialImage, className }:
 
   return (
     <div className={containerClass}>
-      <Image
+      <img
         src={coverUrl}
         alt={gameName}
-        fill
-        className="object-cover"
-        sizes="(max-width: 768px) 100vw, 33vw"
-        priority={false}
+        width={480}
+        height={640}
+        className="h-full w-full object-cover"
+        loading="lazy"
       />
     </div>
   );

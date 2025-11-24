@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { bestImageOriginal } from "@/lib/igdb";
@@ -13,9 +12,6 @@ interface HDImageProps {
   priority?: boolean;
   rounded?: boolean;
 }
-
-const FALLBACK_BLUR =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur in='SourceGraphic' stdDeviation='2' /%3E%3C/filter%3E%3Crect width='16' height='9' fill='%23121b2f' filter='url(%23b)'/%3E%3C/svg%3E";
 
 const buildHdUrl = (imageId?: string | null) => bestImageOriginal(imageId);
 
@@ -35,17 +31,15 @@ export function HDImage({ imageId, alt = "Screenshot", className, priority, roun
       )}
     >
       {!loaded ? <div className="absolute inset-0 animate-pulse rounded-xl bg-slate-800/70" /> : null}
-      <Image
+      <img
         src={src}
         alt={alt}
-        fill
-        sizes="100vw"
-        priority={priority}
-        placeholder="blur"
-        blurDataURL={FALLBACK_BLUR}
-        onLoadingComplete={() => setLoaded(true)}
+        width={1600}
+        height={900}
+        loading={priority ? "eager" : "lazy"}
+        onLoad={() => setLoaded(true)}
         className={cn(
-          "object-contain transition-all duration-700",
+          "h-full w-full object-contain transition-all duration-700",
           loaded ? "opacity-100" : "opacity-0 blur-md",
         )}
       />

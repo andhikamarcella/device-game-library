@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -271,19 +270,24 @@ export default function GameDetailsPage() {
     <div className="space-y-10">
       <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-xl dark:border-slate-800">
         {heroImage ? (
-          <Image
+          <img
             src={heroImage}
             alt={details.name}
             width={1920}
             height={1080}
             className="absolute inset-0 h-full w-full object-cover opacity-60"
-            priority
           />
         ) : null}
         <div className="relative flex flex-col gap-6 bg-gradient-to-t from-slate-950/90 via-slate-950/80 to-slate-950/30 p-6 md:flex-row">
           <div className="mx-auto w-44 shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-lg dark:border-slate-700 md:mx-0">
             {coverImage ? (
-              <Image src={coverImage} alt={`${details.name} cover`} width={440} height={660} className="h-full w-full object-cover" />
+              <img
+                src={coverImage}
+                alt={`${details.name} cover`}
+                width={440}
+                height={660}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full items-center justify-center bg-slate-900 text-slate-500">No cover</div>
             )}

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { ScreenshotModal } from "@/components/ScreenshotModal";
@@ -43,13 +42,12 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
                 setIsOpen(true);
               }}
             >
-              <Image
+              <img
                 src={url}
                 alt="Screenshot"
                 width={320}
                 height={180}
                 className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                sizes="(max-width: 640px) 60vw, 320px"
               />
             </button>
           );

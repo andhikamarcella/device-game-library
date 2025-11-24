@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { Trophy, Youtube } from "lucide-react";
 import type { GameAchievement } from "@/lib/gameData";
@@ -96,7 +95,13 @@ export function AchievementsList({ achievements, initialVisible = 4, gameTitle }
                 >
                   {achievement.image ? (
                     <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800">
-                      <Image src={achievement.image} alt="Achievement badge" fill className="object-cover" sizes="48px" />
+                      <img
+                        src={achievement.image}
+                        alt="Achievement badge"
+                        width={48}
+                        height={48}
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ) : (
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">

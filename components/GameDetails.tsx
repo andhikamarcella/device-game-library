@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -387,7 +386,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
                 "
               >
                 {coverUrl ? (
-                  <Image
+                  <img
                     src={coverUrl}
                     alt={`${game.name} cover`}
                     width={300}
@@ -682,7 +681,13 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
                 >
                   <div className="relative h-40 w-full overflow-hidden">
                   {additionImage ? (
-                    <Image src={additionImage} alt={`${addition.name} cover`} fill className="object-cover transition duration-300 group-hover:scale-105" sizes="320px" />
+                    <img
+                      src={additionImage}
+                      alt={`${addition.name} cover`}
+                      width={320}
+                      height={200}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       No image

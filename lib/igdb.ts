@@ -462,28 +462,23 @@ export function getIgdbImageUrl(
   if (!imageId) {
     return null;
   }
-  const size = "original" as const;
-  return `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`;
+  const size = type === "cover" ? "t_cover_big" : "t_1080p";
+  return buildIgdbImageUrl(imageId, size);
 }
 
-export function buildIgdbImageUrl(
-  imageId: string,
-  size:
-    | "cover_big"
-    | "cover_small"
-    | "screenshot_big"
-    | "screenshot_huge"
-    | "original"
-    | `t_${string}` = "cover_big",
-): string {
-  const normalizedSize =
-    size === "original" ? "original" : size.startsWith("t_") ? size : `t_${size}`;
+export function buildIgdbImageUrl(imageId: string, size?: string): string {
+  const normalizedSize = (() => {
+    if (!size || typeof size !== "string") return "t_cover_big";
+    if (size === "original") return "original";
+    return size.startsWith("t_") ? size : `t_${size}`;
+  })();
+
   return `https://images.igdb.com/igdb/image/upload/${normalizedSize}/${imageId}.jpg`;
 }
 
 export function bestImageOriginal(imageId?: string | null) {
   if (!imageId) return null;
-  return buildIgdbImageUrl(imageId, "original");
+  return buildIgdbImageUrl(imageId, "t_1080p");
 }
 
 export function selectBackground(artworks: any[], screenshots: any[], cover: any) {
