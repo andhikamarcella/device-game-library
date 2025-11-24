@@ -1,7 +1,9 @@
 import { bestImageOriginal, buildIgdbImageUrl } from "@/lib/igdb";
 
-export const igdbImage = (id: string, size = "original") =>
-  buildIgdbImageUrl(id, size === "original" ? "original" : size);
+export const igdbImage = (
+  id: string,
+  size: Parameters<typeof buildIgdbImageUrl>[1] = "original",
+) => buildIgdbImageUrl(id, size);
 
 // Backwards compatibility
 export const igdbImg = igdbImage;
