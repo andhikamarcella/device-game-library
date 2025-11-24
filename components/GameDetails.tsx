@@ -135,13 +135,18 @@ const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | nu
     })
     .filter((src): src is string => Boolean(src));
 
+  const screenshotCandidates = (game.short_screenshots ?? [])
+    .map((shot) => shot?.image ?? null)
+    .filter((src): src is string => Boolean(src));
+
   const extraCandidates = [
     game.background_image_additional,
-    game.short_screenshots?.[0]?.image,
     game.background_image,
+    game.background_image,
+    igdbCoverUrl(game.cover?.image_id ?? null),
   ];
 
-  const candidates = [...artworkCandidates, ...extraCandidates]
+  const candidates = [...artworkCandidates, ...screenshotCandidates, ...extraCandidates]
     .map((src) => normalizeImageUrl(src))
     .filter((src): src is string => Boolean(src));
 
@@ -279,7 +284,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .slice(0, 10);
   const similarCards: SearchGameResult[] = similarGames.slice(0, 10).map((similar) => {
     const coverId = similar.cover?.image_id ?? null;
-    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "t_1080p") : similar.background_image;
+    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "cover_big") : similar.background_image;
     const screenshots = Array.isArray(similar.short_screenshots)
       ? similar.short_screenshots.map((shot) => shot.image).filter(Boolean)
       : [];
