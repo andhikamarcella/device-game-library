@@ -940,7 +940,16 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
 
 const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPayload => {
   const base = mapIgdbGameToGameSummary(details);
-  const screenshots = mapScreenshots(details.screenshots);
+  const screenshots = (Array.isArray(details.screenshots) ? details.screenshots : [])
+    .map((s) => {
+      const image = (s as { image?: string | null }).image ?? null;
+      return {
+        id: s.id ?? 0,
+        image_id: s.image_id ?? image ?? "",
+        image,
+      };
+    })
+    .filter((s) => Boolean(s.image_id));
   const descriptionParts = [details.summary, details.storyline].filter((part): part is string => Boolean(part));
   const descriptionRaw = descriptionParts.join("\n\n");
   const seriesRelated = mapSeries(details);
