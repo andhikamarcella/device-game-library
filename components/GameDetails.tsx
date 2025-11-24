@@ -36,7 +36,7 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
-import { bestImageOriginal, selectBackground } from "@/lib/igdb";
+import { bestImageOriginal, buildIgdbImageUrl } from "@/lib/igdb";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
@@ -124,26 +124,6 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
-};
-
-const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
-  const igdbBackground =
-    selectBackground(game.artworks ?? [], game.screenshots ?? [], game.cover ?? null) ??
-    selectBackground([], game.short_screenshots ?? [], game.cover ?? null);
-
-  const fallbackCandidates = [
-    igdbBackground,
-    game.artworks?.[0]?.image,
-    game.screenshots?.[0]?.image,
-    game.background_image_additional,
-    game.background_image,
-    igdbCoverUrl(game.cover?.image_id ?? null),
-    coverFallback,
-  ]
-    .map((src) => normalizeImageUrl(src))
-    .filter((src): src is string => Boolean(src));
-
-  return fallbackCandidates[0] ?? null;
 };
 
 type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
@@ -366,7 +346,35 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
-  const heroBackground = pickHeroBackground(game, igdbCoverImage);
+
+  // Collect background sources
+  const artworkImages =
+    Array.isArray(game.artworks) && game.artworks.length > 0 ? game.artworks : [];
+
+  const screenshotImages =
+    Array.isArray(game.screenshots) && game.screenshots.length > 0 ? game.screenshots : [];
+
+  const coverImage = game.cover?.image_id ? [{ image_id: game.cover.image_id }] : [];
+
+  const allBackgroundCandidates = [...artworkImages, ...screenshotImages, ...coverImage]
+    .filter((item) => item?.image_id);
+
+  // Pick RANDOM only if more than one candidate exists
+  let selectedBackgroundId: string | null = null;
+
+  if (allBackgroundCandidates.length > 1) {
+    const randomIndex = Math.floor(Math.random() * allBackgroundCandidates.length);
+    selectedBackgroundId = allBackgroundCandidates[randomIndex].image_id;
+  } else if (allBackgroundCandidates.length === 1) {
+    selectedBackgroundId = allBackgroundCandidates[0].image_id;
+  } else {
+    selectedBackgroundId = null;
+  }
+
+  // Generate final URL
+  const backgroundUrl = selectedBackgroundId
+    ? buildIgdbImageUrl(selectedBackgroundId, "1080p")
+    : null;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -383,16 +391,15 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
         <div
           className="relative h-72 w-full overflow-hidden"
-          style={
-            heroBackground
-              ? {
-                  backgroundImage: `url(${heroBackground})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }
-              : undefined
-          }
         >
+          <div
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-700 ease-in-out ${
+              backgroundUrl ? "opacity-100" : "opacity-0"
+            }`}
+            style={{
+              backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : "none",
+            }}
+          />
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
         </div>
         <div className="space-y-8 p-6">
