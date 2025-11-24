@@ -10,6 +10,7 @@ import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import { SimilarGamesRow } from "@/components/SimilarGamesRow";
 import { VideoCarousel } from "@/components/video/VideoCarousel";
 import { useLibrary, type UserGame } from "@/hooks/LibraryProvider";
+import type { GameArtwork } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeImageUrl } from "@/lib/images";
 import { truncateText } from "@/lib/text";
@@ -30,7 +31,7 @@ interface GameDetailsResponse {
   cover: { image_id?: string | null } | null;
   background_image: string | null;
   background_image_additional: string | null;
-  artworks: Array<{ id: number; image: string | null }>;
+  artworks: GameArtwork[];
   released: string | null;
   playtime: number | null;
   metacritic: number | null;
