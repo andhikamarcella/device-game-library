@@ -357,6 +357,16 @@ export interface IgdbCompanyRef {
   publisher?: boolean;
 }
 
+export interface IgdbReleaseDate {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
+}
+
 export interface IgdbGame {
   id: number;
   name: string;
@@ -401,6 +411,7 @@ export interface IgdbGameDetails extends IgdbGame {
     | { hastly?: number | null; normally?: number | null; completely?: number | null }
     | number
     | null;
+  release_dates?: IgdbReleaseDate[] | null;
 }
 
 export interface IgdbSimilarGame
