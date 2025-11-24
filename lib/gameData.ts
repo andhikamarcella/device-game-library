@@ -20,6 +20,7 @@ import {
   type IgdbVideo,
   type IgdbWebsite,
 } from "@/lib/igdb";
+import { fetchRawgReviews, type RawgReview } from "@/lib/rawg";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -234,6 +235,7 @@ export type GameDetailsPayload = GameSummary & {
   language_supports?: GameLanguageSupport[] | null;
   time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
   release_dates?: GameReleaseDate[] | null;
+  rawgReviews?: RawgReview[] | null;
 };
 
 export type GameScreenshot = {
@@ -328,8 +330,22 @@ export async function searchGames(params: GameSearchParams = {}): Promise<GameSe
  * Fetch detailed information for a single IGDB game.
  */
 export async function getGameDetails(id: number): Promise<GameDetailsPayload> {
-  const details = await loadIgdbDetails(id);
-  return mapIgdbDetailsToGameDetails(details);
+  const detailsPromise = loadIgdbDetails(id);
+
+  const rawgReviewsPromise = detailsPromise
+    .then((igdb) => {
+      const slug = igdb.slug ?? slugify(igdb.name);
+      if (!slug) return null;
+      return fetchRawgReviews(slug);
+    })
+    .catch((error) => {
+      console.error("RAWG reviews fetch failed", error);
+      return null;
+    });
+
+  const [details, rawgReviews] = await Promise.all([detailsPromise, rawgReviewsPromise]);
+
+  return mapIgdbDetailsToGameDetails(details, rawgReviews ?? null);
 }
 
 export async function getGameScreenshots(
@@ -939,7 +955,10 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   };
 };
 
-const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPayload => {
+const mapIgdbDetailsToGameDetails = (
+  details: IgdbGameDetails,
+  rawgReviews: RawgReview[] | null = null,
+): GameDetailsPayload => {
   const base = mapIgdbGameToGameSummary(details);
   const screenshots = (details.screenshots ?? [])
     .filter((s) => s?.image_id)
@@ -1029,5 +1048,6 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     involved_companies: mapInvolvedCompanies(details.involved_companies),
     release_dates: releaseDates,
     cover,
+    rawgReviews,
   };
 };

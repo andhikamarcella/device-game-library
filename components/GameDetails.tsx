@@ -45,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/lib/platformIcons";
 import type { IgdbVideo } from "@/lib/igdb";
 import { LinksBox } from "@/components/LinksBox";
+import type { RawgReview } from "@/lib/rawg";
+import { RawgReviewCard } from "@/components/game/RawgReviewCard";
 
 export type GameReview = {
   id: number;
@@ -254,6 +256,29 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     typeof game.ratings_count === "number" && Number.isFinite(game.ratings_count)
       ? game.ratings_count.toLocaleString()
       : "0";
+  const rawgReviews: RawgReview[] = (game.rawgReviews ?? [])
+    .map((review) => {
+      if (!review || typeof review.id !== "number") return null;
+      const text = (review.text ?? "").replace(/<[^>]+>/g, "").trim();
+      const rating = typeof review.rating === "number" && Number.isFinite(review.rating) ? review.rating : null;
+      const created = review.created ?? null;
+      return {
+        ...review,
+        text: text || null,
+        rating,
+        created,
+        user: {
+          username: review.user?.username ?? "RAWG user",
+          avatar: review.user?.avatar ?? null,
+        },
+      } satisfies RawgReview;
+    })
+    .filter((review): review is RawgReview => Boolean(review && (review.text || review.rating !== null)))
+    .sort((a, b) => {
+      const aDate = a.created ? new Date(a.created).getTime() : 0;
+      const bDate = b.created ? new Date(b.created).getTime() : 0;
+      return bDate - aDate;
+    });
   const bestCover = getBestCover(game);
   const igdbCoverImage = normalizeImageUrl(bestCover);
   const description = game.description_raw ?? game.description ?? "No description available.";
@@ -744,6 +769,20 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
               <div key={similar.id} className="min-w-[240px] sm:min-w-0">
                 <GameCard game={similar} coverOverride={similar.coverUrl ?? null} detailReturnTo={backTarget ?? undefined} />
               </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {rawgReviews.length ? (
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            <h2 className="text-sm font-semibold uppercase tracking-widest">Community Reviews (RAWG)</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {rawgReviews.map((review) => (
+              <RawgReviewCard key={`rawg-${review.id}`} review={review} />
             ))}
           </div>
         </section>
