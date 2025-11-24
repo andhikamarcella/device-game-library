@@ -968,6 +968,12 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     m: typeof entry.m === "number" ? entry.m : null,
     date: typeof entry.date === "number" ? entry.date : null,
   }));
+  const cover = details.cover
+    ? {
+        id: details.cover.id ?? 0,
+        image_id: details.cover.image_id ?? "",
+      }
+    : null;
   return {
     ...base,
     summary: details.summary ?? null,
@@ -1018,5 +1024,6 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     engines: mapNamedEntities(details.game_engines),
     involved_companies: mapInvolvedCompanies(details.involved_companies),
     release_dates: releaseDates,
+    cover,
   };
 };
