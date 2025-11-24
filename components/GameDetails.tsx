@@ -280,7 +280,9 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     const coverId = similar.cover?.image_id ?? null;
     const coverUrl = coverId ? buildIgdbImageUrl(coverId, "cover_big") : similar.background_image;
     const screenshots = Array.isArray(similar.short_screenshots)
-      ? similar.short_screenshots.map((shot) => shot.image).filter(Boolean)
+      ? similar.short_screenshots
+          .map((s) => s?.image)
+          .filter((img): img is string => Boolean(img))
       : [];
     const platforms = (similar.platforms ?? []).map((platform) => ({
       id: platform.platform.id,
