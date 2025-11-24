@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getIgdbToken, igdbRequest } from "@/lib/igdb";
-import { igdbArtworkUrl, igdbCoverUrl, igdbImg, igdbThumbUrl } from "@/lib/igdbImages";
+import { igdbArtworkUrl, igdbCoverUrl, igdbImage, igdbThumbUrl } from "@/lib/igdbImages";
 
 type Params = { params: { id: string } };
 
@@ -52,19 +52,16 @@ export async function GET(_request: Request, { params }: Params) {
       summary,
       storyline,
       first_release_date,
-      aggregated_rating,
       rating,
-      aggregated_rating_count,
+      aggregated_rating,
       rating_count,
-      platforms.id,
-      platforms.name,
-      genres.id,
-      genres.name,
+      aggregated_rating_count,
       cover.image_id,
       artworks.image_id,
-      screenshots.id,
       screenshots.image_id,
       videos.video_id,
+      genres.name,
+      platforms.name,
       release_dates.y,
       age_ratings.rating,
       url,
@@ -101,23 +98,22 @@ export async function GET(_request: Request, { params }: Params) {
     const coverImageUrl = igdbCoverUrl(game.cover?.image_id ?? null);
     const thumbnail = igdbThumbUrl(game.cover?.image_id ?? null) ?? coverImageUrl ?? null;
     const screenshotEntries = (game.screenshots ?? [])
-      .map((shot, index) => ({
-        id: shot.id ?? index,
+      .map((shot) => ({
         image_id: shot.image_id ?? null,
       }))
-      .filter((entry): entry is { id: number; image_id: string } => Boolean(entry.image_id));
+      .filter((entry): entry is { image_id: string } => Boolean(entry.image_id));
 
     const artworkEntries = (game.artworks ?? [])
-      .map((art, index) => ({
-        id: art.id ?? index + (screenshotEntries.length || 0),
+      .map((art) => ({
         image_id: art.image_id ?? null,
       }))
-      .filter((entry): entry is { id: number; image_id: string } => Boolean(entry.image_id));
+      .filter((entry): entry is { image_id: string } => Boolean(entry.image_id));
 
     const gallery = [...screenshotEntries, ...artworkEntries];
-    const screenshotUrls = gallery.map((entry) => igdbImg(entry.image_id, "t_screenshot_big"));
-    const backgroundId = game.artworks?.[0]?.image_id ?? game.screenshots?.[0]?.image_id ?? game.cover?.image_id ?? null;
-    const backgroundImage = backgroundId ? igdbImg(backgroundId, "t_screenshot_huge") : coverImageUrl ?? null;
+    const screenshotUrls = gallery.map((entry) => igdbImage(entry.image_id, "t_screenshot_big"));
+    const backgroundId =
+      game.artworks?.[0]?.image_id ?? game.screenshots?.[0]?.image_id ?? game.cover?.image_id ?? null;
+    const backgroundImage = backgroundId ? igdbImage(backgroundId, "t_screenshot_huge") : null;
     const description = game.storyline ?? game.summary ?? "";
     const summary = game.summary ?? "";
     const rating =
@@ -179,7 +175,7 @@ export async function GET(_request: Request, { params }: Params) {
         rating: typeof entry.rating === "number" ? entry.rating : null,
         released: formatReleaseDate(entry.first_release_date),
         coverImage: igdbCoverUrl(entry.cover?.image_id ?? null),
-        heroImage: artworkBackground ? igdbImg(artworkBackground, "t_screenshot_huge") : null,
+        heroImage: artworkBackground ? igdbImage(artworkBackground, "t_screenshot_huge") : null,
         platforms: (entry.platforms ?? [])
           .map((platform) => platform?.name?.trim())
           .filter((name): name is string => Boolean(name)),
@@ -206,7 +202,7 @@ export async function GET(_request: Request, { params }: Params) {
       gallery,
       artworks: artworkEntries,
       screenshots: screenshotEntries,
-      cover: game.cover,
+      cover: game.cover?.image_id ? { image_id: game.cover.image_id } : null,
       similarGames: similarGameDetails,
     };
 

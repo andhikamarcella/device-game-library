@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { ScreenshotModal } from "@/components/ScreenshotModal";
-import { igdbImg } from "@/lib/igdbImages";
+import { igdbImage } from "@/lib/igdbImages";
 import type { GameScreenshot } from "@/lib/gameData";
 
 interface ScreenshotGalleryProps {
@@ -12,7 +12,7 @@ interface ScreenshotGalleryProps {
 }
 
 const buildHdUrl = (imageId?: string | null, fallback?: string | null) =>
-  imageId ? igdbImg(imageId, "t_screenshot_big") : fallback ?? null;
+  imageId ? igdbImage(imageId, "t_screenshot_big") : fallback ?? null;
 
 export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   const [isOpen, setIsOpen] = useState(false);
