@@ -18,7 +18,7 @@ import {
   type IgdbLanguageSupport,
   type IgdbVideo,
 } from "@/lib/igdb";
-import { igdbArtworkUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbArtworkUrl, igdbImg } from "@/lib/igdbImages";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -629,7 +629,7 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbScreenshotUrl(asset.image_id);
+    const image = igdbImg(asset.image_id, "t_screenshot_big");
     if (!image) {
       return;
     }

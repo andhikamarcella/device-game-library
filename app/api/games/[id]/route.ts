@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getIgdbToken, igdbRequest } from "@/lib/igdb";
-import { igdbArtworkUrl, igdbCoverUrl, igdbScreenshotUrl, igdbThumbUrl } from "@/lib/igdbImages";
+import { igdbArtworkUrl, igdbCoverUrl, igdbImg, igdbThumbUrl } from "@/lib/igdbImages";
 
 type Params = { params: { id: string } };
 
@@ -17,11 +17,14 @@ type IgdbDetailRecord = {
   rating_count?: number | null;
   platforms?: Array<{ id: number; name?: string | null }>;
   genres?: Array<{ id: number; name?: string | null }>;
-  cover?: { image_id?: string | null };
+  cover?: { id?: number; image_id?: string | null };
   screenshots?: Array<{ id?: number; image_id?: string | null }>;
   artworks?: Array<{ id?: number; image_id?: string | null }>;
   videos?: Array<{ id?: number; video_id?: string | null }>;
   similar_games?: number[];
+  release_dates?: Array<{ id?: number; y?: number | null }>;
+  age_ratings?: Array<{ id?: number; rating?: number | null }>;
+  url?: string | null;
 };
 
 const formatReleaseDate = (timestamp?: number | null): string | null => {
@@ -62,6 +65,9 @@ export async function GET(_request: Request, { params }: Params) {
       screenshots.id,
       screenshots.image_id,
       videos.video_id,
+      release_dates.y,
+      age_ratings.rating,
+      url,
       similar_games;
     where id = ${id};
     limit 1;
@@ -95,35 +101,23 @@ export async function GET(_request: Request, { params }: Params) {
     const coverImageUrl = igdbCoverUrl(game.cover?.image_id ?? null);
     const thumbnail = igdbThumbUrl(game.cover?.image_id ?? null) ?? coverImageUrl ?? null;
     const screenshotEntries = (game.screenshots ?? [])
-      .map((shot, index) => {
-        const url = igdbScreenshotUrl(shot.image_id ?? null);
-        if (!url) {
-          return null;
-        }
-        return {
-          id: shot.id ?? index,
-          url,
-        };
-      })
-      .filter((entry): entry is { id: number; url: string } => Boolean(entry));
+      .map((shot, index) => ({
+        id: shot.id ?? index,
+        image_id: shot.image_id ?? null,
+      }))
+      .filter((entry): entry is { id: number; image_id: string } => Boolean(entry.image_id));
 
     const artworkEntries = (game.artworks ?? [])
-      .map((art, index) => {
-        const url = igdbArtworkUrl(art.image_id ?? null);
-        if (!url) {
-          return null;
-        }
-        return {
-          id: art.id ?? index + (screenshotEntries.length || 0),
-          url,
-        };
-      })
-      .filter((entry): entry is { id: number; url: string } => Boolean(entry));
+      .map((art, index) => ({
+        id: art.id ?? index + (screenshotEntries.length || 0),
+        image_id: art.image_id ?? null,
+      }))
+      .filter((entry): entry is { id: number; image_id: string } => Boolean(entry.image_id));
 
     const gallery = [...screenshotEntries, ...artworkEntries];
-    const screenshotUrls = gallery.map((entry) => entry.url);
+    const screenshotUrls = gallery.map((entry) => igdbImg(entry.image_id, "t_screenshot_big"));
     const backgroundId = game.artworks?.[0]?.image_id ?? game.screenshots?.[0]?.image_id ?? game.cover?.image_id ?? null;
-    const backgroundImage = backgroundId ? igdbScreenshotUrl(backgroundId) : coverImageUrl ?? null;
+    const backgroundImage = backgroundId ? igdbImg(backgroundId, "t_screenshot_huge") : coverImageUrl ?? null;
     const description = game.storyline ?? game.summary ?? "";
     const summary = game.summary ?? "";
     const rating =
@@ -185,7 +179,7 @@ export async function GET(_request: Request, { params }: Params) {
         rating: typeof entry.rating === "number" ? entry.rating : null,
         released: formatReleaseDate(entry.first_release_date),
         coverImage: igdbCoverUrl(entry.cover?.image_id ?? null),
-        heroImage: artworkBackground ? igdbScreenshotUrl(artworkBackground) : null,
+        heroImage: artworkBackground ? igdbImg(artworkBackground, "t_screenshot_huge") : null,
         platforms: (entry.platforms ?? [])
           .map((platform) => platform?.name?.trim())
           .filter((name): name is string => Boolean(name)),
@@ -210,6 +204,9 @@ export async function GET(_request: Request, { params }: Params) {
       coverImageUrl,
       screenshotUrls,
       gallery,
+      artworks: artworkEntries,
+      screenshots: screenshotEntries,
+      cover: game.cover,
       similarGames: similarGameDetails,
     };
 

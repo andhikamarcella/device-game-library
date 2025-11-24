@@ -8,7 +8,7 @@ import {
   type IgdbPlayerPerspective,
   type IgdbTheme,
 } from "@/types/igdb";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl, igdbImg } from "@/lib/igdbImages";
 
 type IgdbPlatformRef = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
 type IgdbGenreRef = { id?: number; name?: string | null };
@@ -329,7 +329,7 @@ async function executeSearch({
     const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
     const screenshots = Array.isArray(game.screenshots)
       ? game.screenshots
-          .map((shot) => igdbScreenshotUrl(shot?.image_id ?? null))
+          .map((shot) => (shot?.image_id ? igdbImg(shot.image_id, "t_screenshot_big") : null))
           .filter((url): url is string => Boolean(url))
       : [];
 

@@ -38,7 +38,7 @@ import {
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
 import { buildIgdbImageUrl } from "@/lib/igdb";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl, igdbImg } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
 import { getStoreIcon } from "@/lib/storeIcons";
@@ -132,7 +132,7 @@ const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | nu
     game.cover?.image_id ??
     null;
 
-  const igdbBackground = backgroundId ? igdbScreenshotUrl(backgroundId) : null;
+  const igdbBackground = backgroundId ? igdbImg(backgroundId, "t_screenshot_huge") : null;
 
   if (igdbBackground) {
     return igdbBackground;

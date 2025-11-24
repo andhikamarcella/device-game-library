@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { ScreenshotModal } from "@/components/ScreenshotModal";
-import { igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbImg } from "@/lib/igdbImages";
 import type { GameScreenshot } from "@/lib/gameData";
 
 interface ScreenshotGalleryProps {
@@ -12,7 +12,7 @@ interface ScreenshotGalleryProps {
 }
 
 const buildHdUrl = (imageId?: string | null, fallback?: string | null) =>
-  imageId ? `https://images.igdb.com/igdb/image/upload/t_1080p/${imageId}.jpg` : fallback ?? null;
+  imageId ? igdbImg(imageId, "t_screenshot_big") : fallback ?? null;
 
 export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,7 +31,7 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
         {items.map((shot, index) => {
-          const url = igdbScreenshotUrl(shot.image_id ?? null) ?? buildHdUrl(shot.image_id ?? null, shot.image);
+          const url = buildHdUrl(shot.image_id ?? null, shot.image);
           if (!url) return null;
           return (
             <button
