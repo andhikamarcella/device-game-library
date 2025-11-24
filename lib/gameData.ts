@@ -18,7 +18,7 @@ import {
   type IgdbLanguageSupport,
   type IgdbVideo,
 } from "@/lib/igdb";
-import { igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbArtworkUrl, igdbImage } from "@/lib/igdbImages";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -81,9 +81,10 @@ export type GameSummary = {
   rawgId?: number | null;
   rawgSlug?: string | null;
   name: string;
-  cover?: { image_id?: string | null } | null;
+  cover?: { image_id?: string | null; id?: number | null } | null;
   background_image: string | null;
   background_image_additional?: string | null;
+  screenshots?: GameScreenshot[] | null;
   short_screenshots?: GameScreenshot[];
   artworks?: GameArtwork[] | null;
   clip?: GameClip | null;
@@ -181,6 +182,11 @@ export type GameClip = {
 };
 
 export type GameDetailsPayload = GameSummary & {
+  summary?: string | null;
+  storyline?: string | null;
+  artworks?: Array<{ id?: number; image_id: string; image?: string | null }> | null;
+  screenshots?: Array<{ id?: number; image_id: string; image?: string | null }> | null;
+  cover?: { image_id: string; id?: number | null } | null;
   genres: { id: number; name: string }[];
   themes?: { id: number; name: string }[];
   game_modes?: { id: number; name: string }[];
@@ -214,6 +220,7 @@ export type GameDetailsPayload = GameSummary & {
   series?: GameSeriesEntry[] | { results?: GameSeriesEntry[] | null } | null;
   clip?: GameClip | null;
   movies?: GameTrailer[] | null;
+  videos?: GameTrailer[] | null;
   esrb_rating?: GameEsrbRating | null;
   metacritic?: number | null;
   metacritic_platforms?: GameMetacriticPlatform[] | null;
@@ -225,22 +232,33 @@ export type GameDetailsPayload = GameSummary & {
   age_ratings?: IgdbAgeRating[] | null;
   language_supports?: GameLanguageSupport[] | null;
   time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
+  release_dates?: GameReleaseDate[] | null;
 };
 
 export type GameScreenshot = {
-  id: number;
+  id?: number;
   image_id?: string | null;
-  image: string;
+  image?: string | null;
   width?: number;
   height?: number;
 };
 
 export type GameArtwork = {
-  id: number;
+  id?: number;
   image_id: string;
-  image: string;
+  image?: string | null;
   width?: number;
   height?: number;
+};
+
+export type GameReleaseDate = {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
 };
 
 export type GameLanguageSupport = {
@@ -614,7 +632,7 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbScreenshotUrl(asset.image_id);
+    const image = igdbImage(asset.image_id, "t_screenshot_big");
     if (!image) {
       return;
     }
@@ -639,7 +657,7 @@ const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbScreenshotUrl(asset.image_id);
+    const image = igdbArtworkUrl(asset.image_id);
     if (!image) {
       return;
     }
@@ -903,6 +921,7 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     cover: game.cover ?? null,
     background_image: primaryBackdrop,
     background_image_additional: secondaryImage,
+    screenshots,
     short_screenshots: screenshots,
     artworks,
     clip: null,
@@ -931,14 +950,27 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     name: entry.name,
     slug: entry.slug ?? slugify(entry.name),
   }));
+  const releaseDates = (details.release_dates ?? []).map((entry) => ({
+    id: entry.id,
+    human: entry.human ?? null,
+    platform: typeof entry.platform === "number" ? entry.platform : null,
+    region: typeof entry.region === "number" ? entry.region : null,
+    y: typeof entry.y === "number" ? entry.y : null,
+    m: typeof entry.m === "number" ? entry.m : null,
+    date: typeof entry.date === "number" ? entry.date : null,
+  }));
   return {
     ...base,
+    summary: details.summary ?? null,
+    storyline: details.storyline ?? null,
     background_image_additional:
       base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
+    screenshots,
     short_screenshots: screenshots,
     artworks: mapArtworks(details.artworks),
     clip: mapClip(details.videos, details.name),
     movies: [],
+    videos: details.videos ?? null,
     genres: mapGenres(details.genres),
     themes: mapNamedEntities(details.themes),
     description: descriptionRaw || null,
@@ -976,5 +1008,6 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     collections: mapNamedEntities(details.collections),
     engines: mapNamedEntities(details.game_engines),
     involved_companies: mapInvolvedCompanies(details.involved_companies),
+    release_dates: releaseDates,
   };
 };
