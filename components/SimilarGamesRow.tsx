@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
 import { getBestCover } from "@/lib/getCoverArt";
-import type { GameScreenshot } from "@/lib/gameData";
+import type { GameArtwork, GameScreenshot } from "@/lib/gameData";
 import { normalizeImageUrl } from "@/lib/images";
+import { igdbScreenshotUrl } from "@/lib/igdbImages";
 
 export interface SimilarGame {
   id: number;
@@ -18,6 +19,13 @@ export interface SimilarGame {
   short_screenshots?: Array<{
     id?: number;
     image: string | null;
+    image_id?: string | null;
+    width?: number;
+    height?: number;
+  }>;
+  artworks?: Array<{
+    id?: number;
+    image?: string | null;
     image_id?: string | null;
     width?: number;
     height?: number;
@@ -55,11 +63,26 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
       })
       .filter(Boolean) as GameScreenshot[] | undefined;
 
+    const artworkEntries: GameArtwork[] | undefined = game.artworks
+      ?.map((art, idx) => {
+        const imageId = art.image_id;
+        const image = imageId ? igdbScreenshotUrl(imageId) ?? art.image : art.image;
+        if (!image || !imageId) return null;
+        return {
+          id: art.id ?? idx,
+          image_id: imageId,
+          image: image,
+          width: art.width,
+          height: art.height,
+        } satisfies GameArtwork;
+      })
+      .filter(Boolean) as GameArtwork[] | undefined;
+
     const bestCover = getBestCover({
       background_image: game.background_image,
       background_image_additional: game.background_image_additional ?? null,
       short_screenshots: shortScreenshots,
-      artworks: [],
+      artworks: artworkEntries ?? [],
       clip: null,
       cover: game.cover,
     });

@@ -19,6 +19,11 @@ export async function GET(_request: Request, { params }: Params) {
       background_image: normalizeImageUrl(game.background_image),
       background_image_additional: normalizeImageUrl(game.background_image_additional),
       cover: game.cover ? { image_id: game.cover.image_id ?? null } : null,
+      artworks:
+        game.artworks?.map((art) => ({
+          ...art,
+          image: normalizeImageUrl(art.image),
+        })) ?? [],
       short_screenshots:
         game.short_screenshots?.map((shot) => ({
           ...shot,

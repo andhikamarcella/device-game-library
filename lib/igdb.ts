@@ -410,6 +410,7 @@ export interface IgdbSimilarGame
   cover?: IgdbCover;
   platforms?: IgdbPlatformRef[];
   screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
 }
 
 export interface IgdbSearchParams {
@@ -780,6 +781,9 @@ export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | 
       similar_games.rating,
       similar_games.rating_count,
       similar_games.screenshots.image_id,
+      similar_games.artworks.image_id,
+      similar_games.artworks.width,
+      similar_games.artworks.height,
       similar_games.platforms.id,
       similar_games.platforms.name,
       similar_games.platforms.slug,

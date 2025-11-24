@@ -880,9 +880,9 @@ const mapCompanies = (
 const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   const screenshots = mapScreenshots(game.screenshots);
   const artworks = "artworks" in game ? mapArtworks((game as IgdbGameDetails).artworks) : [];
-  const cover =
-    resolveIgdbImage(game.cover) ?? artworks[0]?.image ?? screenshots[0]?.image ?? null;
-  const secondaryImage = screenshots[1]?.image ?? artworks[1]?.image ?? artworks[0]?.image ?? cover;
+  const cover = resolveIgdbImage(game.cover) ?? artworks[0]?.image ?? screenshots[0]?.image ?? null;
+  const primaryBackdrop = artworks[0]?.image ?? screenshots[0]?.image ?? cover;
+  const secondaryImage = screenshots[1]?.image ?? artworks[1]?.image ?? primaryBackdrop ?? cover;
   const slug = game.slug ?? slugify(game.name);
   const userRating = typeof game.rating === "number" ? game.rating : null;
   const critics = typeof game.total_rating === "number" ? game.total_rating : null;
@@ -901,7 +901,7 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     rawgSlug: slug,
     name: game.name,
     cover: game.cover ?? null,
-    background_image: cover,
+    background_image: primaryBackdrop,
     background_image_additional: secondaryImage,
     short_screenshots: screenshots,
     clip: null,
