@@ -70,12 +70,22 @@ export default async function GameDetailPage({ params, searchParams }: GameDetai
   const screenshotMap = new Map<string, { id: number; image: string; width?: number; height?: number }>();
   game.short_screenshots?.forEach((shot) => {
     if (shot?.image) {
-      screenshotMap.set(shot.image, shot);
+      screenshotMap.set(shot.image, {
+        id: shot.id ?? 0,
+        image: shot.image,
+        width: shot.width,
+        height: shot.height,
+      });
     }
   });
   screenshots.forEach((shot) => {
     if (shot?.image) {
-      screenshotMap.set(shot.image, shot);
+      screenshotMap.set(shot.image, {
+        id: shot.id ?? 0,
+        image: shot.image,
+        width: shot.width,
+        height: shot.height,
+      });
     }
   });
 
