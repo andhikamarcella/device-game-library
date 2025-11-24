@@ -13,7 +13,6 @@ import {
   Tag,
   Users,
 } from "lucide-react";
-import { CoverImage } from "@/components/CoverImage";
 import ArtworkGallery from "@/components/ArtworkGallery";
 import { ScreenshotGallery } from "@/components/ScreenshotGallery";
 import PlatformChips from "@/components/PlatformChips";
@@ -124,6 +123,22 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
+};
+
+const pickHeroBackground = (
+  artworks: GameDetailsPayload["artworks"] | null | undefined,
+  coverFallback: string | null,
+) => {
+  const candidates = (artworks ?? [])
+    .map((art) => art?.image)
+    .filter((src): src is string => Boolean(src));
+
+  if (candidates.length) {
+    const randomIndex = Math.floor(Math.random() * candidates.length);
+    return candidates[randomIndex] ?? null;
+  }
+
+  return coverFallback;
 };
 
 type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
@@ -322,6 +337,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
+  const heroBackground = pickHeroBackground(game.artworks, coverUrl);
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -337,12 +353,16 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
         <div className="relative h-72 w-full overflow-hidden">
-          <CoverImage
-            gameName={game.name}
-            fallbackImage={igdbCoverImage}
-            initialImage={igdbCoverImage}
-            className="absolute inset-0 h-full w-full"
-          />
+          {heroBackground ? (
+            <Image
+              src={heroBackground}
+              alt={`${game.name} artwork background`}
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority
+            />
+          ) : null}
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
         </div>
         <div className="space-y-8 p-6">
