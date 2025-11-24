@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getIgdbToken, igdbRequest } from "@/lib/igdb";
-import { igdbCoverUrl, igdbImage, igdbThumbUrl } from "@/lib/igdbImages";
+import { bestImageOriginal, getIgdbToken, igdbRequest, selectBackground } from "@/lib/igdb";
+import { igdbCoverUrl, igdbThumbUrl } from "@/lib/igdbImages";
 
 type Params = { params: { id: string } };
 
@@ -91,7 +91,7 @@ export async function GET(_request: Request, { params }: Params) {
     }
 
     const coverImageId = game.cover?.image_id ?? null;
-    const thumbnail = igdbThumbUrl(coverImageId) ?? (coverImageId ? igdbImage(coverImageId, "t_cover_big") : null);
+    const thumbnail = igdbThumbUrl(coverImageId) ?? (coverImageId ? bestImageOriginal(coverImageId) : null);
     const screenshotEntries = (game.screenshots ?? [])
       .map((shot) => ({
         image_id: shot?.image_id ?? null,
@@ -104,11 +104,13 @@ export async function GET(_request: Request, { params }: Params) {
       }))
       .filter((entry): entry is { image_id: string } => Boolean(entry.image_id));
 
-    const screenshotUrls = screenshotEntries.map((entry) => igdbImage(entry.image_id, "t_screenshot_big"));
-    const artworkUrls = artworkEntries.map((entry) => igdbImage(entry.image_id, "t_1080p"));
-    const backgroundId =
-      game.artworks?.[0]?.image_id ?? game.screenshots?.[0]?.image_id ?? game.cover?.image_id ?? null;
-    const backgroundImage = backgroundId ? igdbImage(backgroundId, "t_screenshot_huge") : null;
+    const screenshotUrls = screenshotEntries
+      .map((entry) => bestImageOriginal(entry.image_id))
+      .filter((url): url is string => Boolean(url));
+    const artworkUrls = artworkEntries
+      .map((entry) => bestImageOriginal(entry.image_id))
+      .filter((url): url is string => Boolean(url));
+    const backgroundImage = selectBackground(game.artworks ?? [], game.screenshots ?? [], game.cover ?? null);
     const description = game.storyline ?? game.summary ?? "";
     const summary = game.summary ?? "";
     const platforms = (game.platforms ?? [])
@@ -173,7 +175,7 @@ export async function GET(_request: Request, { params }: Params) {
         rating: typeof entry.rating === "number" ? entry.rating : null,
         released: formatReleaseDate(entry.first_release_date),
         coverImage: igdbCoverUrl(entry.cover?.image_id ?? null),
-        heroImage: artworkBackground ? igdbImage(artworkBackground, "t_screenshot_huge") : null,
+        heroImage: artworkBackground ? bestImageOriginal(artworkBackground) : null,
         platforms: (entry.platforms ?? [])
           .map((platform) => platform?.name?.trim())
           .filter((name): name is string => Boolean(name)),
@@ -198,7 +200,7 @@ export async function GET(_request: Request, { params }: Params) {
       platforms,
       developers: [] as string[],
       publishers: [] as string[],
-      coverImageUrl: coverImageId ? igdbImage(coverImageId, "t_cover_big") : null,
+      coverImageUrl: coverImageId ? bestImageOriginal(coverImageId) : null,
       screenshotUrls,
       artworkUrls,
       gallery: [...screenshotEntries, ...artworkEntries],

@@ -462,16 +462,40 @@ export function getIgdbImageUrl(
   if (!imageId) {
     return null;
   }
-  const size = type === "cover" ? "t_cover_big" : "t_screenshot_big";
+  const size = "original" as const;
   return `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`;
 }
 
 export function buildIgdbImageUrl(
   imageId: string,
-  size: "cover_big" | "cover_small" | "screenshot_big" | "screenshot_huge" | `t_${string}` = "cover_big",
+  size:
+    | "cover_big"
+    | "cover_small"
+    | "screenshot_big"
+    | "screenshot_huge"
+    | "original"
+    | `t_${string}` = "cover_big",
 ): string {
-  const normalizedSize = size.startsWith("t_") ? size : `t_${size}`;
+  const normalizedSize =
+    size === "original" ? "original" : size.startsWith("t_") ? size : `t_${size}`;
   return `https://images.igdb.com/igdb/image/upload/${normalizedSize}/${imageId}.jpg`;
+}
+
+export function bestImageOriginal(imageId?: string | null) {
+  if (!imageId) return null;
+  return buildIgdbImageUrl(imageId, "original");
+}
+
+export function selectBackground(artworks: any[], screenshots: any[], cover: any) {
+  const bestArt = artworks?.find((a) => a?.image_id);
+  if (bestArt) return bestImageOriginal(bestArt.image_id);
+
+  const bestShot = screenshots?.find((s) => s?.image_id);
+  if (bestShot) return bestImageOriginal(bestShot.image_id);
+
+  if (cover?.image_id) return bestImageOriginal(cover.image_id);
+
+  return null;
 }
 
 export function resolveIgdbImage(asset?: { image_id?: string | null }, size?: Parameters<typeof buildIgdbImageUrl>[1]): string |

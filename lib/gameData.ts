@@ -1,24 +1,25 @@
 import {
+  bestImageOriginal,
   buildIgdbImageUrl,
+  fetchIgdbAchievements,
   getIgdbGameDetails,
   getIgdbImageUrl,
-  fetchIgdbAchievements,
   resolveIgdbImage,
   searchIgdbGames as searchIgdbGamesInternal,
   searchIgdbPlatforms as searchIgdbPlatformsInternal,
-  type IgdbGame,
+  selectBackground,
+  type IgdbAgeRating,
   type IgdbAchievement,
+  type IgdbGame,
   type IgdbGameDetails,
   type IgdbImageAsset,
+  type IgdbLanguageSupport,
   type IgdbPlatformRef,
   type IgdbSearchParams,
   type IgdbSimilarGame,
-  type IgdbAgeRating,
-  type IgdbWebsite,
-  type IgdbLanguageSupport,
   type IgdbVideo,
+  type IgdbWebsite,
 } from "@/lib/igdb";
-import { igdbArtworkUrl, igdbImage } from "@/lib/igdbImages";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -632,7 +633,7 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbImage(asset.image_id, "t_screenshot_big");
+    const image = bestImageOriginal(asset.image_id);
     if (!image) {
       return;
     }
@@ -657,7 +658,7 @@ const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbArtworkUrl(asset.image_id);
+    const image = bestImageOriginal(asset.image_id);
     if (!image) {
       return;
     }
@@ -940,16 +941,20 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
 
 const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPayload => {
   const base = mapIgdbGameToGameSummary(details);
-  const screenshots = (Array.isArray(details.screenshots) ? details.screenshots : [])
-    .map((s) => {
-      const image = (s as { image?: string | null }).image ?? null;
-      return {
-        id: s.id ?? 0,
-        image_id: s.image_id ?? image ?? "",
-        image,
-      };
-    })
-    .filter((s) => Boolean(s.image_id));
+  const screenshots = (details.screenshots ?? [])
+    .filter((s) => s?.image_id)
+    .map((s) => ({
+      id: s.id ?? 0,
+      image_id: s.image_id!,
+      image: bestImageOriginal(s.image_id),
+    }));
+  const short_screenshots = (base.short_screenshots ?? [])
+    .filter((s) => s?.image_id)
+    .map((s) => ({
+      id: s.id ?? 0,
+      image_id: s.image_id,
+      image: bestImageOriginal(s.image_id),
+    }));
   const descriptionParts = [details.summary, details.storyline].filter((part): part is string => Boolean(part));
   const descriptionRaw = descriptionParts.join("\n\n");
   const seriesRelated = mapSeries(details);
@@ -978,10 +983,9 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     ...base,
     summary: details.summary ?? null,
     storyline: details.storyline ?? null,
-    background_image_additional:
-      base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
+    background_image_additional: selectBackground(details.artworks ?? [], screenshots ?? [], base.cover),
     screenshots,
-    short_screenshots: screenshots,
+    short_screenshots,
     artworks: mapArtworks(details.artworks),
     clip: mapClip(details.videos, details.name),
     movies: [],

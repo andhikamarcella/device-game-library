@@ -1,5 +1,6 @@
 import type { GameSummary } from "@/lib/gameData";
-import { igdbCoverUrl, igdbImage } from "@/lib/igdbImages";
+import { bestImageOriginal } from "@/lib/igdb";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { pickBestImage } from "@/lib/images";
 
 type CoverArtSource = Pick<
@@ -21,7 +22,7 @@ export function getBestCover(game: CoverArtSource): string {
   const artworkSources =
     game.artworks?.map((art) => {
       if (art?.image_id) {
-        return igdbImage(art.image_id, "t_screenshot_huge");
+        return bestImageOriginal(art.image_id);
       }
       return art?.image ?? null;
     }) ?? [];

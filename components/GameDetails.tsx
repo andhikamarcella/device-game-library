@@ -37,8 +37,8 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
-import { buildIgdbImageUrl } from "@/lib/igdb";
-import { igdbCoverUrl, igdbImage } from "@/lib/igdbImages";
+import { bestImageOriginal, selectBackground } from "@/lib/igdb";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
 import { getStoreIcon } from "@/lib/storeIcons";
@@ -126,19 +126,12 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
 };
 
 const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
-  const backgroundId =
-    game.artworks?.[0]?.image_id ??
-    game.screenshots?.[0]?.image_id ??
-    game.cover?.image_id ??
-    null;
-
-  const igdbBackground = backgroundId ? igdbImage(backgroundId, "t_screenshot_huge") : null;
-
-  if (igdbBackground) {
-    return igdbBackground;
-  }
+  const igdbBackground =
+    selectBackground(game.artworks ?? [], game.screenshots ?? [], game.cover ?? null) ??
+    selectBackground([], game.short_screenshots ?? [], game.cover ?? null);
 
   const fallbackCandidates = [
+    igdbBackground,
     game.artworks?.[0]?.image,
     game.screenshots?.[0]?.image,
     game.background_image_additional,
@@ -278,7 +271,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .slice(0, 10);
   const similarCards: SearchGameResult[] = similarGames.slice(0, 10).map((similar) => {
     const coverId = similar.cover?.image_id ?? null;
-    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "cover_big") : similar.background_image;
+    const coverUrl = coverId ? bestImageOriginal(coverId) : similar.background_image;
     const screenshots = Array.isArray(similar.short_screenshots)
       ? similar.short_screenshots
           .map((s) => s?.image)
@@ -365,17 +358,18 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
-        <div className="relative h-72 w-full overflow-hidden">
-          {heroBackground ? (
-            <Image
-              src={heroBackground}
-              alt={`${game.name} artwork background`}
-              fill
-              className="object-cover"
-              sizes="100vw"
-              priority
-            />
-          ) : null}
+        <div
+          className="relative h-72 w-full overflow-hidden"
+          style={
+            heroBackground
+              ? {
+                  backgroundImage: `url(${heroBackground})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }
+              : undefined
+          }
+        >
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
         </div>
         <div className="space-y-8 p-6">
