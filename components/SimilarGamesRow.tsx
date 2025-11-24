@@ -9,6 +9,7 @@ export interface SimilarGame {
   name: string;
   slug?: string | null;
   background_image: string | null;
+  cover?: { image_id?: string | null } | null;
   rating: number | null;
   released: string | null;
   parent_platforms?: Array<{ id: number; name: string; slug: string }>;
@@ -34,6 +35,7 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
     return {
       id: game.id,
       name: game.name,
+      coverImageId: game.cover?.image_id ?? null,
       coverUrl: normalizeImageUrl(game.background_image) ?? null,
       rating: typeof game.rating === "number" ? game.rating : null,
       releaseYear,

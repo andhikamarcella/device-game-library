@@ -142,7 +142,6 @@ const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | nu
   const extraCandidates = [
     game.background_image_additional,
     game.background_image,
-    game.background_image,
     igdbCoverUrl(game.cover?.image_id ?? null),
   ];
 
@@ -151,8 +150,7 @@ const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | nu
     .filter((src): src is string => Boolean(src));
 
   if (candidates.length) {
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    return candidates[randomIndex] ?? coverFallback;
+    return candidates[0] ?? coverFallback;
   }
 
   return coverFallback;
