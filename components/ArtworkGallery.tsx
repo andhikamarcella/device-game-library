@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { igdbHD } from "@/lib/igdb-image";
+import { bestImageOriginal } from "@/lib/igdb";
 import type { GameArtwork } from "@/lib/gameData";
 
 interface ArtworkGalleryProps {
@@ -28,8 +28,10 @@ export default function ArtworkGallery({ artworks }: ArtworkGalleryProps) {
             className="overflow-hidden rounded-xl group"
           >
             <img
-              src={`https://images.igdb.com/igdb/image/upload/t_720p/${a.image_id}.jpg`}
-              alt="Game artwork"
+              src={bestImageOriginal(a.image_id) ?? ""}
+              alt="Artwork"
+              width={600}
+              height={400}
               className="object-cover w-full h-40 group-hover:scale-105 transition"
             />
           </button>
@@ -56,9 +58,11 @@ export default function ArtworkGallery({ artworks }: ArtworkGalleryProps) {
           </button>
 
           <img
-            src={igdbHD(items[active].image_id)}
-            alt="Game artwork full"
-            className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl"
+            src={bestImageOriginal(items[active].image_id) ?? ""}
+            alt="Artwork"
+            width={1600}
+            height={900}
+            className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl object-cover"
             onClick={(e) => e.stopPropagation()}
           />
 

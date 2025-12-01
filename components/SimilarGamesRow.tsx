@@ -5,7 +5,7 @@ import { GameCardCompact, type CompactGameCardData } from "@/components/GameCard
 import { getBestCover } from "@/lib/getCoverArt";
 import type { GameArtwork, GameScreenshot } from "@/lib/gameData";
 import { normalizeImageUrl } from "@/lib/images";
-import { igdbScreenshotUrl } from "@/lib/igdbImages";
+import { bestImageOriginal } from "@/lib/igdb";
 
 export interface SimilarGame {
   id: number;
@@ -66,7 +66,7 @@ export function SimilarGamesRow({ games }: SimilarGamesRowProps) {
     const artworkEntries: GameArtwork[] | undefined = game.artworks
       ?.map((art, idx) => {
         const imageId = art.image_id;
-        const image = imageId ? igdbScreenshotUrl(imageId) ?? art.image : art.image;
+        const image = art.image ?? bestImageOriginal(imageId);
         if (!image || !imageId) return null;
         return {
           id: art.id ?? idx,

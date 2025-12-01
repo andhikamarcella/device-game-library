@@ -9,7 +9,8 @@ import { FiltersBar, type SortOption } from "@/components/FiltersBar";
 import { GameStatusControls } from "@/components/GameStatusControls";
 import { SimilarGamesRow, type SimilarGame } from "@/components/SimilarGamesRow";
 import { type Ownership, type PlayStatus, useLibrary, type UserGame } from "@/hooks/LibraryProvider";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { bestImageOriginal } from "@/lib/igdb";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 import { getBestCover } from "@/lib/getCoverArt";
 import { normalizeImageUrl } from "@/lib/images";
 import type { GameArtwork, GameScreenshot } from "@/lib/gameData";
@@ -68,7 +69,7 @@ const getResultScreenshots = (game: SearchGameResult | null | undefined): string
     const resolved = rawScreens
       .map((shot: any) => {
         const id = shot?.image_id ?? null;
-        return id ? igdbScreenshotUrl(id) : typeof shot === "string" ? shot : null;
+        return id ? bestImageOriginal(id) : typeof shot === "string" ? shot : null;
       })
       .filter((url): url is string => Boolean(url));
     if (resolved.length) {

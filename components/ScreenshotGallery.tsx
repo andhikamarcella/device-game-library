@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import { ScreenshotModal } from "@/components/ScreenshotModal";
-import { igdbScreenshotUrl } from "@/lib/igdbImages";
+import { bestImageOriginal } from "@/lib/igdb";
 import type { GameScreenshot } from "@/lib/gameData";
 
 interface ScreenshotGalleryProps {
@@ -12,7 +11,7 @@ interface ScreenshotGalleryProps {
 }
 
 const buildHdUrl = (imageId?: string | null, fallback?: string | null) =>
-  imageId ? `https://images.igdb.com/igdb/image/upload/t_1080p/${imageId}.jpg` : fallback ?? null;
+  fallback ?? bestImageOriginal(imageId);
 
 export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,7 +30,7 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
         {items.map((shot, index) => {
-          const url = igdbScreenshotUrl(shot.image_id ?? null) ?? buildHdUrl(shot.image_id ?? null, shot.image);
+          const url = buildHdUrl(shot.image_id ?? null, shot.image);
           if (!url) return null;
           return (
             <button
@@ -43,13 +42,12 @@ export function ScreenshotGallery({ screenshots }: ScreenshotGalleryProps) {
                 setIsOpen(true);
               }}
             >
-              <Image
+              <img
                 src={url}
                 alt="Screenshot"
                 width={320}
                 height={180}
                 className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                sizes="(max-width: 640px) 60vw, 320px"
               />
             </button>
           );

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, Sparkles, Star } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
@@ -111,11 +110,11 @@ export function GameCard({
         className="relative block w-full overflow-hidden bg-slate-200 focus:outline-none dark:bg-slate-800"
       >
         <div className="relative aspect-[3/4] w-full overflow-hidden sm:aspect-[2/3] lg:aspect-[5/8]">
-          <Image
+          <img
             src={coverSrc}
             alt={`${game.name} cover art`}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+            width={600}
+            height={900}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent" />
@@ -183,14 +182,13 @@ export function GameCard({
           {screenshotPreviews.length ? (
             <div className="flex gap-2 overflow-x-auto pb-1">
               {screenshotPreviews.map((url, index) => (
-                <Image
+                <img
                   key={`${game.id}-preview-${index}`}
                   src={url}
                   alt={`${game.name} screenshot ${index + 1}`}
                   width={160}
                   height={90}
                   className="h-24 w-40 flex-shrink-0 rounded-xl object-cover"
-                  sizes="160px"
                 />
               ))}
             </div>

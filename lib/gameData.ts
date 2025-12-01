@@ -1,24 +1,26 @@
 import {
+  bestImageOriginal,
   buildIgdbImageUrl,
+  fetchIgdbAchievements,
   getIgdbGameDetails,
   getIgdbImageUrl,
-  fetchIgdbAchievements,
   resolveIgdbImage,
   searchIgdbGames as searchIgdbGamesInternal,
   searchIgdbPlatforms as searchIgdbPlatformsInternal,
-  type IgdbGame,
+  selectBackground,
+  type IgdbAgeRating,
   type IgdbAchievement,
+  type IgdbGame,
   type IgdbGameDetails,
   type IgdbImageAsset,
+  type IgdbLanguageSupport,
   type IgdbPlatformRef,
   type IgdbSearchParams,
   type IgdbSimilarGame,
-  type IgdbAgeRating,
-  type IgdbWebsite,
-  type IgdbLanguageSupport,
   type IgdbVideo,
+  type IgdbWebsite,
 } from "@/lib/igdb";
-import { igdbScreenshotUrl } from "@/lib/igdbImages";
+import { fetchRawgReviews, type RawgReview } from "@/lib/rawg";
 
 export type GamePlatformRequirement = {
   minimum?: string;
@@ -81,9 +83,10 @@ export type GameSummary = {
   rawgId?: number | null;
   rawgSlug?: string | null;
   name: string;
-  cover?: { image_id?: string | null } | null;
+  cover?: { image_id?: string | null; id?: number | null } | null;
   background_image: string | null;
   background_image_additional?: string | null;
+  screenshots?: GameScreenshot[] | null;
   short_screenshots?: GameScreenshot[];
   artworks?: GameArtwork[] | null;
   clip?: GameClip | null;
@@ -181,6 +184,11 @@ export type GameClip = {
 };
 
 export type GameDetailsPayload = GameSummary & {
+  summary?: string | null;
+  storyline?: string | null;
+  artworks?: Array<{ id?: number; image_id: string; image?: string | null }> | null;
+  screenshots?: Array<{ id?: number; image_id: string; image?: string | null }> | null;
+  cover?: { image_id: string; id?: number | null } | null;
   genres: { id: number; name: string }[];
   themes?: { id: number; name: string }[];
   game_modes?: { id: number; name: string }[];
@@ -214,6 +222,7 @@ export type GameDetailsPayload = GameSummary & {
   series?: GameSeriesEntry[] | { results?: GameSeriesEntry[] | null } | null;
   clip?: GameClip | null;
   movies?: GameTrailer[] | null;
+  videos?: GameTrailer[] | null;
   esrb_rating?: GameEsrbRating | null;
   metacritic?: number | null;
   metacritic_platforms?: GameMetacriticPlatform[] | null;
@@ -225,22 +234,34 @@ export type GameDetailsPayload = GameSummary & {
   age_ratings?: IgdbAgeRating[] | null;
   language_supports?: GameLanguageSupport[] | null;
   time_to_beat?: { hastly?: number | null; normally?: number | null; completely?: number | null } | null;
+  release_dates?: GameReleaseDate[] | null;
+  rawgReviews?: RawgReview[] | null;
 };
 
 export type GameScreenshot = {
-  id: number;
+  id?: number;
   image_id?: string | null;
-  image: string;
+  image?: string | null;
   width?: number;
   height?: number;
 };
 
 export type GameArtwork = {
-  id: number;
+  id?: number;
   image_id: string;
-  image: string;
+  image?: string | null;
   width?: number;
   height?: number;
+};
+
+export type GameReleaseDate = {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
 };
 
 export type GameLanguageSupport = {
@@ -309,8 +330,22 @@ export async function searchGames(params: GameSearchParams = {}): Promise<GameSe
  * Fetch detailed information for a single IGDB game.
  */
 export async function getGameDetails(id: number): Promise<GameDetailsPayload> {
-  const details = await loadIgdbDetails(id);
-  return mapIgdbDetailsToGameDetails(details);
+  const detailsPromise = loadIgdbDetails(id);
+
+  const rawgReviewsPromise = detailsPromise
+    .then((igdb) => {
+      const slug = igdb.slug ?? slugify(igdb.name);
+      if (!slug) return null;
+      return fetchRawgReviews(slug);
+    })
+    .catch((error) => {
+      console.error("RAWG reviews fetch failed", error);
+      return null;
+    });
+
+  const [details, rawgReviews] = await Promise.all([detailsPromise, rawgReviewsPromise]);
+
+  return mapIgdbDetailsToGameDetails(details, rawgReviews ?? null);
 }
 
 export async function getGameScreenshots(
@@ -614,7 +649,7 @@ const mapScreenshots = (assets?: IgdbImageAsset[]): GameScreenshot[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbScreenshotUrl(asset.image_id);
+    const image = bestImageOriginal(asset.image_id);
     if (!image) {
       return;
     }
@@ -639,7 +674,7 @@ const mapArtworks = (assets?: IgdbImageAsset[]): GameArtwork[] => {
     if (!asset?.image_id) {
       return;
     }
-    const image = igdbScreenshotUrl(asset.image_id);
+    const image = bestImageOriginal(asset.image_id);
     if (!image) {
       return;
     }
@@ -903,6 +938,7 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
     cover: game.cover ?? null,
     background_image: primaryBackdrop,
     background_image_additional: secondaryImage,
+    screenshots,
     short_screenshots: screenshots,
     artworks,
     clip: null,
@@ -919,9 +955,25 @@ const mapIgdbGameToGameSummary = (game: IgdbGame): GameSummary => {
   };
 };
 
-const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPayload => {
+const mapIgdbDetailsToGameDetails = (
+  details: IgdbGameDetails,
+  rawgReviews: RawgReview[] | null = null,
+): GameDetailsPayload => {
   const base = mapIgdbGameToGameSummary(details);
-  const screenshots = mapScreenshots(details.screenshots);
+  const screenshots = (details.screenshots ?? [])
+    .filter((s) => s?.image_id)
+    .map((s) => ({
+      id: s.id ?? 0,
+      image_id: s.image_id!,
+      image: bestImageOriginal(s.image_id),
+    }));
+  const short_screenshots = (base.short_screenshots ?? [])
+    .filter((s) => s?.image_id)
+    .map((s) => ({
+      id: s.id ?? 0,
+      image_id: s.image_id,
+      image: bestImageOriginal(s.image_id),
+    }));
   const descriptionParts = [details.summary, details.storyline].filter((part): part is string => Boolean(part));
   const descriptionRaw = descriptionParts.join("\n\n");
   const seriesRelated = mapSeries(details);
@@ -931,14 +983,32 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     name: entry.name,
     slug: entry.slug ?? slugify(entry.name),
   }));
+  const releaseDates = (details.release_dates ?? []).map((entry) => ({
+    id: entry.id,
+    human: entry.human ?? null,
+    platform: typeof entry.platform === "number" ? entry.platform : null,
+    region: typeof entry.region === "number" ? entry.region : null,
+    y: typeof entry.y === "number" ? entry.y : null,
+    m: typeof entry.m === "number" ? entry.m : null,
+    date: typeof entry.date === "number" ? entry.date : null,
+  }));
+  const cover = details.cover
+    ? {
+        id: details.cover.id ?? 0,
+        image_id: details.cover.image_id ?? "",
+      }
+    : null;
   return {
     ...base,
-    background_image_additional:
-      base.background_image_additional ?? screenshots[0]?.image ?? base.background_image ?? null,
-    short_screenshots: screenshots,
+    summary: details.summary ?? null,
+    storyline: details.storyline ?? null,
+    background_image_additional: selectBackground(details.artworks ?? [], screenshots ?? [], base.cover),
+    screenshots,
+    short_screenshots,
     artworks: mapArtworks(details.artworks),
     clip: mapClip(details.videos, details.name),
     movies: [],
+    videos: details.videos ?? null,
     genres: mapGenres(details.genres),
     themes: mapNamedEntities(details.themes),
     description: descriptionRaw || null,
@@ -976,5 +1046,8 @@ const mapIgdbDetailsToGameDetails = (details: IgdbGameDetails): GameDetailsPaylo
     collections: mapNamedEntities(details.collections),
     engines: mapNamedEntities(details.game_engines),
     involved_companies: mapInvolvedCompanies(details.involved_companies),
+    release_dates: releaseDates,
+    cover,
+    rawgReviews,
   };
 };

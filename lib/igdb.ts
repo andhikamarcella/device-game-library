@@ -112,7 +112,9 @@ export function buildIgdbQuery(opts: {
       "  total_rating_count,",
       "  first_release_date,",
       "  cover.image_id,",
+      "  artworks.image_id,",
       "  screenshots.image_id,",
+      "  videos.video_id,",
       "  platforms.name,",
       "  platforms.slug,",
       "  platforms.abbreviation,",
@@ -120,6 +122,7 @@ export function buildIgdbQuery(opts: {
       "  themes.name,",
       "  game_modes.name,",
       "  player_perspectives.name,",
+      "  release_dates.y,",
       "  age_ratings.rating;",
     ].join("\n"),
   );
@@ -357,6 +360,16 @@ export interface IgdbCompanyRef {
   publisher?: boolean;
 }
 
+export interface IgdbReleaseDate {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
+}
+
 export interface IgdbGame {
   id: number;
   name: string;
@@ -401,6 +414,7 @@ export interface IgdbGameDetails extends IgdbGame {
     | { hastly?: number | null; normally?: number | null; completely?: number | null }
     | number
     | null;
+  release_dates?: IgdbReleaseDate[] | null;
 }
 
 export interface IgdbSimilarGame
@@ -448,16 +462,35 @@ export function getIgdbImageUrl(
   if (!imageId) {
     return null;
   }
-  const size = type === "cover" ? "t_cover_big" : "t_screenshot_big";
-  return `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`;
+  const size = type === "cover" ? "t_cover_big" : "t_1080p";
+  return buildIgdbImageUrl(imageId, size);
 }
 
-export function buildIgdbImageUrl(
-  imageId: string,
-  size: "cover_big" | "cover_small" | "screenshot_big" | "screenshot_huge" | `t_${string}` = "cover_big",
-): string {
-  const normalizedSize = size.startsWith("t_") ? size : `t_${size}`;
+export function buildIgdbImageUrl(imageId: string, size?: string): string {
+  const normalizedSize = (() => {
+    if (!size || typeof size !== "string") return "t_cover_big";
+    if (size === "original") return "original";
+    return size.startsWith("t_") ? size : `t_${size}`;
+  })();
+
   return `https://images.igdb.com/igdb/image/upload/${normalizedSize}/${imageId}.jpg`;
+}
+
+export function bestImageOriginal(imageId?: string | null) {
+  if (!imageId) return null;
+  return buildIgdbImageUrl(imageId, "t_1080p");
+}
+
+export function selectBackground(artworks: any[], screenshots: any[], cover: any) {
+  const bestArt = artworks?.find((a) => a?.image_id);
+  if (bestArt) return bestImageOriginal(bestArt.image_id);
+
+  const bestShot = screenshots?.find((s) => s?.image_id);
+  if (bestShot) return bestImageOriginal(bestShot.image_id);
+
+  if (cover?.image_id) return bestImageOriginal(cover.image_id);
+
+  return null;
 }
 
 export function resolveIgdbImage(asset?: { image_id?: string | null }, size?: Parameters<typeof buildIgdbImageUrl>[1]): string |
@@ -673,7 +706,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 
   const queryParts: string[] = [];
   queryParts.push(
-    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height;",
+    "fields id,name,slug,summary,storyline,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,artworks.image_id,screenshots.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,release_dates.y,age_ratings.rating,videos.video_id;",
   );
 
   if (searchTerm) {

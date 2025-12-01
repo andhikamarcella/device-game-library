@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getIgdbImageUrl, getIgdbToken } from "@/lib/igdb";
+import { bestImageOriginal, getIgdbToken, igdbRequest, selectBackground } from "@/lib/igdb";
+import { igdbCoverUrl, igdbThumbUrl } from "@/lib/igdbImages";
 
 type Params = { params: { id: string } };
 
@@ -9,15 +10,18 @@ type IgdbDetailRecord = {
   name: string;
   summary?: string | null;
   storyline?: string | null;
-  first_release_date?: number | null;
-  aggregated_rating?: number | null;
-  rating?: number | null;
-  aggregated_rating_count?: number | null;
-  rating_count?: number | null;
+  release_dates?: Array<{ id?: number; y?: number | null; date?: number | null }>;
   platforms?: Array<{ id: number; name?: string | null }>;
   genres?: Array<{ id: number; name?: string | null }>;
-  cover?: { image_id?: string | null };
+  themes?: Array<{ id: number; name?: string | null }>;
+  game_modes?: Array<{ id: number; name?: string | null }>;
+  player_perspectives?: Array<{ id: number; name?: string | null }>;
+  cover?: { id?: number; image_id?: string | null };
   screenshots?: Array<{ id?: number; image_id?: string | null }>;
+  artworks?: Array<{ id?: number; image_id?: string | null }>;
+  videos?: Array<{ id?: number; video_id?: string | null }>;
+  age_ratings?: Array<{ id?: number; rating?: number | null }>;
+  similar_games?: number[];
 };
 
 const formatReleaseDate = (timestamp?: number | null): string | null => {
@@ -42,20 +46,21 @@ export async function GET(_request: Request, { params }: Params) {
     fields
       id,
       name,
+      artworks.image_id,
+      screenshots.image_id,
+      cover.image_id,
+      genres.name,
+      themes.name,
+      game_modes.name,
+      player_perspectives.name,
+      release_dates.y,
+      release_dates.date,
+      platforms.name,
       summary,
       storyline,
-      first_release_date,
-      aggregated_rating,
-      rating,
-      aggregated_rating_count,
-      rating_count,
-      platforms.id,
-      platforms.name,
-      genres.id,
-      genres.name,
-      cover.image_id,
-      screenshots.id,
-      screenshots.image_id;
+      videos.video_id,
+      age_ratings.rating,
+      similar_games;
     where id = ${id};
     limit 1;
   `;
@@ -85,43 +90,97 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Game not found." }, { status: 404 });
     }
 
-    const coverImageUrl = getIgdbImageUrl(game.cover?.image_id, "cover");
+    const coverImageId = game.cover?.image_id ?? null;
+    const thumbnail = igdbThumbUrl(coverImageId) ?? (coverImageId ? bestImageOriginal(coverImageId) : null);
     const screenshotEntries = (game.screenshots ?? [])
-      .map((shot, index) => {
-        const url = getIgdbImageUrl(shot.image_id, "screenshot");
-        if (!url) {
-          return null;
-        }
-        return {
-          id: shot.id ?? index,
-          url,
-        };
-      })
-      .filter((entry): entry is { id: number; url: string } => Boolean(entry));
+      .map((shot) => ({
+        image_id: shot?.image_id ?? null,
+      }))
+      .filter((entry): entry is { image_id: string } => Boolean(entry.image_id));
 
-    const screenshotUrls = screenshotEntries.map((entry) => entry.url);
-    const thumbnail = coverImageUrl ?? screenshotUrls[0] ?? null;
-    const backgroundImage = screenshotUrls[0] ?? coverImageUrl ?? null;
+    const artworkEntries = (game.artworks ?? [])
+      .map((art) => ({
+        image_id: art?.image_id ?? null,
+      }))
+      .filter((entry): entry is { image_id: string } => Boolean(entry.image_id));
+
+    const screenshotUrls = screenshotEntries
+      .map((entry) => bestImageOriginal(entry.image_id))
+      .filter((url): url is string => Boolean(url));
+    const artworkUrls = artworkEntries
+      .map((entry) => bestImageOriginal(entry.image_id))
+      .filter((url): url is string => Boolean(url));
+    const backgroundImage = selectBackground(game.artworks ?? [], game.screenshots ?? [], game.cover ?? null);
     const description = game.storyline ?? game.summary ?? "";
     const summary = game.summary ?? "";
-    const rating =
-      typeof game.aggregated_rating === "number"
-        ? game.aggregated_rating
-        : typeof game.rating === "number"
-          ? game.rating
-          : null;
-    const ratingsCount =
-      typeof game.aggregated_rating_count === "number"
-        ? game.aggregated_rating_count
-        : typeof game.rating_count === "number"
-          ? game.rating_count
-          : 0;
     const platforms = (game.platforms ?? [])
       .map((platform) => platform?.name?.trim())
       .filter((name): name is string => Boolean(name));
     const genres = (game.genres ?? [])
       .map((genre) => genre?.name?.trim())
       .filter((name): name is string => Boolean(name));
+    const themes = (game.themes ?? [])
+      .map((theme) => theme?.name?.trim())
+      .filter((name): name is string => Boolean(name));
+    const gameModes = (game.game_modes ?? [])
+      .map((mode) => mode?.name?.trim())
+      .filter((name): name is string => Boolean(name));
+    const playerPerspectives = (game.player_perspectives ?? [])
+      .map((perspective) => perspective?.name?.trim())
+      .filter((name): name is string => Boolean(name));
+
+    const videos = (game.videos ?? [])
+      .map((video) => ({
+        video_id: video?.video_id ?? null,
+      }))
+      .filter((entry): entry is { video_id: string } => Boolean(entry.video_id));
+
+    const similarIds = Array.isArray(game.similar_games)
+      ? game.similar_games.filter((value) => Number.isFinite(value))
+      : [];
+
+    const similarGames = similarIds.length
+      ? await igdbRequest<
+          Array<{
+            id: number;
+            name: string;
+            cover?: { image_id?: string | null } | null;
+            artworks?: Array<{ image_id?: string | null }>;
+            screenshots?: Array<{ image_id?: string | null }>;
+            first_release_date?: number | null;
+            platforms?: Array<{ name?: string | null }>;
+            rating?: number | null;
+          }>
+        >(
+          `/games`,
+          `
+      fields
+        name,
+        cover.image_id,
+        artworks.image_id,
+        screenshots.image_id,
+        first_release_date,
+        platforms.name,
+        rating;
+      where id = (${similarIds.join(",")});
+    `,
+        )
+      : [];
+
+    const similarGameDetails = similarGames.map((entry) => {
+      const artworkBackground = entry.artworks?.[0]?.image_id ?? entry.screenshots?.[0]?.image_id ?? null;
+      return {
+        id: entry.id,
+        name: entry.name,
+        rating: typeof entry.rating === "number" ? entry.rating : null,
+        released: formatReleaseDate(entry.first_release_date),
+        coverImage: igdbCoverUrl(entry.cover?.image_id ?? null),
+        heroImage: artworkBackground ? bestImageOriginal(artworkBackground) : null,
+        platforms: (entry.platforms ?? [])
+          .map((platform) => platform?.name?.trim())
+          .filter((name): name is string => Boolean(name)),
+      };
+    });
 
     const response = {
       id: game.id,
@@ -130,17 +189,26 @@ export async function GET(_request: Request, { params }: Params) {
       summary,
       thumbnail,
       backgroundImage,
-      released: formatReleaseDate(game.first_release_date),
-      rating,
-      ratingsCount,
+      released: formatReleaseDate(game.release_dates?.[0]?.date ?? null),
+      rating: null,
+      ratingsCount: 0,
       website: null,
       genres,
+      themes,
+      game_modes: gameModes,
+      player_perspectives: playerPerspectives,
       platforms,
       developers: [] as string[],
       publishers: [] as string[],
-      coverImageUrl,
+      coverImageUrl: coverImageId ? bestImageOriginal(coverImageId) : null,
       screenshotUrls,
-      gallery: screenshotEntries,
+      artworkUrls,
+      gallery: [...screenshotEntries, ...artworkEntries],
+      artworks: artworkEntries,
+      screenshots: screenshotEntries,
+      cover: coverImageId ? { image_id: coverImageId } : null,
+      videos,
+      similarGames: similarGameDetails,
     };
 
     return NextResponse.json(response, { status: 200 });

@@ -4,9 +4,9 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 
-import { HDImage } from "@/components/HDImage";
 import { cn } from "@/lib/utils";
 import type { GameScreenshot } from "@/lib/gameData";
+import { bestImageOriginal } from "@/lib/igdb";
 
 interface ScreenshotModalProps {
   isOpen: boolean;
@@ -64,6 +64,10 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
   }, [isOpen, next, onClose, prev]);
 
   const currentImage = useMemo(() => images[current], [images, current]);
+  const currentImageSrc = useMemo(() => {
+    if (!currentImage) return null;
+    return currentImage.image ?? bestImageOriginal(currentImage.image_id ?? null);
+  }, [currentImage]);
 
   if (!isOpen || !images.length) return null;
 
@@ -132,7 +136,8 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-xl"
+      className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-xl"
+      style={{ background: "rgba(0,0,0,0.9)" }}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -198,7 +203,7 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
         </div>
 
         <div
-          className="relative z-10 h-full w-full overflow-hidden rounded-2xl bg-slate-950 shadow-2xl ring-1 ring-white/5"
+          className="relative z-10 flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-950 shadow-2xl ring-1 ring-white/5"
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -206,20 +211,18 @@ export function ScreenshotModal({ isOpen, images, startIndex = 0, onClose }: Scr
           onPointerCancel={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
-          <div
-            className={cn(
-              "flex h-full w-full items-center justify-center transition-transform duration-200",
-            )}
-            style={{
-              transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
-              touchAction: "none",
-            }}
-          >
-            {currentImage ? (
-              <HDImage
-                imageId={currentImage.image_id ?? null}
+          <div className="flex h-full w-full items-center justify-center">
+            {currentImageSrc ? (
+              <img
+                src={currentImageSrc}
                 alt={`Screenshot ${current + 1}`}
-                className="max-h-[82vh] max-w-full"
+                className={cn(
+                  "max-h-[82vh] max-w-full object-contain transition-transform duration-200",
+                )}
+                style={{
+                  transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
+                  touchAction: "none",
+                }}
               />
             ) : null}
           </div>

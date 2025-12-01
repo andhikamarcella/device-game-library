@@ -1,8 +1,7 @@
-export const igdbHD = (id: string) =>
-  `https://images.igdb.com/igdb/image/upload/t_1080p/${id}.jpg`;
+import { bestImageOriginal } from "@/lib/igdb";
 
-export const igdbLarge = (id: string) =>
-  `https://images.igdb.com/igdb/image/upload/t_screenshot_huge/${id}.jpg`;
+export const igdbHD = (id: string) => bestImageOriginal(id) ?? "";
 
-export const igdbThumb = (id: string) =>
-  `https://images.igdb.com/igdb/image/upload/t_cover_big/${id}.jpg`;
+export const igdbLarge = (id: string) => bestImageOriginal(id) ?? "";
+
+export const igdbThumb = (id: string) => bestImageOriginal(id) ?? "";

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -37,7 +36,7 @@ import {
   type GameSimilarEntry,
 } from "@/lib/gameData";
 import { getBestCover } from "@/lib/getCoverArt";
-import { buildIgdbImageUrl } from "@/lib/igdb";
+import { bestImageOriginal, buildIgdbImageUrl } from "@/lib/igdb";
 import { igdbCoverUrl } from "@/lib/igdbImages";
 import { normalizeImageUrl } from "@/lib/images";
 import { extractDevelopers, extractPublishers } from "@/lib/metadata";
@@ -46,6 +45,8 @@ import { cn } from "@/lib/utils";
 import { PlatformIcon } from "@/lib/platformIcons";
 import type { IgdbVideo } from "@/lib/igdb";
 import { LinksBox } from "@/components/LinksBox";
+import type { RawgReview } from "@/lib/rawg";
+import { RawgReviewCard } from "@/components/game/RawgReviewCard";
 
 export type GameReview = {
   id: number;
@@ -123,37 +124,6 @@ const additionLabelFallback = (slug?: string | null, name?: string | null) => {
   if (source.includes("dlc")) return "DLC";
   if (source.includes("expansion")) return "Expansion";
   return "Add-on";
-};
-
-const pickHeroBackground = (game: GameDetailsPayload, coverFallback: string | null) => {
-  const artworkCandidates = (game.artworks ?? [])
-    .map((art) => {
-      if (art?.image_id) {
-        return buildIgdbImageUrl(art.image_id, "t_screenshot_huge");
-      }
-      return art?.image ?? null;
-    })
-    .filter((src): src is string => Boolean(src));
-
-  const screenshotCandidates = (game.short_screenshots ?? [])
-    .map((shot) => shot?.image ?? null)
-    .filter((src): src is string => Boolean(src));
-
-  const extraCandidates = [
-    game.background_image_additional,
-    game.background_image,
-    igdbCoverUrl(game.cover?.image_id ?? null),
-  ];
-
-  const candidates = [...artworkCandidates, ...screenshotCandidates, ...extraCandidates]
-    .map((src) => normalizeImageUrl(src))
-    .filter((src): src is string => Boolean(src));
-
-  if (candidates.length) {
-    return candidates[0] ?? coverFallback;
-  }
-
-  return coverFallback;
 };
 
 type PlatformEntry = GamePlatform | GameParentPlatform | null | undefined;
@@ -266,6 +236,28 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     typeof game.ratings_count === "number" && Number.isFinite(game.ratings_count)
       ? game.ratings_count.toLocaleString()
       : "0";
+  const rawgReviews: RawgReview[] = (game.rawgReviews ?? [])
+    .map((review) => {
+      if (!review || typeof review.id !== "number") return null;
+
+      const text = (review.text ?? "").replace(/<[^>]+>/g, "").trim();
+
+      return {
+        id: review.id,
+        text,
+        rating: review.rating ?? null,
+        created: review.created ?? null,
+        likes_count: review.likes_count ?? null,
+        comments_count: review.comments_count ?? null,
+        positive: review.positive ?? null,
+        negative: review.negative ?? null,
+        user: {
+          username: review.user?.username ?? "Unknown",
+          avatar: review.user?.avatar ?? null,
+        },
+      };
+    })
+    .filter(Boolean) as RawgReview[];
   const bestCover = getBestCover(game);
   const igdbCoverImage = normalizeImageUrl(bestCover);
   const description = game.description_raw ?? game.description ?? "No description available.";
@@ -282,9 +274,11 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .slice(0, 10);
   const similarCards: SearchGameResult[] = similarGames.slice(0, 10).map((similar) => {
     const coverId = similar.cover?.image_id ?? null;
-    const coverUrl = coverId ? buildIgdbImageUrl(coverId, "cover_big") : similar.background_image;
+    const coverUrl = coverId ? bestImageOriginal(coverId) : similar.background_image;
     const screenshots = Array.isArray(similar.short_screenshots)
-      ? similar.short_screenshots.map((shot) => shot.image).filter(Boolean)
+      ? similar.short_screenshots
+          .map((s) => s?.image)
+          .filter((img): img is string => Boolean(img))
       : [];
     const platforms = (similar.platforms ?? []).map((platform) => ({
       id: platform.platform.id,
@@ -352,7 +346,35 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
     .sort((a, b) => Number(b[1]) - Number(a[1]));
   const playtimeDistribution = buildPlaytimeDistribution(game.playtime_distribution);
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null) ?? igdbCoverImage;
-  const heroBackground = pickHeroBackground(game, igdbCoverImage);
+
+  // Collect background sources
+  const artworkImages =
+    Array.isArray(game.artworks) && game.artworks.length > 0 ? game.artworks : [];
+
+  const screenshotImages =
+    Array.isArray(game.screenshots) && game.screenshots.length > 0 ? game.screenshots : [];
+
+  const coverImage = game.cover?.image_id ? [{ image_id: game.cover.image_id }] : [];
+
+  const allBackgroundCandidates = [...artworkImages, ...screenshotImages, ...coverImage]
+    .filter((item) => item?.image_id);
+
+  // Pick RANDOM only if more than one candidate exists
+  let selectedBackgroundId: string | null = null;
+
+  if (allBackgroundCandidates.length > 1) {
+    const randomIndex = Math.floor(Math.random() * allBackgroundCandidates.length);
+    selectedBackgroundId = allBackgroundCandidates[randomIndex].image_id;
+  } else if (allBackgroundCandidates.length === 1) {
+    selectedBackgroundId = allBackgroundCandidates[0].image_id;
+  } else {
+    selectedBackgroundId = null;
+  }
+
+  // Generate final URL
+  const backgroundUrl = selectedBackgroundId
+    ? buildIgdbImageUrl(selectedBackgroundId, "1080p")
+    : null;
 
   const storeEntries = (game.stores ?? []).filter((store): store is GameStoreEntry => Boolean(buildStoreUrl(store)));
 
@@ -367,17 +389,17 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/80 shadow-lg shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900/60">
-        <div className="relative h-72 w-full overflow-hidden">
-          {heroBackground ? (
-            <Image
-              src={heroBackground}
-              alt={`${game.name} artwork background`}
-              fill
-              className="object-cover"
-              sizes="100vw"
-              priority
-            />
-          ) : null}
+        <div
+          className="relative h-72 w-full overflow-hidden"
+        >
+          <div
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-700 ease-in-out ${
+              backgroundUrl ? "opacity-100" : "opacity-0"
+            }`}
+            style={{
+              backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : "none",
+            }}
+          />
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 to-transparent" />
         </div>
         <div className="space-y-8 p-6">
@@ -395,7 +417,7 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
                 "
               >
                 {coverUrl ? (
-                  <Image
+                  <img
                     src={coverUrl}
                     alt={`${game.name} cover`}
                     width={300}
@@ -690,7 +712,13 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
                 >
                   <div className="relative h-40 w-full overflow-hidden">
                   {additionImage ? (
-                    <Image src={additionImage} alt={`${addition.name} cover`} fill className="object-cover transition duration-300 group-hover:scale-105" sizes="320px" />
+                    <img
+                      src={additionImage}
+                      alt={`${addition.name} cover`}
+                      width={320}
+                      height={200}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       No image
@@ -747,6 +775,20 @@ export function GameDetails({ game, backLink, screenshots, reviews, videos, simi
               <div key={similar.id} className="min-w-[240px] sm:min-w-0">
                 <GameCard game={similar} coverOverride={similar.coverUrl ?? null} detailReturnTo={backTarget ?? undefined} />
               </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {rawgReviews.length ? (
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            <h2 className="text-sm font-semibold uppercase tracking-widest">Community Reviews (RAWG)</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {rawgReviews.map((review) => (
+              <RawgReviewCard key={`rawg-${review.id}`} review={review} />
             ))}
           </div>
         </section>

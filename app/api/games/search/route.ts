@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { IgdbRequestError, buildIgdbCountQuery, buildIgdbQuery, getIgdbToken, type SortKey } from "@/lib/igdb";
+import {
+  IgdbRequestError,
+  bestImageOriginal,
+  buildIgdbCountQuery,
+  buildIgdbQuery,
+  getIgdbToken,
+  type SortKey,
+} from "@/lib/igdb";
 import {
   type IgdbAgeRating,
   type IgdbGameMode,
@@ -8,7 +15,7 @@ import {
   type IgdbPlayerPerspective,
   type IgdbTheme,
 } from "@/types/igdb";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl } from "@/lib/igdbImages";
 
 type IgdbPlatformRef = { id?: number; name?: string | null; slug?: string | null; abbreviation?: string | null };
 type IgdbGenreRef = { id?: number; name?: string | null };
@@ -329,7 +336,7 @@ async function executeSearch({
     const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
     const screenshots = Array.isArray(game.screenshots)
       ? game.screenshots
-          .map((shot) => igdbScreenshotUrl(shot?.image_id ?? null))
+          .map((shot) => (shot?.image_id ? bestImageOriginal(shot.image_id) : null))
           .filter((url): url is string => Boolean(url))
       : [];
 
