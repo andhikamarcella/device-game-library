@@ -4,12 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, LibraryBig, Sparkles } from "lucide-react";
 import { GameStatusControls } from "@/components/GameStatusControls";
-import PlatformChips from "@/components/PlatformChips";
 import { type UserGame } from "@/hooks/LibraryProvider";
 import { getBestCover } from "@/lib/getCoverArt";
 import { extractGameFeatures } from "@/lib/gameFeatures";
 import { normalizeRawgImageUrl } from "@/lib/images";
-import type { RawgGame } from "@/lib/rawg";
+import type { RawgGame, RawgParentPlatform, RawgPlatform } from "@/lib/rawg";
+import { PlatformIcon } from "@/lib/platformIcons";
 
 export interface SearchGameResult
   extends Pick<
@@ -42,6 +42,30 @@ interface GameCardProps {
   rawgReturnTo?: string;
 }
 
+type PlatformEntry = RawgPlatform | RawgParentPlatform | null | undefined;
+
+type NormalizedPlatform = RawgPlatform["platform"];
+
+const normalizePlatformList = (entries: PlatformEntry[] = []): NormalizedPlatform[] => {
+  const normalized = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      if ("platform" in entry && entry.platform) {
+        return entry.platform;
+      }
+      return null;
+    })
+    .filter((platform): platform is NormalizedPlatform => {
+      if (!platform || typeof platform.id !== "number") return false;
+      const hasLabel =
+        (typeof platform.name === "string" && platform.name.trim().length > 0) ||
+        (typeof platform.slug === "string" && platform.slug.trim().length > 0);
+      return hasLabel;
+    });
+
+  return normalized;
+};
+
 export function GameCard({
   game,
   coverOverride,
@@ -59,6 +83,7 @@ export function GameCard({
     : `/games/${game.id}`;
   const platformEntries =
     (game.parent_platforms?.length ? game.parent_platforms : game.platforms) ?? [];
+  const normalizedPlatforms = normalizePlatformList(platformEntries);
   const featureFlags = extractGameFeatures({ tags: game.tags ?? null });
   const featureBadges: Array<{ label: string }> = [];
 
@@ -136,7 +161,23 @@ export function GameCard({
           {game.genres.length ? (
             <p className="text-sm text-slate-600 dark:text-slate-300">{game.genres.map((genre) => genre.name).join(", ")}</p>
           ) : null}
-          <PlatformChips platforms={platformEntries} className="mt-1" limit={4} size="sm" />
+          {normalizedPlatforms.length ? (
+            <div className="mt-1 flex flex-wrap gap-1 text-xs text-slate-300">
+              {normalizedPlatforms.slice(0, 4).map((platform) => {
+                const label = platform.name ?? platform.slug ?? "Unknown platform";
+                const key = platform.slug ?? `${platform.id}`;
+                return (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5"
+                  >
+                    <PlatformIcon platform={label} className="h-3.5 w-3.5" />
+                    <span>{label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
           {featureBadges.length ? (
             <div className="flex flex-wrap gap-2">
               {featureBadges.map((badge, index) => (
