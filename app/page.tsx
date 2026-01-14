@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Loader2, Search, Star } from "lucide-react";
+import { ArrowRight, Clapperboard, Loader2, Search, Star, X } from "lucide-react";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TagPill } from "@/components/TagPill";
@@ -44,6 +44,19 @@ type DetailMetadata = {
   thumbnail: string | null;
   backgroundImage: string | null;
   gallery: Array<{ id: number; url: string | null }>;
+};
+
+type TrailerPreview = {
+  id: number;
+  name: string;
+  preview: string | null;
+  data: Record<string, string | undefined>;
+};
+
+type GameplayPreview = {
+  videoId: string;
+  title: string;
+  channelTitle: string;
 };
 
 type PlatformOption = {
@@ -108,6 +121,11 @@ function DashboardPageContent() {
   const [platformSearch, setPlatformSearch] = useState("");
   const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
   const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ gameId: number; title: string } | null>(null);
+  const [mediaTrailers, setMediaTrailers] = useState<TrailerPreview[]>([]);
+  const [mediaVideos, setMediaVideos] = useState<GameplayPreview[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   useEffect(() => {
     const currentSearch = searchParams.toString();
@@ -184,6 +202,128 @@ function DashboardPageContent() {
     const timeout = window.setTimeout(() => setWishlistStatus(null), 4000);
     return () => window.clearTimeout(timeout);
   }, [wishlistStatus]);
+
+  useEffect(() => {
+    if (!results.length) {
+      setMediaPreview(null);
+      setMediaTrailers([]);
+      setMediaVideos([]);
+      setMediaLoading(false);
+      setMediaError(null);
+      return;
+    }
+
+    if (!mediaPreview) {
+      return;
+    }
+
+    const match = results.find((game) => game.id === mediaPreview.gameId);
+    if (!match) {
+      setMediaPreview(null);
+      setMediaTrailers([]);
+      setMediaVideos([]);
+      setMediaLoading(false);
+      setMediaError(null);
+      return;
+    }
+
+    if (match.name !== mediaPreview.title) {
+      setMediaPreview({ gameId: match.id, title: match.name });
+    }
+  }, [mediaPreview, results]);
+
+  const previewGameId = mediaPreview?.gameId ?? null;
+  const previewTitle = mediaPreview?.title ?? null;
+
+  useEffect(() => {
+    if (!previewGameId || !previewTitle) {
+      setMediaTrailers([]);
+      setMediaVideos([]);
+      setMediaLoading(false);
+      setMediaError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const trailerController = new AbortController();
+    const youtubeController = new AbortController();
+
+    setMediaLoading(true);
+    setMediaError(null);
+    setMediaTrailers([]);
+    setMediaVideos([]);
+
+    const fetchMedia = async () => {
+      try {
+        const [trailerResults, youtubeResults] = await Promise.all([
+          fetch(`/api/rawg/movies/${previewGameId}`, { signal: trailerController.signal }).then(async (response) => {
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload) {
+              const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat trailer RAWG.";
+              throw new Error(message);
+            }
+            const rawResults = (payload as { results?: TrailerPreview[] }).results ?? [];
+            return rawResults.filter((item): item is TrailerPreview => Boolean(item));
+          }),
+          fetch(`/api/youtube/gameplay?q=${encodeURIComponent(previewTitle)}`, {
+            signal: youtubeController.signal,
+          }).then(async (response) => {
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || !payload) {
+              const message = (payload as { error?: string } | null)?.error ?? "Tidak dapat memuat video gameplay.";
+              throw new Error(message);
+            }
+            const rawResults = (payload as { results?: GameplayPreview[] }).results ?? [];
+            return rawResults.filter((item): item is GameplayPreview => Boolean(item));
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setMediaTrailers(trailerResults);
+        setMediaVideos(youtubeResults);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setMediaError(error instanceof Error ? error.message : "Tidak dapat memuat media permainan.");
+        setMediaTrailers([]);
+        setMediaVideos([]);
+      } finally {
+        if (!cancelled) {
+          setMediaLoading(false);
+        }
+      }
+    };
+
+    fetchMedia();
+
+    return () => {
+      cancelled = true;
+      trailerController.abort();
+      youtubeController.abort();
+    };
+  }, [previewGameId, previewTitle]);
+
+  useEffect(() => {
+    if (!mediaPreview) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMediaPreview(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mediaPreview]);
 
   useEffect(() => {
     const shouldFetch = Boolean(debouncedQuery) || selectedPlatform !== "all";
@@ -763,6 +903,25 @@ function DashboardPageContent() {
                       </Link>
                       <button
                         type="button"
+                        onClick={() =>
+                          setMediaPreview((current) =>
+                            current?.gameId === game.id
+                              ? null
+                              : { gameId: game.id, title: game.name },
+                          )
+                        }
+                        aria-pressed={mediaPreview?.gameId === game.id}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          mediaPreview?.gameId === game.id
+                            ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                            : "border-slate-300 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                        }`}
+                      >
+                        <Clapperboard className="h-4 w-4" />
+                        {mediaPreview?.gameId === game.id ? "Tutup media" : "Tampilkan media"}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleAddToWishlist(game)}
                         disabled={isWishlisted || isProcessing}
                         aria-pressed={isWishlisted}
@@ -790,6 +949,100 @@ function DashboardPageContent() {
               );
             })}
           </div>
+          {mediaPreview ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+              onClick={() => setMediaPreview(null)}
+            >
+              <div
+                className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setMediaPreview(null)}
+                  className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-slate-900/10 text-slate-500 transition hover:bg-slate-900/20 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/20"
+                  aria-label="Tutup media"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <div className="max-h-[80vh] overflow-y-auto space-y-4 p-6 text-slate-700 dark:text-slate-200">
+                  <div className="flex items-center gap-3">
+                    <Clapperboard className="h-5 w-5" aria-hidden="true" />
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                        Trailer & gameplay preview
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{mediaPreview.title}</p>
+                    </div>
+                  </div>
+                  {mediaError ? (
+                    <p className="text-sm text-rose-600 dark:text-rose-300">{mediaError}</p>
+                  ) : null}
+                  {mediaLoading ? (
+                    <p className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Memuat trailer dan gameplay...
+                    </p>
+                  ) : null}
+                  {!mediaLoading && !mediaError && mediaTrailers.length === 0 && mediaVideos.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      Tidak ada trailer atau video gameplay yang ditemukan untuk judul ini.
+                    </p>
+                  ) : null}
+                  {mediaTrailers.length ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {mediaTrailers.slice(0, 2).map((trailer) => {
+                        const sources = trailer.data ?? {};
+                        const src = sources.max ?? sources["1080"] ?? sources["720"] ?? sources["480"] ?? null;
+                        if (!src) {
+                          return null;
+                        }
+                        return (
+                          <figure
+                            key={trailer.id}
+                            className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-sm dark:border-slate-800 dark:bg-slate-800"
+                          >
+                            <video controls poster={trailer.preview ?? undefined} className="h-48 w-full object-cover">
+                              <source src={src} type="video/mp4" />
+                            </video>
+                            <figcaption className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                              {trailer.name}
+                            </figcaption>
+                          </figure>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {mediaVideos.length ? (
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {mediaVideos.slice(0, 3).map((video) => (
+                        <article
+                          key={video.videoId}
+                          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-emerald-400 dark:border-slate-800 dark:bg-slate-900"
+                        >
+                          <div className="aspect-video">
+                            <iframe
+                              src={`https://www.youtube.com/embed/${video.videoId}`}
+                              title={video.title}
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                          <div className="space-y-1 px-3 py-2">
+                            <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{video.title}</h4>
+                            <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{video.channelTitle}</p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
           {(pagination.total > pagination.pageSize || pagination.hasNextPage || pagination.hasPreviousPage) && (
             <nav
               aria-label="RAWG search pagination"
