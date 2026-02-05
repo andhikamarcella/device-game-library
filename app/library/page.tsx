@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Search, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Clock, Heart, ListTodo, Loader2, PlayCircle, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { GameCardCompact, type CompactGameCardData } from "@/components/GameCardCompact";
 import type { SearchGameResult } from "@/components/GameCard";
 import { DashboardStats } from "@/components/DashboardStats";
@@ -678,6 +678,48 @@ export default function DashboardPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [libraryGames]);
 
+  const quickFilterStats = useMemo(() => {
+    const playingCount = libraryGames.filter((game) => game.status === "playing").length;
+    const backlogCount = libraryGames.filter((game) => game.status === "not_started").length;
+    const wishlistCount = libraryGames.filter((game) => game.ownership === "wishlist").length;
+    const recentlyPlayedCount = libraryGames.filter((game) => Boolean(game.lastPlayedAt)).length;
+    const ratedCount = libraryGames.filter((game) => typeof game.personalRating === "number").length;
+
+    return {
+      playingCount,
+      backlogCount,
+      wishlistCount,
+      recentlyPlayedCount,
+      ratedCount,
+    };
+  }, [libraryGames]);
+
+  const resetLibraryFilters = () => {
+    setOwnershipFilter("all");
+    setStatusFilter("all");
+    setPlatformFilter("all");
+    setMinRating(null);
+    setSortOrder("added_date");
+    setLibrarySearch("");
+  };
+
+  const applyQuickFilter = ({
+    status,
+    ownership,
+    sort,
+  }: {
+    status?: PlayStatus;
+    ownership?: Ownership;
+    sort?: SortOption;
+  }) => {
+    setOwnershipFilter(ownership ?? "all");
+    setStatusFilter(status ?? "all");
+    setPlatformFilter("all");
+    setMinRating(null);
+    setSortOrder(sort ?? "added_date");
+    setLibrarySearch("");
+  };
+
   const filteredLibrary = useMemo(() => {
     const normalizedQuery = librarySearch.trim().toLowerCase();
 
@@ -947,6 +989,86 @@ export default function DashboardPage() {
               className="w-full rounded-lg bg-slate-900/5 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-emerald-500 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
             />
           </label>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Quick filters</p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Jump back in</h3>
+            </div>
+            <button
+              type="button"
+              onClick={resetLibraryFilters}
+              className="rounded-full border border-emerald-400/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/10 dark:text-emerald-200"
+            >
+              Reset filters
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                key: "playing",
+                label: "Playing now",
+                helper: "Continue active sessions",
+                count: quickFilterStats.playingCount,
+                icon: PlayCircle,
+                action: () => applyQuickFilter({ status: "playing" }),
+              },
+              {
+                key: "backlog",
+                label: "Backlog",
+                helper: "Not started yet",
+                count: quickFilterStats.backlogCount,
+                icon: ListTodo,
+                action: () => applyQuickFilter({ status: "not_started" }),
+              },
+              {
+                key: "wishlist",
+                label: "Wishlist",
+                helper: "Games to grab next",
+                count: quickFilterStats.wishlistCount,
+                icon: Heart,
+                action: () => applyQuickFilter({ ownership: "wishlist" }),
+              },
+              {
+                key: "recently-played",
+                label: "Recently played",
+                helper: "Sort by latest session",
+                count: quickFilterStats.recentlyPlayedCount,
+                icon: Clock,
+                action: () => applyQuickFilter({ sort: "last_played" }),
+              },
+              {
+                key: "top-rated",
+                label: "Top rated",
+                helper: "Sort by personal score",
+                count: quickFilterStats.ratedCount,
+                icon: Star,
+                action: () => applyQuickFilter({ sort: "personal_rating" }),
+              },
+            ].map((filter) => {
+              const Icon = filter.icon;
+              return (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={filter.action}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-emerald-400/70 hover:bg-emerald-50/70 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/10"
+                >
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{filter.label}</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">{filter.helper}</span>
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                    {filter.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
         <DashboardStats games={libraryGames} />
         <FiltersBar

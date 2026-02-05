@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, Clock, Gamepad2, NotebookPen, Sparkles } from "lucide-react";
+import { Calendar, Clock, Gamepad2, Heart, NotebookPen, Sparkles, Trophy } from "lucide-react";
 import { type UserGame } from "@/hooks/LibraryProvider";
 
 interface DashboardStatsProps {
@@ -100,6 +100,16 @@ export function DashboardStats({ games }: DashboardStatsProps) {
     { label: "Wishlist", value: wishlist.toString(), icon: NotebookPen },
     { label: "Total playtime", value: formatHours(totalPlaytime), icon: Clock },
   ];
+
+  const mostPlayedGames = [...games]
+    .filter((game) => game.playtimeHours > 0)
+    .sort((a, b) => b.playtimeHours - a.playtimeHours)
+    .slice(0, 3);
+
+  const wishlistHighlights = [...games]
+    .filter((game) => game.ownership === "wishlist")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -278,6 +288,81 @@ export function DashboardStats({ games }: DashboardStatsProps) {
             </ul>
           ) : (
             <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Add platform info to your games to build this list.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+          <header className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Most played
+              </p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Playtime leaders</h3>
+            </div>
+            <Trophy className="h-5 w-5 text-emerald-500" />
+          </header>
+          {mostPlayedGames.length ? (
+            <ul className="mt-4 space-y-3">
+              {mostPlayedGames.map((game) => (
+                <li
+                  key={game.igdbId}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2 transition hover:border-emerald-400/60 hover:bg-emerald-500/5 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{game.title}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Last played {formatDate(game.lastPlayedAt ?? game.updatedAt)}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                    {formatHours(game.playtimeHours)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+              Log some playtime to surface your top games.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+          <header className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Wishlist spotlight
+              </p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Ready to try next</h3>
+            </div>
+            <Heart className="h-5 w-5 text-rose-500" />
+          </header>
+          {wishlistHighlights.length ? (
+            <ul className="mt-4 space-y-3">
+              {wishlistHighlights.map((game) => (
+                <li
+                  key={game.igdbId}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2 transition hover:border-emerald-400/60 hover:bg-emerald-500/5 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{game.title}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Added {formatDate(game.createdAt)}</span>
+                  </div>
+                  <Link
+                    href={`/games/${game.igdbId}`}
+                    className="text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:text-emerald-500 dark:text-emerald-300"
+                  >
+                    View
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+              Add wishlist games to build your next-up list.
+            </p>
           )}
         </div>
       </section>
