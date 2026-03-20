@@ -112,7 +112,9 @@ export function buildIgdbQuery(opts: {
       "  total_rating_count,",
       "  first_release_date,",
       "  cover.image_id,",
+      "  artworks.image_id,",
       "  screenshots.image_id,",
+      "  videos.video_id,",
       "  platforms.name,",
       "  platforms.slug,",
       "  platforms.abbreviation,",
@@ -120,6 +122,7 @@ export function buildIgdbQuery(opts: {
       "  themes.name,",
       "  game_modes.name,",
       "  player_perspectives.name,",
+      "  release_dates.y,",
       "  age_ratings.rating;",
     ].join("\n"),
   );
@@ -357,6 +360,16 @@ export interface IgdbCompanyRef {
   publisher?: boolean;
 }
 
+export interface IgdbReleaseDate {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
+}
+
 export interface IgdbGame {
   id: number;
   name: string;
@@ -401,6 +414,7 @@ export interface IgdbGameDetails extends IgdbGame {
     | { hastly?: number | null; normally?: number | null; completely?: number | null }
     | number
     | null;
+  release_dates?: IgdbReleaseDate[] | null;
 }
 
 export interface IgdbSimilarGame
@@ -673,7 +687,7 @@ export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSea
 
   const queryParts: string[] = [];
   queryParts.push(
-    "fields id,name,slug,summary,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height;",
+    "fields id,name,slug,summary,storyline,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,artworks.image_id,screenshots.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,release_dates.y,age_ratings.rating,videos.video_id;",
   );
 
   if (searchTerm) {

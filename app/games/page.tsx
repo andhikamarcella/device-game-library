@@ -10,7 +10,7 @@ import { TagPill } from "@/components/TagPill";
 import { useDeviceStore } from "@/hooks/useDeviceStore";
 import { useGameStore } from "@/hooks/useGameStore";
 import type { GameDraft } from "@/hooks/useGameStore";
-import { igdbCoverUrl, igdbScreenshotUrl } from "@/lib/igdbImages";
+import { igdbCoverUrl, igdbImage } from "@/lib/igdbImages";
 import { Game, GameFormat, GameStatus, Device } from "@/lib/types";
 import { cn, formatDateTime, parseTags, sortGames, cycleStatus } from "@/lib/utils";
 import { truncateText } from "@/lib/text";
@@ -193,7 +193,7 @@ const getResultScreenshots = (game: IgdbSearchResult | null | undefined): string
       .map((shot) => {
         if (typeof shot === "string") return shot;
         const id = shot?.image_id ?? null;
-        return id ? igdbScreenshotUrl(id) : null;
+        return id ? igdbImage(id, "t_screenshot_huge") : null;
       })
       .filter((url): url is string => Boolean(url));
     if (resolved.length) {
