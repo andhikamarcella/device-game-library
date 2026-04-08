@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Loader2, Search, Star } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Loader2, Search, Star } from "lucide-react";
 import { Card } from "@/components/Card";
 import { GameCard, type SearchGameResult as CardResult } from "@/components/GameCard";
 import { GameCardCompact } from "@/components/GameCardCompact";
@@ -190,6 +190,29 @@ type IgdbListGame = {
 const HOMEPAGE_GRID =
   "grid grid-flow-col auto-cols-[70%] gap-4 overflow-x-auto pb-2 sm:auto-cols-[45%] lg:auto-cols-[30%] xl:auto-cols-[25%]";
 
+function CarouselControls({ onLeft, onRight }: { onLeft: () => void; onRight: () => void }) {
+  return (
+    <div className="flex items-center gap-2 sm:hidden">
+      <button
+        type="button"
+        onClick={onLeft}
+        className="rounded-full border border-white/40 bg-white/60 p-2 text-slate-700 backdrop-blur dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
+        aria-label="Geser ke kiri"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onRight}
+        className="rounded-full border border-white/40 bg-white/60 p-2 text-slate-700 backdrop-blur dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
+        aria-label="Geser ke kanan"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 const mapIgdbListGame = (game: IgdbListGame): CardResult => {
   const coverUrl = igdbCoverUrl(game.cover?.image_id ?? null);
   const platforms = Array.isArray(game.platforms)
@@ -301,6 +324,9 @@ const formatDaysAgo = (days: number | null) => {
     const [platformSearch, setPlatformSearch] = useState("");
     const [wishlistStatus, setWishlistStatus] = useState<{ message: string; tone: "success" | "info" | "error" } | null>(null);
     const [wishlistProcessingId, setWishlistProcessingId] = useState<number | null>(null);
+    const topCarouselRef = useRef<HTMLDivElement | null>(null);
+    const soonCarouselRef = useRef<HTMLDivElement | null>(null);
+    const recentCarouselRef = useRef<HTMLDivElement | null>(null);
     const [topGames, setTopGames] = useState<CardResult[]>([]);
     const [comingSoonGames, setComingSoonGames] = useState<CardResult[]>([]);
     const [recentGames, setRecentGames] = useState<CardResult[]>([]);
@@ -832,7 +858,15 @@ const formatDaysAgo = (days: number | null) => {
       </div>
 
       <div className="space-y-6">
-        <Card title="Top 100 Games">
+        <Card
+          title="Top 100 Games"
+          action={
+            <CarouselControls
+              onLeft={() => topCarouselRef.current?.scrollBy({ left: -280, behavior: "smooth" })}
+              onRight={() => topCarouselRef.current?.scrollBy({ left: 280, behavior: "smooth" })}
+            />
+          }
+        >
           {headlineLoading && !topGames.length ? (
             <div className={HOMEPAGE_GRID}>
               {Array.from({ length: 8 }).map((_, idx) => (
@@ -843,9 +877,17 @@ const formatDaysAgo = (days: number | null) => {
               ))}
             </div>
           ) : topGames.length ? (
-            <div className={HOMEPAGE_GRID}>
+            <div className={HOMEPAGE_GRID} ref={topCarouselRef}>
               {topGames.map((game) => (
-                <GameCard key={game.id} game={game} />
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  onWishlist={handleAddToWishlist}
+                  wishlistBusy={wishlistProcessingId === game.id}
+                  wishlistDisabled={Boolean(
+                    trackedGames.find((item) => item.title.trim().toLowerCase() === game.name.trim().toLowerCase())?.wishlist,
+                  )}
+                />
               ))}
             </div>
           ) : (
@@ -853,7 +895,16 @@ const formatDaysAgo = (days: number | null) => {
           )}
         </Card>
 
-        <Card title="Coming Soon" description="Releases ordered by date">
+        <Card
+          title="Coming Soon"
+          description="Releases ordered by date"
+          action={
+            <CarouselControls
+              onLeft={() => soonCarouselRef.current?.scrollBy({ left: -280, behavior: "smooth" })}
+              onRight={() => soonCarouselRef.current?.scrollBy({ left: 280, behavior: "smooth" })}
+            />
+          }
+        >
           {headlineLoading && !comingSoonGames.length ? (
             <div className={HOMEPAGE_GRID}>
               {Array.from({ length: 6 }).map((_, idx) => (
@@ -864,13 +915,21 @@ const formatDaysAgo = (days: number | null) => {
               ))}
             </div>
           ) : comingSoonGames.length ? (
-            <div className={HOMEPAGE_GRID}>
+            <div className={HOMEPAGE_GRID} ref={soonCarouselRef}>
               {comingSoonGames.map((game) => {
                 const releaseTimestamp = (game as { first_release_date?: number | null }).first_release_date ?? null;
                 const label = formatCountdown(daysUntil(releaseTimestamp));
                 return (
                   <div key={game.id} className="space-y-2">
-                    <GameCard game={game} />
+                    <GameCard
+                      game={game}
+                      coverLabel={label === "Releases tomorrow" ? "Releases Tomorrow" : null}
+                      onWishlist={handleAddToWishlist}
+                      wishlistBusy={wishlistProcessingId === game.id}
+                      wishlistDisabled={Boolean(
+                        trackedGames.find((item) => item.title.trim().toLowerCase() === game.name.trim().toLowerCase())?.wishlist,
+                      )}
+                    />
                     {label ? <p className="text-sm text-slate-600 dark:text-slate-300">{label}</p> : null}
                   </div>
                 );
@@ -881,7 +940,16 @@ const formatDaysAgo = (days: number | null) => {
           )}
         </Card>
 
-        <Card title="Recently Released" description="Latest launches in the past 90 days">
+        <Card
+          title="Recently Released"
+          description="Latest launches in the past 90 days"
+          action={
+            <CarouselControls
+              onLeft={() => recentCarouselRef.current?.scrollBy({ left: -280, behavior: "smooth" })}
+              onRight={() => recentCarouselRef.current?.scrollBy({ left: 280, behavior: "smooth" })}
+            />
+          }
+        >
           {headlineLoading && !recentGames.length ? (
             <div className={HOMEPAGE_GRID}>
               {Array.from({ length: 6 }).map((_, idx) => (
@@ -892,13 +960,20 @@ const formatDaysAgo = (days: number | null) => {
               ))}
             </div>
           ) : recentGames.length ? (
-            <div className={HOMEPAGE_GRID}>
+            <div className={HOMEPAGE_GRID} ref={recentCarouselRef}>
               {recentGames.map((game) => {
                 const releaseTimestamp = (game as { first_release_date?: number | null }).first_release_date ?? null;
                 const ago = formatDaysAgo(daysSince(releaseTimestamp));
                 return (
                   <div key={game.id} className="space-y-2">
-                    <GameCard game={game} />
+                    <GameCard
+                      game={game}
+                      onWishlist={handleAddToWishlist}
+                      wishlistBusy={wishlistProcessingId === game.id}
+                      wishlistDisabled={Boolean(
+                        trackedGames.find((item) => item.title.trim().toLowerCase() === game.name.trim().toLowerCase())?.wishlist,
+                      )}
+                    />
                     {ago ? <p className="text-sm text-slate-600 dark:text-slate-300">{ago}</p> : null}
                   </div>
                 );

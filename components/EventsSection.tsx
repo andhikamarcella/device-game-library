@@ -6,9 +6,7 @@ import { GameCardCompact, type CompactGameCardData } from "@/components/GameCard
 import { igdbHD } from "@/lib/igdb-image";
 
 type EventBucket = {
-  upcoming: IgdbEventGame[];
   anniversaries: IgdbEventGame[];
-  fallback: IgdbEventGame[];
 };
 
 type IgdbEventGame = {
@@ -67,7 +65,7 @@ function EventGrid({ games, note }: { games: IgdbEventGame[]; note?: (game: Igdb
 }
 
 export default function EventsSection() {
-  const [events, setEvents] = useState<EventBucket>({ upcoming: [], anniversaries: [], fallback: [] });
+  const [events, setEvents] = useState<EventBucket>({ anniversaries: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,14 +77,12 @@ export default function EventsSection() {
         const json = (await res.json()) as Partial<EventBucket> & { error?: string };
         if (cancelled || json?.error) return;
         setEvents({
-          upcoming: Array.isArray(json.upcoming) ? json.upcoming : [],
           anniversaries: Array.isArray(json.anniversaries) ? json.anniversaries : [],
-          fallback: Array.isArray(json.fallback) ? json.fallback : [],
         });
       } catch (error) {
         console.warn("Failed to fetch events", error);
         if (!cancelled) {
-          setEvents({ upcoming: [], anniversaries: [], fallback: [] });
+          setEvents({ anniversaries: [] });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -99,7 +95,7 @@ export default function EventsSection() {
   }, []);
 
   const hasAny = useMemo(
-    () => events.upcoming.length > 0 || events.anniversaries.length > 0 || events.fallback.length > 0,
+    () => events.anniversaries.length > 0,
     [events],
   );
 
@@ -129,19 +125,6 @@ export default function EventsSection() {
         </div>
       ) : null}
 
-      {!loading && events.upcoming.length ? (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground">Upcoming Releases (next 30 days)</h3>
-          <EventGrid
-            games={events.upcoming}
-            note={(game) => {
-              const date = game.first_release_date ? new Date(Number(game.first_release_date) * 1000) : null;
-              return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
-            }}
-          />
-        </div>
-      ) : null}
-
       {!loading && events.anniversaries.length ? (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground">Anniversaries</h3>
@@ -152,12 +135,6 @@ export default function EventsSection() {
         </div>
       ) : null}
 
-      {!loading && !events.upcoming.length && !events.anniversaries.length && events.fallback.length ? (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-muted-foreground">Notable Updates</h3>
-          <EventGrid games={events.fallback} />
-        </div>
-      ) : null}
     </section>
   );
 }

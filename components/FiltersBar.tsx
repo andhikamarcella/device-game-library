@@ -39,7 +39,7 @@ export function FiltersBar({
   onSortOrderChange,
 }: FiltersBarProps) {
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+    <section className="glass-panel neon-outline flex flex-col gap-4 rounded-2xl p-4">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Library filters</h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex flex-col gap-1">
@@ -47,7 +47,7 @@ export function FiltersBar({
           <select
             value={ownership}
             onChange={(event) => onOwnershipChange(event.target.value as Ownership | "all")}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-white/55 bg-white/70 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/45 dark:text-slate-100"
           >
             <option value="all">All</option>
             <option value="wishlist">Wishlist</option>
@@ -62,7 +62,7 @@ export function FiltersBar({
           <select
             value={status}
             onChange={(event) => onStatusChange(event.target.value as PlayStatus | "all")}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-white/55 bg-white/70 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/45 dark:text-slate-100"
           >
             <option value="all">All</option>
             <option value="not_started">Not started</option>
@@ -77,7 +77,7 @@ export function FiltersBar({
           <select
             value={platform}
             onChange={(event) => onPlatformChange(event.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-white/55 bg-white/70 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/45 dark:text-slate-100"
           >
             <option value="all">All</option>
             {availablePlatforms.map((name) => (
@@ -105,7 +105,7 @@ export function FiltersBar({
               }
             }}
             placeholder="Any"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-white/55 bg-white/70 px-3 py-2 text-sm text-slate-800 shadow-sm backdrop-blur focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/45 dark:text-slate-100"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -113,7 +113,7 @@ export function FiltersBar({
           <select
             value={sortOrder}
             onChange={(event) => onSortOrderChange(event.target.value as SortOption)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-white/55 bg-white/70 px-3 py-2 text-sm font-medium text-slate-800 shadow-sm backdrop-blur focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/45 dark:text-slate-100"
           >
             <option value="title">Title</option>
             <option value="release_year">Release year</option>

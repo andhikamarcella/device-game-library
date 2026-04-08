@@ -1285,15 +1285,15 @@ export default function GamesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="glass-panel neon-outline flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-4 sm:px-5">
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">Games library</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Keep track of ROMs, physical copies, and digital purchases.</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">Cari game lebih cepat: filter status, platform, format, dan favorit dalam sekali lihat.</p>
         </div>
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/90 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100 dark:hover:text-emerald-50 dark:focus-visible:ring-offset-slate-900"
+          className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/90 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:border-cyan-500/60 dark:bg-cyan-500/30 dark:text-cyan-100 dark:hover:text-cyan-50 dark:focus-visible:ring-offset-slate-900"
         >
           <Plus className="h-4 w-4" /> Add game
         </button>
@@ -1301,22 +1301,27 @@ export default function GamesPage() {
 
       <Card>
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
             {statusFilters.map((filter) => (
               <button
                 key={filter.value}
                 type="button"
                 onClick={() => setStatusFilter(filter.value)}
                 className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider transition-colors duration-200",
+                  "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider transition-colors duration-200",
                   filters.status === filter.value
-                    ? "bg-emerald-500/30 text-emerald-700 dark:text-emerald-200"
-                    : "bg-slate-200 text-slate-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:bg-slate-900 dark:text-slate-300",
+                    ? "border-cyan-500/50 bg-cyan-500/25 text-cyan-700 dark:text-cyan-200"
+                    : "border-white/40 bg-white/45 text-slate-600 hover:bg-cyan-500/10 hover:text-cyan-700 dark:border-white/10 dark:bg-slate-900/30 dark:text-slate-300",
                 )}
               >
                 {filter.label}
               </button>
             ))}
+            </div>
+            <div className="rounded-lg border border-white/40 bg-white/50 px-3 py-1.5 text-xs font-medium text-slate-600 backdrop-blur dark:border-white/10 dark:bg-slate-900/35 dark:text-slate-300">
+              {filteredGames.length} game ditemukan
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1327,7 +1332,7 @@ export default function GamesPage() {
               <select
                 value={filters.platformId}
                 onChange={(event) => setPlatformFilter(event.target.value)}
-                className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="rounded-xl border border-white/50 bg-white/65 px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur focus:border-cyan-500 focus:ring-cyan-400 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
               >
                 <option value="all">All platforms</option>
                 {devices.map((device) => (
@@ -1342,7 +1347,7 @@ export default function GamesPage() {
               <select
                 value={filters.format}
                 onChange={(event) => setFormatFilter(event.target.value as GameFormat | "all")}
-                className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="rounded-xl border border-white/50 bg-white/65 px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur focus:border-cyan-500 focus:ring-cyan-400 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
               >
                 <option value="all">All formats</option>
                 {formatOptions.map((format) => (
@@ -1357,7 +1362,7 @@ export default function GamesPage() {
               <select
                 value={filters.sortOrder}
                 onChange={(event) => setSortOrder(event.target.value as typeof filters.sortOrder)}
-                className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="rounded-xl border border-white/50 bg-white/65 px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur focus:border-cyan-500 focus:ring-cyan-400 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
               >
                 {sortOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1372,7 +1377,7 @@ export default function GamesPage() {
                 value={filters.platformTerm}
                 onChange={(event) => setPlatformTerm(event.target.value)}
                 placeholder="Search by console name..."
-                className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                className="rounded-xl border border-white/50 bg-white/65 px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur focus:border-cyan-500 focus:ring-cyan-400 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-100"
               />
             </label>
           </div>
@@ -1384,8 +1389,8 @@ export default function GamesPage() {
               className={cn(
                 "rounded-xl border px-4 py-2 text-sm font-medium transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900",
                 filters.favoritesOnly
-                  ? "border-amber-400/70 bg-amber-100 text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/20 dark:text-amber-200"
-                  : "border-slate-200 bg-white/80 text-slate-600 shadow-sm hover:-translate-y-0.5 hover:border-amber-300 hover:text-amber-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
+                  ? "border-amber-400/70 bg-amber-100/90 text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/20 dark:text-amber-200"
+                  : "border-white/50 bg-white/60 text-slate-600 shadow-sm backdrop-blur hover:-translate-y-0.5 hover:border-amber-300 hover:text-amber-700 dark:border-white/10 dark:bg-slate-900/35 dark:text-slate-300",
               )}
               aria-pressed={filters.favoritesOnly}
             >
@@ -1397,8 +1402,8 @@ export default function GamesPage() {
               className={cn(
                 "rounded-xl border px-4 py-2 text-sm font-medium transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:focus-visible:ring-offset-slate-900",
                 filters.wishlistOnly
-                  ? "border-sky-400/70 bg-sky-100 text-sky-700 dark:border-sky-500/60 dark:bg-sky-500/20 dark:text-sky-200"
-                  : "border-slate-200 bg-white/80 text-slate-600 shadow-sm hover:-translate-y-0.5 hover:border-sky-300 hover:text-sky-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
+                  ? "border-sky-400/70 bg-sky-100/90 text-sky-700 dark:border-sky-500/60 dark:bg-sky-500/20 dark:text-sky-200"
+                  : "border-white/50 bg-white/60 text-slate-600 shadow-sm backdrop-blur hover:-translate-y-0.5 hover:border-sky-300 hover:text-sky-700 dark:border-white/10 dark:bg-slate-900/35 dark:text-slate-300",
               )}
               aria-pressed={filters.wishlistOnly}
             >
@@ -1407,7 +1412,7 @@ export default function GamesPage() {
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 shadow-sm shadow-slate-900/10 dark:border-slate-800">
+        <div className="mt-6 overflow-hidden rounded-2xl border border-white/45 bg-white/45 shadow-sm shadow-slate-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/35">
           <div className="max-w-full overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800" aria-label="Games list">
             <thead className="bg-slate-100/80 text-left text-xs uppercase tracking-wider text-slate-600 dark:bg-slate-900/80 dark:text-slate-300">
