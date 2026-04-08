@@ -8,7 +8,7 @@ import { useGameStore } from "@/hooks/useGameStore";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
-  "/games": "Games Library",
+  "/games": "Discover Game",
   "/devices": "Devices",
   "/settings": "Settings",
 };

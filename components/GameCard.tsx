@@ -37,8 +37,12 @@ export interface SearchGameResult {
 interface GameCardProps {
   game: SearchGameResult;
   coverOverride?: string | null;
+  coverLabel?: string | null;
   userGame?: UserGame;
   onAdd?: (game: SearchGameResult) => void;
+  onWishlist?: (game: SearchGameResult) => void;
+  wishlistDisabled?: boolean;
+  wishlistBusy?: boolean;
   onUpdate?: (igdbId: number, patch: Partial<UserGame>) => void;
   onRemove?: (igdbId: number) => void;
   onShowSimilar?: (game: SearchGameResult) => void;
@@ -57,8 +61,12 @@ const buildFeatureSource = (genres: string[]): Pick<GameSummary, "tags"> => {
 export function GameCard({
   game,
   coverOverride,
+  coverLabel,
   userGame,
   onAdd,
+  onWishlist,
+  wishlistDisabled,
+  wishlistBusy,
   onUpdate,
   onRemove,
   onShowSimilar,
@@ -129,6 +137,11 @@ export function GameCard({
               </span>
             ) : null}
           </div>
+          {coverLabel ? (
+            <span className="absolute left-4 top-4 rounded-full border border-fuchsia-300/70 bg-gradient-to-r from-fuchsia-500/85 to-cyan-500/85 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-fuchsia-900/30 backdrop-blur">
+              {coverLabel}
+            </span>
+          ) : null}
         </div>
       </Link>
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -209,13 +222,25 @@ export function GameCard({
         {userGame && onUpdate ? (
           <GameStatusControls userGame={userGame} onUpdate={onUpdate} onRemove={onRemove} />
         ) : (
-          <button
-            type="button"
-            onClick={() => onAdd?.(game)}
-            className="mt-auto inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-          >
-            Add to library
-          </button>
+          <div className="mt-auto grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => onAdd?.(game)}
+              className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            >
+              Add to library
+            </button>
+            {onWishlist ? (
+              <button
+                type="button"
+                disabled={wishlistDisabled || wishlistBusy}
+                onClick={() => onWishlist(game)}
+                className="inline-flex items-center justify-center rounded-xl border border-cyan-400/50 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:text-cyan-200"
+              >
+                {wishlistBusy ? "Saving..." : wishlistDisabled ? "In wishlist" : "Add wishlist"}
+              </button>
+            ) : null}
+          </div>
         )}
       </div>
     </article>
