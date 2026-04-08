@@ -17,14 +17,14 @@ export function LayoutSidebar({ open, onClose }: { open: boolean; onClose: () =>
   const pathname = usePathname();
 
   const SidebarContent = (
-    <div className="flex h-full flex-col border-r border-slate-200/60 bg-white/80 text-slate-900 backdrop-blur transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-100 high-contrast-surface">
+    <div className="glass-panel high-contrast-surface flex h-full flex-col border-r text-slate-900 transition-colors duration-300 dark:text-slate-100">
       <div className="flex items-center justify-between px-6 py-5">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-emerald-500/40 bg-emerald-500/10 shadow-sm shadow-emerald-500/20 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-cyan-500/40 bg-cyan-500/10 shadow-sm shadow-cyan-500/20 dark:border-cyan-400/30 dark:bg-cyan-500/10">
             <img src="/logo.svg" alt="Device & Game Library Tracker logo" className="h-9 w-9" />
           </span>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">DG Tracker</p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-cyan-600 dark:text-cyan-300">DG Tracker</p>
             <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Device & Game Library</p>
           </div>
         </div>
@@ -47,10 +47,10 @@ export function LayoutSidebar({ open, onClose }: { open: boolean; onClose: () =>
               href={item.href}
               onClick={onClose}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 motion-safe:animate-[menu-item-appear_0.25s_ease-out] motion-safe:transition-transform motion-safe:hover:translate-x-1 dark:focus-visible:ring-offset-slate-900",
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 motion-safe:animate-[menu-item-appear_0.25s_ease-out] motion-safe:transition-transform motion-safe:hover:translate-x-1 dark:focus-visible:ring-offset-slate-900",
                 active
-                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                  : "text-slate-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-white",
+                  ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                  : "text-slate-600 hover:bg-cyan-500/10 hover:text-cyan-700 dark:text-slate-300 dark:hover:text-white",
               )}
               style={{ animationDelay: `${index * 60}ms` }}
               aria-current={active ? "page" : undefined}

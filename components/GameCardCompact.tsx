@@ -45,7 +45,7 @@ export function GameCardCompact({
   const coverUrl = igdbCoverUrl(game.coverImageId) ?? game.coverUrl ?? null;
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/80 text-slate-900 shadow-sm transition-colors duration-200 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100">
+    <article className="glass-panel group flex flex-col overflow-hidden rounded-2xl text-slate-900 transition-colors duration-200 focus-within:ring-2 focus-within:ring-cyan-500/50 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:text-slate-100">
       <div className="relative mx-auto w-full max-w-[120px] overflow-hidden rounded-xl bg-slate-200 text-center dark:bg-slate-800 sm:max-w-[150px] md:max-w-[160px]">
         <div className="aspect-[3/4] w-full">
           {coverUrl ? (
@@ -61,7 +61,7 @@ export function GameCardCompact({
           )}
         </div>
         {ratingLabel ? (
-          <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-amber-600 shadow-sm dark:bg-slate-950/80 dark:text-amber-300">
+          <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-white/60 bg-white/80 px-2 py-1 text-[11px] font-semibold text-amber-600 shadow-sm backdrop-blur dark:border-white/15 dark:bg-slate-950/70 dark:text-amber-300">
             <Star className="h-3 w-3" aria-hidden="true" />
             <span>{ratingLabel}</span>
           </div>
@@ -95,8 +95,8 @@ export function GameCardCompact({
             className={cn(
               "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition",
               actionDisabled || actionBusy
-                ? "cursor-not-allowed border-emerald-500/30 bg-emerald-500/10 text-emerald-700 opacity-70 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
-                : "border-emerald-500/40 bg-emerald-500/90 text-white hover:-translate-y-0.5 hover:border-emerald-400 dark:border-emerald-500/60 dark:bg-emerald-500/30 dark:text-emerald-100",
+                ? "cursor-not-allowed border-cyan-500/30 bg-cyan-500/10 text-cyan-700 opacity-70 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-200"
+                : "border-cyan-500/40 bg-cyan-500/90 text-white hover:-translate-y-0.5 hover:border-cyan-400 dark:border-cyan-500/60 dark:bg-cyan-500/30 dark:text-cyan-100",
             )}
           >
             {actionBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
