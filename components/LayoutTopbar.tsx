@@ -31,18 +31,18 @@ export function LayoutTopbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
   }, [filters.searchTerm]);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full flex-none items-center gap-3 border-b border-slate-200/80 bg-white/70 px-4 text-slate-900 backdrop-blur transition-colors duration-300 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100 sm:px-6 high-contrast-surface">
+    <header className="glass-panel neon-outline high-contrast-surface sticky top-2 z-30 mx-2 mt-2 flex h-16 w-auto flex-none items-center gap-3 rounded-2xl border px-4 text-slate-900 transition-colors duration-300 dark:text-slate-100 sm:mx-4 sm:px-6">
       <button
         type="button"
         onClick={onOpenSidebar}
-        className="rounded-xl border border-slate-200 bg-white/80 p-2 text-slate-600 shadow-sm transition hover:border-emerald-500/60 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white dark:focus-visible:ring-offset-slate-900 lg:hidden"
+        className="rounded-xl border border-white/50 bg-white/50 p-2 text-cyan-700 shadow-sm backdrop-blur transition hover:border-cyan-400/60 hover:text-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 dark:border-white/15 dark:bg-slate-900/40 dark:text-cyan-200 dark:hover:text-white dark:focus-visible:ring-offset-slate-900 lg:hidden"
         aria-label="Open navigation"
       >
         <Menu className="h-5 w-5" />
       </button>
       <div className="flex flex-1 items-center gap-4">
         <div>
-          <p className="text-xs uppercase tracking-widest text-emerald-600 dark:text-emerald-400">DG Tracker</p>
+          <p className="text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-300">DG Tracker</p>
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h1>
         </div>
         {showSearch ? (
@@ -57,7 +57,7 @@ export function LayoutTopbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
               }}
               placeholder="Search games by title or tags..."
               aria-label="Search games"
-              className="w-full rounded-xl border border-slate-200 bg-white/90 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm transition-colors focus:border-emerald-500 focus:ring-emerald-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+              className="w-full rounded-xl border border-white/50 bg-white/65 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm backdrop-blur transition-colors focus:border-cyan-500 focus:ring-cyan-400 dark:border-white/15 dark:bg-slate-900/40 dark:text-slate-100"
             />
           </div>
         ) : null}

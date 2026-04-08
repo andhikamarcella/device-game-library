@@ -16,7 +16,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-lg shadow-slate-900/10 backdrop-blur transition-colors duration-300 ease-out dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-slate-950/40 motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-xl focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:focus-within:ring-offset-slate-900 high-contrast-surface",
+        "glass-panel neon-outline high-contrast-surface w-full rounded-2xl p-6 transition-colors duration-300 ease-out motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-xl focus-within:ring-2 focus-within:ring-cyan-500/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-50 dark:focus-within:ring-offset-slate-900",
         className,
       )}
     >
