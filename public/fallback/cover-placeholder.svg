@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 450" role="img" aria-label="Game cover placeholder">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+  <rect width="320" height="450" fill="url(#grad)" rx="24" ry="24" />
+  <g fill="none" stroke="#475569" stroke-width="6" stroke-linecap="round">
+    <path d="M90 180h140" />
+    <path d="M70 220h180" opacity="0.6" />
+    <path d="M110 260h100" opacity="0.3" />
+    <rect x="135" y="120" width="50" height="50" rx="8" stroke="#cbd5f5" />
+  </g>
+  <g fill="#e2e8f0" font-family="'Inter', 'Segoe UI', sans-serif" font-size="20" font-weight="600">
+    <text x="50%" y="350" text-anchor="middle">No Cover</text>
+  </g>
+</svg>

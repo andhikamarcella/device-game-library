@@ -1,0 +1,918 @@
+const IGDB_BASE_URL = process.env.IGDB_BASE_URL?.trim() || "https://api.igdb.com/v4";
+
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID?.trim();
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET?.trim();
+
+type TokenCache = {
+  accessToken: string;
+  expiresAt: number;
+  clientId: string;
+};
+
+let tokenCache: TokenCache | null = null;
+
+export function getYoutubeEmbedUrl(videoId: string) {
+  return `https://www.youtube.com/embed/${videoId}?rel=0&showinfo=0&modestbranding=1&iv_load_policy=3&playsinline=1&enablejsapi=1`;
+}
+
+export function getYoutubeWatchUrl(videoId: string) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+const resolveTokenUrl = (): string => {
+  const fallbackUrl = "https://id.twitch.tv/oauth2/token";
+  const rawUrl =
+    process.env.IGDB_TOKEN_URL?.trim() || process.env.TWITCH_TOKEN_URL?.trim() || fallbackUrl;
+
+  return rawUrl.trim();
+};
+
+export async function getIgdbToken(): Promise<{ accessToken: string; clientId: string }> {
+  const clientId = TWITCH_CLIENT_ID;
+  const clientSecret = TWITCH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET in environment variables");
+    throw new Error("Missing Twitch credentials");
+  }
+
+  const now = Date.now();
+  if (tokenCache && tokenCache.clientId === clientId && now < tokenCache.expiresAt - 60_000) {
+    return { accessToken: tokenCache.accessToken, clientId };
+  }
+
+  const params = new URLSearchParams();
+  params.set("client_id", clientId);
+  params.set("client_secret", clientSecret);
+  params.set("grant_type", "client_credentials");
+
+  const tokenUrl = resolveTokenUrl();
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.error("Failed to fetch IGDB token", tokenUrl, res.status, text);
+    throw new Error(`Failed to fetch IGDB token: ${res.status}`);
+  }
+
+  const data = (await res.json()) as { access_token: string; expires_in: number };
+
+  tokenCache = {
+    accessToken: data.access_token,
+    expiresAt: now + data.expires_in * 1000,
+    clientId,
+  };
+
+  return { accessToken: data.access_token, clientId };
+}
+
+export type SortKey =
+  | "none"
+  | "most_popular"
+  | "least_popular"
+  | "highest_rated"
+  | "lowest_rated"
+  | "newest"
+  | "oldest"
+  | "alphabetical"
+  | "alphabetical_desc";
+
+export function buildIgdbQuery(opts: {
+  searchText?: string;
+  sort?: SortKey;
+  platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
+  limit?: number;
+  offset?: number;
+}): string {
+  const lines: string[] = [];
+
+  lines.push(
+    [
+      "fields",
+      "  id,",
+      "  name,",
+      "  summary,",
+      "  aggregated_rating,",
+      "  rating,",
+      "  rating_count,",
+      "  total_rating,",
+      "  total_rating_count,",
+      "  first_release_date,",
+      "  cover.image_id,",
+      "  artworks.image_id,",
+      "  screenshots.image_id,",
+      "  videos.video_id,",
+      "  platforms.name,",
+      "  platforms.slug,",
+      "  platforms.abbreviation,",
+      "  genres.name,",
+      "  themes.name,",
+      "  game_modes.name,",
+      "  player_perspectives.name,",
+      "  release_dates.y,",
+      "  age_ratings.rating;",
+    ].join("\n"),
+  );
+
+  const trimmedSearch = opts.searchText?.trim();
+  if (trimmedSearch) {
+    const escaped = trimmedSearch.replace(/"/g, '\\"');
+    lines.push(`search "${escaped}";`);
+  }
+
+  const whereClauses: string[] = [];
+
+  if (typeof opts.platformId === "number") {
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
+  }
+
+  const sortMapping: Record<Exclude<SortKey, "none">, string> = {
+    most_popular: "total_rating_count desc",
+    least_popular: "total_rating_count asc",
+    highest_rated: "total_rating desc",
+    lowest_rated: "total_rating asc",
+    newest: "first_release_date desc",
+    oldest: "first_release_date asc",
+    alphabetical: "name asc",
+    alphabetical_desc: "name desc",
+  };
+
+  const sortKey = opts.sort ?? "none";
+  const sortExpr = sortKey === "none" ? null : sortMapping[sortKey as Exclude<SortKey, "none">];
+  if (sortExpr) {
+    lines.push(`sort ${sortExpr};`);
+  }
+
+  const limit = typeof opts.limit === "number" && opts.limit > 0 ? Math.min(opts.limit, 50) : 50;
+  const offset = typeof opts.offset === "number" && opts.offset > 0 ? opts.offset : 0;
+
+  lines.push(`limit ${limit};`);
+  if (offset) {
+    lines.push(`offset ${offset};`);
+  }
+
+  return lines.join("\n");
+}
+
+export function buildIgdbCountQuery(opts: {
+  searchText?: string;
+  platformId?: number | null;
+  genres?: number[];
+  themes?: number[];
+  gameModes?: number[];
+  playerPerspectives?: number[];
+  ageRatings?: number[];
+  releaseDateFrom?: number | null;
+  releaseDateTo?: number | null;
+}): string {
+  const lines: string[] = ["fields count;"];
+
+  const trimmedSearch = opts.searchText?.trim();
+  if (trimmedSearch) {
+    const escaped = trimmedSearch.replace(/"/g, '\\"');
+    lines.push(`search "${escaped}";`);
+  }
+
+  const whereClauses: string[] = [];
+
+  if (typeof opts.platformId === "number") {
+    whereClauses.push(`platforms = (${opts.platformId})`);
+  }
+
+  if (Array.isArray(opts.genres) && opts.genres.length) {
+    whereClauses.push(`genres = (${opts.genres.join(",")})`);
+  }
+
+  if (Array.isArray(opts.themes) && opts.themes.length) {
+    whereClauses.push(`themes = (${opts.themes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.gameModes) && opts.gameModes.length) {
+    whereClauses.push(`game_modes = (${opts.gameModes.join(",")})`);
+  }
+
+  if (Array.isArray(opts.playerPerspectives) && opts.playerPerspectives.length) {
+    whereClauses.push(`player_perspectives = (${opts.playerPerspectives.join(",")})`);
+  }
+
+  if (Array.isArray(opts.ageRatings) && opts.ageRatings.length) {
+    whereClauses.push(`age_ratings.rating = (${opts.ageRatings.join(",")})`);
+  }
+
+  const releaseClauses: string[] = [];
+  if (typeof opts.releaseDateFrom === "number") {
+    releaseClauses.push(`first_release_date > ${opts.releaseDateFrom}`);
+  }
+  if (typeof opts.releaseDateTo === "number") {
+    releaseClauses.push(`first_release_date < ${opts.releaseDateTo}`);
+  }
+  if (releaseClauses.length) {
+    whereClauses.push(releaseClauses.join(" & "));
+  }
+
+  if (whereClauses.length) {
+    lines.push(`where ${whereClauses.join(" & ")};`);
+  }
+
+  return lines.join("\n");
+}
+
+export interface IgdbCover {
+  id: number;
+  image_id: string;
+}
+
+export interface IgdbImageAsset {
+  id: number;
+  image_id: string;
+  width?: number;
+  height?: number;
+}
+
+export interface IgdbPlatformRef {
+  id: number;
+  name?: string;
+  abbreviation?: string | null;
+  slug?: string | null;
+}
+
+export interface IgdbGenreRef {
+  id: number;
+  name?: string;
+}
+
+export interface IgdbKeywordRef {
+  id: number;
+  name?: string;
+  slug?: string;
+}
+
+export interface IgdbModeRef {
+  id: number;
+  name?: string;
+}
+
+export interface IgdbEntityRef {
+  id: number;
+  name?: string;
+  slug?: string | null;
+}
+
+export interface IgdbWebsite {
+  id: number;
+  url: string;
+  category?: number;
+  trusted?: boolean | null;
+}
+
+export interface IgdbVideo {
+  id?: number;
+  name?: string;
+  video_id: string;
+}
+
+export interface IgdbAgeRating {
+  id: number;
+  category?: number | null;
+  rating?: number | null;
+  synopsis?: string | null;
+  rating_cover_url?: string | null;
+}
+
+export interface IgdbLanguageSupport {
+  id: number;
+  language?: { id: number; name?: string | null } | null;
+  language_support_type?: number | number[] | null;
+}
+
+export interface IgdbAchievementIcon {
+  id?: number;
+  image_id?: string | null;
+}
+
+export interface IgdbAchievement {
+  id: number;
+  name?: string | null;
+  description?: string | null;
+  instructions?: string | null;
+  achievement_icon?: IgdbAchievementIcon | null;
+  locked_icon?: IgdbAchievementIcon | null;
+  unlocked_icon?: IgdbAchievementIcon | null;
+  platforms?: Array<{ id: number; name?: string | null } | null> | null;
+}
+
+export interface IgdbCompanyRef {
+  id: number;
+  company?: {
+    id: number;
+    name?: string;
+    slug?: string | null;
+  };
+  developer?: boolean;
+  publisher?: boolean;
+}
+
+export interface IgdbReleaseDate {
+  id: number;
+  human?: string | null;
+  platform?: number | null;
+  region?: number | null;
+  y?: number | null;
+  m?: number | null;
+  date?: number | null;
+}
+
+export interface IgdbGame {
+  id: number;
+  name: string;
+  slug?: string;
+  summary?: string | null;
+  first_release_date?: number | null;
+  aggregated_rating?: number | null;
+  total_rating?: number | null;
+  total_rating_count?: number | null;
+  rating?: number | null;
+  rating_count?: number | null;
+  cover?: IgdbCover;
+  platforms?: IgdbPlatformRef[];
+  genres?: IgdbGenreRef[];
+  screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
+}
+
+export interface IgdbGameDetails extends IgdbGame {
+  storyline?: string | null;
+  themes?: IgdbGenreRef[];
+  keywords?: IgdbKeywordRef[];
+  game_modes?: IgdbModeRef[];
+  player_perspectives?: IgdbModeRef[];
+  franchises?: IgdbEntityRef[];
+  collections?: IgdbEntityRef[];
+  game_engines?: IgdbEntityRef[];
+  websites?: IgdbWebsite[];
+  videos?: IgdbVideo[];
+  screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
+  similar_games?: IgdbSimilarGame[];
+  dlcs?: IgdbSimilarGame[];
+  expansions?: IgdbSimilarGame[];
+  remakes?: IgdbSimilarGame[];
+  remasters?: IgdbSimilarGame[];
+  parent_game?: IgdbSimilarGame;
+  involved_companies?: IgdbCompanyRef[];
+  age_ratings?: IgdbAgeRating[] | null;
+  language_supports?: IgdbLanguageSupport[] | null;
+  time_to_beat?:
+    | { hastly?: number | null; normally?: number | null; completely?: number | null }
+    | number
+    | null;
+  release_dates?: IgdbReleaseDate[] | null;
+}
+
+export interface IgdbSimilarGame
+  extends Pick<
+    IgdbGame,
+    "id" | "name" | "slug" | "aggregated_rating" | "total_rating" | "total_rating_count" | "rating" | "rating_count"
+  > {
+  cover?: IgdbCover;
+  platforms?: IgdbPlatformRef[];
+  screenshots?: IgdbImageAsset[];
+  artworks?: IgdbImageAsset[];
+}
+
+export interface IgdbSearchParams {
+  search?: string;
+  ordering?: string;
+  platforms?: string;
+  genres?: string;
+  tags?: string;
+  dates?: string;
+  metacritic?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface IgdbSearchResponse {
+  results: IgdbGame[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface IgdbPlatformSummary {
+  id: number;
+  name: string;
+  slug?: string;
+  abbreviation?: string | null;
+  generation?: number | null;
+}
+
+export function getIgdbImageUrl(
+  imageId?: string | null,
+  type: "cover" | "screenshot" = "cover",
+): string | null {
+  if (!imageId) {
+    return null;
+  }
+  const size = type === "cover" ? "t_cover_big" : "t_1080p";
+  return buildIgdbImageUrl(imageId, size);
+}
+
+export function buildIgdbImageUrl(imageId: string, size?: string): string {
+  const normalizedSize = (() => {
+    if (!size || typeof size !== "string") return "t_cover_big";
+    if (size === "original") return "original";
+    return size.startsWith("t_") ? size : `t_${size}`;
+  })();
+
+  return `https://images.igdb.com/igdb/image/upload/${normalizedSize}/${imageId}.jpg`;
+}
+
+export function bestImageOriginal(imageId?: string | null) {
+  if (!imageId) return null;
+  return buildIgdbImageUrl(imageId, "t_1080p");
+}
+
+export function selectBackground(artworks: any[], screenshots: any[], cover: any) {
+  const bestArt = artworks?.find((a) => a?.image_id);
+  if (bestArt) return bestImageOriginal(bestArt.image_id);
+
+  const bestShot = screenshots?.find((s) => s?.image_id);
+  if (bestShot) return bestImageOriginal(bestShot.image_id);
+
+  if (cover?.image_id) return bestImageOriginal(cover.image_id);
+
+  return null;
+}
+
+export function resolveIgdbImage(asset?: { image_id?: string | null }, size?: Parameters<typeof buildIgdbImageUrl>[1]): string |
+  null {
+  if (!asset?.image_id) {
+    return null;
+  }
+  if (size === "cover_big") {
+    return getIgdbImageUrl(asset.image_id, "cover");
+  }
+  if (size === "screenshot_big") {
+    return getIgdbImageUrl(asset.image_id, "screenshot");
+  }
+  return buildIgdbImageUrl(asset.image_id, size ?? "cover_big");
+}
+
+const getBaseUrl = (): string => {
+  const raw = IGDB_BASE_URL?.trim();
+  return raw && raw.length > 0 ? raw : "https://api.igdb.com/v4";
+};
+
+export class IgdbRequestError extends Error {
+  constructor(message: string, public status?: number, public body?: string) {
+    super(message);
+    this.name = "IgdbRequestError";
+  }
+}
+
+export async function igdbFetch<T>(endpoint: string, body: string): Promise<T> {
+  const { accessToken, clientId } = await getIgdbToken();
+  const baseUrl = getBaseUrl().replace(/\/$/, "");
+  const normalizedEndpoint = endpoint.replace(/^\/+/, "");
+
+  const res = await fetch(`${baseUrl}/${normalizedEndpoint}`, {
+    method: "POST",
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "text/plain",
+    },
+    body,
+    next: { revalidate: 60 },
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error(`IGDB error for ${normalizedEndpoint}`, res.status, text);
+    throw new IgdbRequestError(
+      `IGDB ${normalizedEndpoint} failed: ${res.status} ${text.substring(0, 300)}`,
+      res.status,
+      text,
+    );
+  }
+
+  return (text ? JSON.parse(text) : []) as T;
+}
+
+export async function igdbRequest<T>(endpoint: string, query: string): Promise<T> {
+  return igdbFetch<T>(endpoint, query);
+}
+
+const sanitizeSearchTerm = (term: string): string => term.replace(/"/g, '\\"');
+
+export async function searchIgdbGameCoverByName(name: string): Promise<string | null> {
+  const trimmed = name?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const sanitizedName = sanitizeSearchTerm(trimmed);
+    const query = `search "${sanitizedName}";\nfields id,name,cover.image_id;\nlimit 1;`;
+
+    const data = await igdbRequest<IgdbGame[]>("/games", query);
+    const imageId = data?.[0]?.cover?.image_id;
+    if (imageId) {
+      return buildIgdbImageUrl(imageId, "cover_big");
+    }
+  } catch (error) {
+    console.error("IGDB cover lookup error", error);
+  }
+
+  return null;
+}
+
+const parseCommaSeparatedIds = (value?: string): number[] => {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => /^\d+$/.test(part))
+    .map((part) => Number.parseInt(part, 10))
+    .filter((num) => Number.isFinite(num));
+};
+
+const parseCommaSeparatedSlugs = (value?: string): string[] => {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part.length > 0);
+};
+
+const keywordCache = new Map<string, number>();
+
+async function fetchKeywordIds(slugs: string[]): Promise<number[]> {
+  const unique = Array.from(new Set(slugs));
+  const missing = unique.filter((slug) => !keywordCache.has(slug));
+
+  if (missing.length) {
+    const quoted = missing.map((slug) => `"${sanitizeSearchTerm(slug)}"`).join(",");
+    const query = `where slug = (${quoted});\nfields id,slug;\nlimit ${missing.length};`;
+    try {
+      const data = await igdbRequest<Array<{ id: number; slug?: string }>>("keywords", query);
+      data.forEach((entry) => {
+        if (entry.slug && Number.isFinite(entry.id)) {
+          keywordCache.set(entry.slug, entry.id);
+        }
+      });
+    } catch (error) {
+      console.error("IGDB keyword lookup failed", error);
+    }
+  }
+
+  return unique
+    .map((slug) => keywordCache.get(slug))
+    .filter((id): id is number => typeof id === "number");
+}
+
+const parseDateRange = (range?: string): { from?: number; to?: number } => {
+  if (!range) return {};
+  const [rawFrom, rawTo] = range.split(",");
+  const from = rawFrom?.trim() ? Date.parse(rawFrom.trim()) : NaN;
+  const to = rawTo?.trim() ? Date.parse(rawTo.trim()) : NaN;
+  return {
+    from: Number.isFinite(from) ? Math.floor(from / 1000) : undefined,
+    to: Number.isFinite(to) ? Math.floor(to / 1000) : undefined,
+  };
+};
+
+const parseRatingRange = (range?: string): { min?: number; max?: number } => {
+  if (!range) return {};
+  const [rawMin, rawMax] = range.split(",");
+  const min = rawMin ? Number.parseFloat(rawMin) : NaN;
+  const max = rawMax ? Number.parseFloat(rawMax) : NaN;
+  return {
+    min: Number.isFinite(min) ? min : undefined,
+    max: Number.isFinite(max) ? max : undefined,
+  };
+};
+
+const ORDERING_FIELDS: Record<string, { field: string; direction: "asc" | "desc" }> = {
+  "": { field: "total_rating_count", direction: "desc" },
+  "-added": { field: "total_rating_count", direction: "desc" },
+  "-rating": { field: "total_rating", direction: "desc" },
+  "-metacritic": { field: "total_rating", direction: "desc" },
+  "-released": { field: "first_release_date", direction: "desc" },
+  name: { field: "name", direction: "asc" },
+};
+
+const buildSortClause = (ordering?: string): string => {
+  const key = ordering ?? "";
+  const rule = ORDERING_FIELDS[key] ?? ORDERING_FIELDS[""];
+  return `sort ${rule.field} ${rule.direction};`;
+};
+
+const clampPageSize = (size?: number): number => {
+  if (!size || !Number.isFinite(size)) return 24;
+  return Math.min(Math.max(size, 1), 50);
+};
+
+export async function searchIgdbGames(params: IgdbSearchParams): Promise<IgdbSearchResponse> {
+  const pageSize = clampPageSize(params.page_size);
+  const page = params.page && params.page > 0 ? Math.floor(params.page) : 1;
+  const offset = (page - 1) * pageSize;
+
+  const searchTerm = params.search?.trim();
+  const platformIds = parseCommaSeparatedIds(params.platforms);
+  const genreIds = parseCommaSeparatedIds(params.genres);
+  const keywordSlugs = parseCommaSeparatedSlugs(params.tags);
+  const dateRange = parseDateRange(params.dates);
+  const ratingRange = parseRatingRange(params.metacritic);
+
+  const whereClauses: string[] = [];
+
+  if (platformIds.length) {
+    whereClauses.push(`platforms = (${platformIds.join(",")})`);
+  }
+
+  if (genreIds.length) {
+    whereClauses.push(`genres = (${genreIds.join(",")})`);
+  }
+
+  if (keywordSlugs.length) {
+    const keywordIds = await fetchKeywordIds(keywordSlugs);
+    if (keywordIds.length) {
+      whereClauses.push(`keywords = (${keywordIds.join(",")})`);
+    }
+  }
+
+  if (typeof dateRange.from === "number") {
+    whereClauses.push(`first_release_date >= ${dateRange.from}`);
+  }
+  if (typeof dateRange.to === "number") {
+    whereClauses.push(`first_release_date <= ${dateRange.to}`);
+  }
+
+  if (typeof ratingRange.min === "number") {
+    whereClauses.push(`total_rating >= ${ratingRange.min}`);
+  }
+  if (typeof ratingRange.max === "number") {
+    whereClauses.push(`total_rating <= ${ratingRange.max}`);
+  }
+
+  const queryParts: string[] = [];
+  queryParts.push(
+    "fields id,name,slug,summary,storyline,first_release_date,total_rating,total_rating_count,rating,rating_count,cover.image_id,artworks.image_id,screenshots.image_id,platforms.id,platforms.name,platforms.slug,platforms.abbreviation,genres.id,genres.name,release_dates.y,age_ratings.rating,videos.video_id;",
+  );
+
+  if (searchTerm) {
+    queryParts.push(`search "${sanitizeSearchTerm(searchTerm)}";`);
+  }
+
+  if (whereClauses.length) {
+    queryParts.push(`where ${whereClauses.join(" & ")};`);
+  }
+
+  queryParts.push(buildSortClause(params.ordering));
+  queryParts.push(`limit ${pageSize};`);
+  queryParts.push(`offset ${offset};`);
+
+  const results = await igdbRequest<IgdbGame[]>("games", queryParts.join("\n"));
+
+  let total = results.length;
+  try {
+    const whereSegment = whereClauses.length ? `where ${whereClauses.join(" & ")};` : "";
+    const payload = await igdbRequest<Array<{ count: number }>>("games/count", whereSegment);
+    total = payload?.[0]?.count ?? total;
+  } catch (error) {
+    console.error("IGDB count lookup failed", error);
+  }
+
+  return {
+    results,
+    total,
+    page,
+    pageSize,
+  };
+}
+
+export async function getIgdbGameDetails(id: number): Promise<IgdbGameDetails | null> {
+  const sharedFields = `
+      id,
+      name,
+      slug,
+      summary,
+      storyline,
+      first_release_date,
+      total_rating,
+      total_rating_count,
+      rating,
+      rating_count,
+      cover.image_id,
+      platforms.id,
+      platforms.name,
+      platforms.abbreviation,
+      genres.id,
+      genres.name,
+      themes.id,
+      themes.name,
+      keywords.id,
+      keywords.name,
+      game_modes.id,
+      game_modes.name,
+      player_perspectives.id,
+      player_perspectives.name,
+      franchises.id,
+      franchises.name,
+      franchises.slug,
+      collections.id,
+      collections.name,
+      collections.slug,
+      game_engines.id,
+      game_engines.name,
+      game_engines.slug,
+      involved_companies.id,
+      involved_companies.company.id,
+      involved_companies.company.name,
+      involved_companies.company.slug,
+      involved_companies.developer,
+      involved_companies.publisher,
+      age_ratings.*,
+      age_ratings.id,
+      age_ratings.category,
+      age_ratings.rating,
+      age_ratings.synopsis,
+      age_ratings.rating_cover_url,
+      aggregated_rating,
+      rating,
+      rating_count,
+      language_supports.id,
+      language_supports.language.id,
+      language_supports.language.name,
+      language_supports.language,
+      language_supports.language_support_type,
+      websites.url,
+      websites.category,
+      websites.trusted,
+      videos.id,
+      videos.name,
+      videos.video_id,
+      screenshots.image_id,
+      screenshots.width,
+      screenshots.height,
+      artworks.image_id,
+      artworks.width,
+      artworks.height,
+      similar_games.id,
+      similar_games.name,
+      similar_games.slug,
+      similar_games.cover.image_id,
+      similar_games.aggregated_rating,
+      similar_games.rating,
+      similar_games.rating_count,
+      similar_games.screenshots.image_id,
+      similar_games.artworks.image_id,
+      similar_games.artworks.width,
+      similar_games.artworks.height,
+      similar_games.platforms.id,
+      similar_games.platforms.name,
+      similar_games.platforms.slug,
+      dlcs.id,
+      dlcs.name,
+      dlcs.slug,
+      dlcs.cover.image_id,
+      dlcs.screenshots.image_id,
+      expansions.id,
+      expansions.name,
+      expansions.slug,
+      expansions.cover.image_id,
+      expansions.screenshots.image_id,
+      remakes.id,
+      remakes.name,
+      remakes.slug,
+      remakes.cover.image_id,
+      remakes.screenshots.image_id,
+      remasters.id,
+      remasters.name,
+      remasters.slug,
+      remasters.cover.image_id,
+      remasters.screenshots.image_id,
+      parent_game.id,
+      parent_game.name,
+      parent_game.slug,
+      parent_game.cover.image_id,
+      parent_game.screenshots.image_id,
+      bundles.id,
+      bundles.name,
+      bundles.slug,
+      bundles.cover.image_id,
+      bundles.screenshots.image_id,
+      status,
+      category`;
+
+  const query = `
+    fields
+      ${sharedFields};
+    where id = ${id};
+    limit 1;
+  `;
+
+  const data = await igdbRequest<IgdbGameDetails[]>("games", query);
+  const game = data[0];
+
+  if (!game) return null;
+
+  return game;
+}
+
+export async function fetchIgdbAchievements(gameId: number, limit = 20): Promise<IgdbAchievement[]> {
+  const safeLimit = Math.max(limit, 1);
+  const query = `
+    fields
+      id,
+      name,
+      description,
+      instructions,
+      achievement_icon.image_id,
+      locked_icon.image_id,
+      unlocked_icon.image_id,
+      platforms.id,
+      platforms.name;
+    where game = ${gameId};
+    limit ${safeLimit};
+  `;
+
+  try {
+    const data = await igdbRequest<IgdbAchievement[]>("achievements", query);
+    return data ?? [];
+  } catch (error) {
+    if (error instanceof IgdbRequestError && error.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function searchIgdbPlatforms(query: string): Promise<IgdbPlatformSummary[]> {
+  const sanitized = sanitizeSearchTerm(query.trim());
+  const clauses = ["fields id,name,slug,abbreviation,generation;", "limit 50;"];
+  if (sanitized) {
+    clauses.unshift(`search "${sanitized}";`);
+  }
+
+  const results = await igdbRequest<
+    Array<{ id: number; name: string; slug?: string; abbreviation?: string | null; generation?: number | null }>
+  >("/platforms", clauses.join("\n"));
+
+  return results.map((platform) => ({
+    id: platform.id,
+    name: platform.name,
+    slug: platform.slug,
+    abbreviation: platform.abbreviation ?? null,
+    generation: platform.generation ?? null,
+  }));
+}
